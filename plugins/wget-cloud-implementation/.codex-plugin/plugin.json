@@ -1,0 +1,32 @@
+{
+  "name": "wget-cloud-implementation",
+  "version": "0.1.0",
+  "description": "Architecture-safe multi-agent implementation, review, QA, GitOps, and deployment workflow for Wget Cloud repositories.",
+  "author": {
+    "name": "Wget Cloud",
+    "url": "https://github.com/wget-cloud"
+  },
+  "homepage": "https://github.com/wget-cloud/codex-plugins/tree/main/plugins/wget-cloud-implementation",
+  "repository": "https://github.com/wget-cloud/codex-plugins",
+  "keywords": [
+    "wget-cloud",
+    "multi-agent",
+    "implementation",
+    "architecture",
+    "gitops"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Wget Cloud Implementation",
+    "shortDescription": "Multi-agent delivery with architecture and GitOps gates.",
+    "longDescription": "Coordinates discovery, architecture, protected tests, implementation, independent review, QA, GitOps infrastructure changes, and approval-gated deployment across the Wget Cloud repositories.",
+    "developerName": "Wget Cloud",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/wget-cloud/codex-plugins",
+    "defaultPrompt": "Use $wget-cloud-implementation to deliver this Wget Cloud task through the required architecture, test, review, QA, and GitOps gates."
+  }
+}
