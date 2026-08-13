@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import re
@@ -55,6 +56,20 @@ class HooksConfigTest(unittest.TestCase):
             if handler.get("async")
         }
         self.assertEqual(async_events, {"PostToolUse"})
+
+    def test_profile_contracts_match_separate_role_files(self):
+        spec = importlib.util.spec_from_file_location("wgc_hooks_contracts", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        skills = SCRIPT.parent.parent / "skills"
+        for profile, role_verdicts in module.PROFILE_ROLE_VERDICTS.items():
+            role_dir = skills / f"wgc-{profile}" / "references" / "agents"
+            documented = {path.stem for path in role_dir.glob("*.md") if path.name != "index.md"}
+            self.assertEqual(documented, set(role_verdicts) | {"orchestrator"})
+            for role, verdicts in role_verdicts.items():
+                text = (role_dir / f"{role}.md").read_text(encoding="utf-8")
+                for verdict in verdicts:
+                    self.assertIn(verdict, text, f"{profile}/{role} does not document {verdict}")
 
 
 class WgcHooksTest(unittest.TestCase):
@@ -195,6 +210,46 @@ class WgcHooksTest(unittest.TestCase):
         state_path = next((self.data / "hook-state").glob("*.json"))
         state = json.loads(state_path.read_text(encoding="utf-8"))
         self.assertEqual(state["subagent_results"][-1]["role"], "reviewer")
+
+    def test_subagent_verdicts_are_scoped_to_active_profile(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        agent_id = "wrong-profile-architect"
+        started = self.call(
+            "subagent-start",
+            {
+                "hook_event_name": "SubagentStart",
+                "agent_id": agent_id,
+                "agent_type": "architect",
+            },
+            cwd,
+        )
+        revision = re.search(
+            r"revision is ([0-9a-f]{64})",
+            started["hookSpecificOutput"]["additionalContext"],
+        ).group(1)
+        marker = json.dumps(
+            {
+                "role": "architect",
+                "verdict": "planned",
+                "phase": "",
+                "input_revision": revision,
+            },
+            separators=(",", ":"),
+        )
+        output = self.call(
+            "subagent-stop",
+            {
+                "hook_event_name": "SubagentStop",
+                "agent_id": agent_id,
+                "agent_type": "architect",
+                "stop_hook_active": False,
+                "last_assistant_message": f"WGC_AGENT_RESULT: {marker}",
+            },
+            cwd,
+        )
+        self.assertEqual(output["decision"], "block")
+        self.assertIn("profile implementation", output["reason"])
 
     def test_prompt_submit_activates_only_implementation_intent(self):
         output = self.call(

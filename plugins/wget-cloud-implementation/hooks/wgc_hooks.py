@@ -94,24 +94,37 @@ SOURCE_SUFFIXES = {
     ".ts",
     ".tsx",
 }
-ROLE_VERDICTS: Dict[str, Set[str]] = {
-    "explorer": {"mapped", "needs_input"},
-    "bug-triage": {"triaged", "needs_input", "blocked"},
-    "bug-investigator": {"evidence_ready", "root_cause_supported", "needs_more_evidence", "blocked"},
-    "reproducer": {"reproduced", "characterized", "not_reproduced", "blocked"},
-    "root-cause-reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
-    "architect": {"proposed", "planned", "needs_input", "blocked"},
-    "architecture-guardian": {"approved", "changes_requested", "needs_input", "blocked"},
-    "test-maker": {"baseline_ready", "tests_ready", "changes_requested", "needs_input", "blocked"},
-    "implementor": {"implemented", "needs_input", "blocked"},
-    "reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
-    "qa": {"pass", "defects_found", "blocked"},
-    "browser-qa": {"pass", "defects_found", "blocked"},
-    "security-reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
-    "contract-qa": {"pass", "defects_found", "blocked"},
-    "devops": {"prepared", "needs_input", "blocked"},
-    "infrastructure-reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
-    "deployment-agent": {"deployed_healthy", "failed", "rolled_back", "blocked", "approval_invalid"},
+PROFILE_ROLE_VERDICTS: Dict[str, Dict[str, Set[str]]] = {
+    "implementation": {
+        "explorer": {"mapped", "needs_input"},
+        "architect": {"proposed", "needs_input"},
+        "architecture-guardian": {"approved", "changes_requested", "needs_input"},
+        "test-maker": {"baseline_ready", "changes_requested", "blocked"},
+        "implementor": {"implemented", "needs_input", "blocked"},
+        "reviewer": {"approved", "changes_requested", "needs_input"},
+        "qa": {"pass", "defects_found", "blocked"},
+        "devops": {"prepared", "needs_input", "blocked"},
+        "infrastructure-reviewer": {"approved", "changes_requested", "needs_input"},
+        "deployment-agent": {"deployed_healthy", "failed", "blocked", "approval_invalid"},
+    },
+    "bugfix": {
+        "bug-triage": {"triaged", "needs_input", "blocked"},
+        "bug-investigator": {"evidence_ready", "root_cause_supported", "needs_more_evidence", "blocked"},
+        "reproducer": {"reproduced", "characterized", "not_reproduced", "blocked"},
+        "root-cause-reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
+        "architect": {"planned", "needs_input", "blocked"},
+        "architecture-guardian": {"approved", "changes_requested", "blocked"},
+        "test-maker": {"tests_ready", "needs_input", "blocked"},
+        "implementor": {"implemented", "needs_input", "blocked"},
+        "reviewer": {"approved", "changes_requested", "blocked"},
+        "qa": {"pass", "defects_found", "blocked"},
+        "browser-qa": {"pass", "defects_found", "blocked"},
+        "security-reviewer": {"approved", "changes_requested", "needs_input"},
+        "contract-qa": {"pass", "defects_found", "blocked"},
+        "devops": {"prepared", "needs_input", "blocked"},
+        "infrastructure-reviewer": {"approved", "changes_requested", "blocked"},
+        "deployment-agent": {"deployed_healthy", "failed", "rolled_back", "blocked"},
+    },
 }
 
 
@@ -957,7 +970,7 @@ def gate_mentions(message: str) -> Set[str]:
     return result
 
 
-def parse_agent_result(message: str) -> Tuple[Optional[Dict[str, str]], Optional[str]]:
+def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, str]], Optional[str]]:
     marker = "WGC_AGENT_RESULT:"
     raw = None
     for line in reversed(message.splitlines()):
@@ -976,14 +989,17 @@ def parse_agent_result(message: str) -> Tuple[Optional[Dict[str, str]], Optional
     verdict = str(value.get("verdict") or "").lower().strip()
     phase = str(value.get("phase") or "").lower().strip()
     revision = str(value.get("input_revision") or value.get("revision") or "").strip()
-    if role not in ROLE_VERDICTS:
-        return None, f"unknown WGC role: {role or '<empty>'}"
-    if verdict not in ROLE_VERDICTS[role]:
-        return None, f"invalid verdict '{verdict or '<empty>'}' for role {role}"
+    role_verdicts = PROFILE_ROLE_VERDICTS.get(profile, {})
+    if role not in role_verdicts:
+        return None, f"unknown WGC role for profile {profile}: {role or '<empty>'}"
+    if verdict not in role_verdicts[role]:
+        return None, f"invalid verdict '{verdict or '<empty>'}' for role {role} in profile {profile}"
     if role == "architecture-guardian" and phase not in {"plan", "diff"}:
         return None, "architecture-guardian result requires phase plan or diff"
     if role == "bug-investigator" and phase not in {"evidence", "rca"}:
         return None, "bug-investigator result requires phase evidence or rca"
+    if role not in {"architecture-guardian", "bug-investigator"} and phase:
+        return None, f"role {role} requires an empty phase"
     if not revision:
         return None, "WGC_AGENT_RESULT requires input_revision from SubagentStart"
     return {
@@ -1158,7 +1174,10 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     state = update_state(payload, context, lambda value: None)
     if not state.get("active"):
         return None
-    result, error = parse_agent_result(str(payload.get("last_assistant_message") or ""))
+    result, error = parse_agent_result(
+        str(payload.get("last_assistant_message") or ""),
+        str(state.get("profile") or "implementation"),
+    )
     agent_id = str(payload.get("agent_id") or "")
     expected = state.get("subagent_inputs", {}).get(agent_id, {}).get("revision")
     if not error and expected and result and result.get("input_revision") != expected:

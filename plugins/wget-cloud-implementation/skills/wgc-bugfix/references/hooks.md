@@ -24,7 +24,7 @@ Route flags:
 
 - `SessionStart`: краткая карта WGC и текущий active profile.
 - `SubagentStart`: repository boundaries, роль, запрет на prompt/log persistence и напоминание read-only evidence rules.
-- `SubagentStop`: принимает только валидный `WGC_AGENT_RESULT` и записывает verdict/revision.
+- `SubagentStop`: принимает только валидный для профиля `bugfix` набор role/verdict/phase и записывает verdict/revision; verdict из implementation-профиля не может закрыть bugfix gate.
 - `PreToolUse`: запрещает destructive Git и прямые cluster mutations; предупреждает о broad log collection, protected tests и deployment permission.
 - `PostToolUse`: классифицирует изменённые repositories, protected-test hashes и выполненные проверки; изменение diff инвалидирует устаревшие approvals.
 - `Stop`: один раз продолжает задачу, если для текущего профиля не закрыты применимые checks/gates; затем позволяет честно сообщить blocker.

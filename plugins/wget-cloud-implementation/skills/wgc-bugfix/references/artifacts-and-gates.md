@@ -2,7 +2,7 @@
 
 ## Общий envelope субагента
 
-Каждый субагент завершает ответ JSON-блоком на одной строке:
+Каждый субагент использует свой contract из [agent registry](agents/index.md) и завершает ответ JSON-блоком на одной строке:
 
 ```text
 WGC_AGENT_RESULT: {"role":"bug-triage","verdict":"triaged","phase":"","input_revision":"<workspace-revision>","scope":["backend"],"evidence":["artifact:triage-1"],"findings":[],"checks":[],"blocked_by":[]}

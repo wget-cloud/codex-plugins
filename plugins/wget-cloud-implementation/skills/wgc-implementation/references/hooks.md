@@ -25,7 +25,7 @@ Hooks работают только если `cwd` распознан как coo
 | `SessionStart` | `session-start` | Добавляет текущий project, branch/dirty summary, обязательные docs и project-specific checks. Также срабатывает после compaction через source `compact`. |
 | `UserPromptSubmit` | `prompt-submit` | Выбирает профиль `$wgc-implementation` или `$wgc-bugfix`, выводит privacy-safe route flags и фиксирует baseline dirty paths. |
 | `SubagentStart` | `subagent-start` | Добавляет repository/scope/Git/deployment boundaries каждому субагенту. |
-| `SubagentStop` | `subagent-stop` | Проверяет `WGC_AGENT_RESULT`, role/verdict/phase и назначенную revision; сохраняет структурированный verdict или один раз возвращает агента для исправления. |
+| `SubagentStop` | `subagent-stop` | Проверяет профильный `WGC_AGENT_RESULT`, точный набор role/verdict/phase и назначенную revision; сохраняет структурированный verdict или один раз возвращает агента для исправления. |
 | `PreToolUse` | `pre-tool` | До Bash/edit блокирует однозначно опасные действия; для test/legacy/generated/publication changes добавляет предупреждение. |
 | `PostToolUse` | `post-tool` | Асинхронно фиксирует touched paths и успешные verification commands; сообщает только релевантные gaps. |
 | `Stop` | `stop` | Для активной implementation/bugfix-задачи один раз продолжает turn, если не хватает observable checks или profile-specific gate ledger. |

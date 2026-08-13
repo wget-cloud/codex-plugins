@@ -29,7 +29,7 @@
 - `risks` и `unknowns`;
 - один verdict из разрешённого enum.
 
-Каждый субагент также завершает ответ строкой `WGC_AGENT_RESULT` из [agents.md](agents.md). Lifecycle ledger принимает только разрешённый verdict и revision, назначенный при старте агента. Для `reviewer`, post-implementation `architecture-guardian`, `QA` и `infrastructure-reviewer` approval перестаёт действовать после изменения reviewed tree.
+Каждый субагент также завершает ответ строкой `WGC_AGENT_RESULT` из [agent registry](agents/index.md). Lifecycle ledger принимает только разрешённый profile-specific verdict и revision, назначенный при старте агента. Для `reviewer`, post-implementation `architecture-guardian`, `QA` и `infrastructure-reviewer` approval перестаёт действовать после изменения reviewed tree.
 
 Артефакт устаревает, если изменился относящийся к нему diff, plan, acceptance criteria, protected test или release identity.
 

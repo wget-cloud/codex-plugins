@@ -12,7 +12,7 @@ description: Coordinate architecture-safe planned implementation work across the
 1. Полностью прочитай корневой `AGENTS.md`, затем `AGENTS.md` каждого затронутого проекта. Вложенные инструкции имеют приоритет.
 2. Прочитай README и обязательную архитектурную/бизнес-документацию затронутых проектов до планирования изменений.
 3. Прочитай [project-map.md](references/project-map.md). Это карта, проверенная 2026-08-13, а не замена текущему коду и локальным инструкциям.
-4. Прочитай [workflow.md](references/workflow.md), [agents.md](references/agents.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md).
+4. Прочитай [workflow.md](references/workflow.md), [agent registry](references/agents/index.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md). Файл роли открывай непосредственно перед её назначением; downstream-роли не загружай заранее.
 5. Если затронуты `k8s`, CI/CD, release или rollout, дополнительно полностью прочитай [gitops-and-deployment.md](references/gitops-and-deployment.md).
 6. Lifecycle hooks плагина автоматически добавляют workspace-контекст, safety checks и completion reminders. При блокировке или диагностике прочитай [hooks.md](references/hooks.md).
 
@@ -68,7 +68,7 @@ description: Coordinate architecture-safe planned implementation work across the
 - список разрешённых действий и явных запретов;
 - обязательный формат результата из [artifacts-and-gates.md](references/artifacts-and-gates.md).
 
-Используй определения из [agents.md](references/agents.md) без ослабления запретов. Параллельные write-агенты допустимы только на непересекающихся repository/path scopes. Никогда не разрешай двум агентам одновременно писать в один репозиторий или общий contract boundary.
+Используй отдельные role contracts из [agent registry](references/agents/index.md) без ослабления запретов. Параллельные write-агенты допустимы только на непересекающихся repository/path scopes. Никогда не разрешай двум агентам одновременно писать в один репозиторий или общий contract boundary.
 
 Оркестратор обязан сам:
 

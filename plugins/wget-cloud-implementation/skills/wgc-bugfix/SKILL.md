@@ -11,7 +11,7 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 
 1. Полностью прочитай корневой `AGENTS.md`, затем `AGENTS.md` каждого затронутого проекта. Вложенные инструкции имеют приоритет.
 2. Прочитай README и обязательную архитектурную/бизнес-документацию затронутых проектов до изменения кода.
-3. Прочитай [project-routing.md](references/project-routing.md), [workflow.md](references/workflow.md), [agents.md](references/agents.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md).
+3. Прочитай [project-routing.md](references/project-routing.md), [workflow.md](references/workflow.md), [agent registry](references/agents/index.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md). Файл роли открывай непосредственно перед её назначением; downstream-роли не загружай заранее, а conditional-роли подключай только при активном route signal.
 4. Для логов, трассировки, воспроизведения и работы с чувствительными данными прочитай [evidence-and-reproduction.md](references/evidence-and-reproduction.md).
 5. Для UI, API, realtime, PWA, RBAC, tenant isolation или контрактов прочитай [ui-api-security-testing.md](references/ui-api-security-testing.md).
 6. Если затронуты `k8s`, CI/CD, release или rollout, полностью прочитай [gitops-and-deployment.md](references/gitops-and-deployment.md).
