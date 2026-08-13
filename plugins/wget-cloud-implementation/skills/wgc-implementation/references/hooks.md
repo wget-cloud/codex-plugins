@@ -23,12 +23,12 @@ Hooks работают только если `cwd` распознан как coo
 | Event | Handler | Поведение |
 | --- | --- | --- |
 | `SessionStart` | `session-start` | Добавляет текущий project, branch/dirty summary, обязательные docs и project-specific checks. Также срабатывает после compaction через source `compact`. |
-| `UserPromptSubmit` | `prompt-submit` | Активирует workflow-state при `$wgc-implementation` или явном implementation intent и фиксирует baseline dirty paths. |
+| `UserPromptSubmit` | `prompt-submit` | Выбирает профиль `$wgc-implementation` или `$wgc-bugfix`, выводит privacy-safe route flags и фиксирует baseline dirty paths. |
 | `SubagentStart` | `subagent-start` | Добавляет repository/scope/Git/deployment boundaries каждому субагенту. |
 | `SubagentStop` | `subagent-stop` | Проверяет `WGC_AGENT_RESULT`, role/verdict/phase и назначенную revision; сохраняет структурированный verdict или один раз возвращает агента для исправления. |
 | `PreToolUse` | `pre-tool` | До Bash/edit блокирует однозначно опасные действия; для test/legacy/generated/publication changes добавляет предупреждение. |
 | `PostToolUse` | `post-tool` | Асинхронно фиксирует touched paths и успешные verification commands; сообщает только релевантные gaps. |
-| `Stop` | `stop` | Для активной implementation-задачи один раз продолжает turn, если не хватает observable checks или gate ledger. |
+| `Stop` | `stop` | Для активной implementation/bugfix-задачи один раз продолжает turn, если не хватает observable checks или profile-specific gate ledger. |
 | `SessionEnd` | `session-end` | Деактивирует и компактно архивирует session ledger в `PLUGIN_DATA`. |
 
 `PreCompact`/`PostCompact` не используются: state обновляется после tool calls, а `SessionStart(source=compact)` уже восстанавливает контекст после compaction. `PermissionRequest` не используется, потому что плагин не должен автоматически разрешать escalation.
@@ -52,6 +52,7 @@ Hooks работают только если `cwd` распознан как coo
 - изменение test/spec paths: роль не видна в `PreToolUse`, поэтому решение принимает hash/diff gate;
 - изменение `legacy/` или generated GitOps profile без видимого source profile;
 - commit/push/merge, которым всё равно требуется явное разрешение пользователя;
+- runtime log collection без гарантии узкого time/service scope и redaction;
 - production change без зафиксированного targeted test/coverage;
 - cross-repository diff;
 - k8s change без renderer/validation/infrastructure review.
@@ -62,7 +63,7 @@ Hook не auto-approve permissions и не выполняет tests, formatting,
 
 ## State и производительность
 
-State хранится только в `${PLUGIN_DATA}/hook-state/<session-id>.json`. В product repositories не создаются lock, cache или ledger files. Исходный prompt и текст shell-команд не сохраняются — только SHA-256, безопасное имя runner, exit code и verification tags. Tool output целиком также не сохраняется.
+State хранится только в `${PLUGIN_DATA}/hook-state/<session-id>.json`. В product repositories не создаются lock, cache или ledger files. Исходный prompt, текст shell-команд и runtime output не сохраняются — только SHA-256, безопасное имя runner, exit code, профиль, route flags и verification tags.
 
 Async `PostToolUse` не задерживает основную tool operation. JSON updates защищены platform-specific lock и atomic replace. Ledger ограничивает количество commands, paths и guard events.
 
@@ -82,6 +83,8 @@ Runner классифицирует изменённые paths и успешны
 - k8s требует `gitops-render` и `validate`.
 
 Lifecycle ledger ожидает структурированные успешные результаты Architect, Test-maker, Reviewer, post-implementation Architecture Guardian и QA; для k8s также Infrastructure Reviewer. Diff-facing approvals привязаны к workspace revision и инвалидируются после новой правки. Финальный текст может перечислить эти verdicts, но не заменяет агентные артефакты. Если evidence отсутствует, первый `Stop` возвращает `decision: block` с точным списком gaps. Следующее событие имеет `stop_hook_active: true`, поэтому runner не создаёт бесконечный цикл: он позволяет завершить turn, деактивирует workflow и сохраняет оставшиеся gaps. Агент обязан выполнить проверки или честно описать blocker.
+
+Профиль bugfix дополнительно требует структурированные gates Bug-triage, Bug-investigator/RCA, Reproducer, Implementor и plan approval Architecture Guardian. Route flags добавляют browser, security, contract, DevOps/infrastructure и approval-gated deployment gates; UI требует e2e/browser evidence, разрешённый deployment — smoke evidence.
 
 Успешное прохождение hook gate не доказывает корректность теста, архитектуры или QA. Оркестратор всё равно проверяет command output, protected hashes, diff scope и отдельные agent artifacts.
 

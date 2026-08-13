@@ -1,6 +1,6 @@
 ---
 name: wgc-implementation
-description: Coordinate architecture-safe implementation work across the Wget Cloud frontend, backend microservices, shared front-lib, public sites, and Kubernetes GitOps repositories. Use for feature development, bug fixes, refactors, contracts, cross-repository changes, tests, reviews, QA, infrastructure preparation, rollout, or any task that benefits from specialized architect, architecture guardian, test-maker, implementor, reviewer, QA, DevOps, infrastructure reviewer, and deployment agents. Do not use for a simple explanation or read-only question that needs no implementation workflow.
+description: Coordinate architecture-safe planned implementation work across the Wget Cloud frontend, backend microservices, shared front-lib, public sites, and Kubernetes GitOps repositories. Use for feature development, refactors, contracts, cross-repository changes, tests, reviews, QA, infrastructure preparation, rollout, or any planned task that benefits from specialized architect, architecture guardian, test-maker, implementor, reviewer, QA, DevOps, infrastructure reviewer, and deployment agents. For a user-reported defect, regression, failure, crash, or production incident that must be investigated and fixed, use wgc-bugfix instead. Do not use for a simple explanation or read-only question that needs no implementation workflow.
 ---
 
 # WGC Implementation
@@ -36,7 +36,7 @@ description: Coordinate architecture-safe implementation work across the Wget Cl
 Используй минимальный процесс, сохраняющий независимость проверок:
 
 - `small`: один проект, локальная правка, низкий риск. Architect и test-maker могут быть короткими отдельными проходами; обязательны implementor, reviewer и architecture guardian. QA выполняет целевой smoke/exploratory check.
-- `standard`: feature, bugfix, refactor или contract change. Используй полный основной конвейер.
+- `standard`: feature, refactor или contract change. Используй полный основной конвейер. Для дефекта с неизвестной причиной переключись на `$wgc-bugfix`.
 - `cross-repo`: несколько репозиториев, публичный контракт, schema/proto, shared library или rollout dependency. Architect строит DAG и delivery order; каждый репозиторий имеет отдельные gates и commit boundary.
 - `deployment`: добавь DevOps, infrastructure reviewer, human gate, deployment agent и наблюдение rollout.
 

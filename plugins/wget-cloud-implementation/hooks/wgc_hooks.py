@@ -55,7 +55,25 @@ IMPLEMENTATION_INTENT = re.compile(
     r"переделать|отрефакторить|задеплоить|развернуть|разработать)\b)",
     re.IGNORECASE,
 )
-EXPLICIT_SKILL = re.compile(r"(?:\$wgc-implementation|\bwgc-implementation\b)", re.IGNORECASE)
+IMPLEMENTATION_EXPLICIT = re.compile(r"(?:\$wgc-implementation|\bwgc-implementation\b)", re.IGNORECASE)
+BUGFIX_EXPLICIT = re.compile(r"(?:\$wgc-bugfix|\bwgc-bugfix\b)", re.IGNORECASE)
+BUGFIX_ACTION = re.compile(
+    r"\b(?:fix|repair|resolve|debug|исправ\w*|почин\w*|устран\w*|разобрат\w*|найт\w*\s+причин\w*)\b",
+    re.IGNORECASE,
+)
+BUG_SIGNAL = re.compile(
+    r"(?:\b(?:bug|defect|regression|crash|exception|failure|failed|broken|wrong|incorrect|stale|"
+    r"duplicate|missing|timeout|incident|outage|"
+    r"not\s+working|doesn['’]?t\s+work|5\d\d|4\d\d)\b|"
+    r"\b(?:баг\w*|дефект\w*|регресс\w*|ошиб\w*|исключени\w*|инцидент\w*|таймаут\w*|"
+    r"пад\w*|сломал\w*|сбо\w*|неверн\w*|устаревш\w*|дублиру\w*|пропада\w*)\b|"
+    r"не\s+(?:работа|сохраня|загружа|открыва|отобража|обновля|созда|удаля|отправля|подключа)\w*)",
+    re.IGNORECASE,
+)
+DEPLOYMENT_FOLLOWUP = re.compile(
+    r"\b(?:deploy(?:ment)?|rollout|release|ship|депло\w*|задепло\w*|раскат\w*|релиз\w*|разверн\w*)\b",
+    re.IGNORECASE,
+)
 TEST_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__|e2e)(?:/|$)|(?:\.(?:test|spec)\.[^.]+$)", re.IGNORECASE)
 DOC_PATH = re.compile(r"(?:^|/)(?:docs?|README|AGENTS|ARCHITECTURE|BUSINESS_LOGIC)(?:[./_-]|$)", re.IGNORECASE)
 SOURCE_SUFFIXES = {
@@ -78,16 +96,55 @@ SOURCE_SUFFIXES = {
 }
 ROLE_VERDICTS: Dict[str, Set[str]] = {
     "explorer": {"mapped", "needs_input"},
-    "architect": {"proposed", "needs_input"},
-    "architecture-guardian": {"approved", "changes_requested", "needs_input"},
-    "test-maker": {"baseline_ready", "changes_requested", "blocked"},
+    "bug-triage": {"triaged", "needs_input", "blocked"},
+    "bug-investigator": {"evidence_ready", "root_cause_supported", "needs_more_evidence", "blocked"},
+    "reproducer": {"reproduced", "characterized", "not_reproduced", "blocked"},
+    "root-cause-reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
+    "architect": {"proposed", "planned", "needs_input", "blocked"},
+    "architecture-guardian": {"approved", "changes_requested", "needs_input", "blocked"},
+    "test-maker": {"baseline_ready", "tests_ready", "changes_requested", "needs_input", "blocked"},
     "implementor": {"implemented", "needs_input", "blocked"},
-    "reviewer": {"approved", "changes_requested", "needs_input"},
+    "reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
     "qa": {"pass", "defects_found", "blocked"},
+    "browser-qa": {"pass", "defects_found", "blocked"},
+    "security-reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
+    "contract-qa": {"pass", "defects_found", "blocked"},
     "devops": {"prepared", "needs_input", "blocked"},
-    "infrastructure-reviewer": {"approved", "changes_requested", "needs_input"},
-    "deployment-agent": {"deployed_healthy", "failed", "blocked", "approval_invalid"},
+    "infrastructure-reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
+    "deployment-agent": {"deployed_healthy", "failed", "rolled_back", "blocked", "approval_invalid"},
 }
+
+
+def bugfix_routes(prompt: str) -> Dict[str, bool]:
+    """Return privacy-safe routing flags without persisting the prompt."""
+    patterns = {
+        "ui": r"\b(?:ui|ux|browser|page|form|modal|pwa|service[ -]?worker|websocket|realtime|"
+        r"интерфейс\w*|браузер\w*|страниц\w*|форм\w*|модал\w*)\b",
+        "security": r"\b(?:auth|oauth|jwt|session|rbac|permission|acl|tenant|isolation|security|"
+        r"авторизац\w*|аутентификац\w*|доступ\w*|разрешени\w*|рол(?:ь|и|ей|ям|ями|ях)|тенант\w*|безопасност\w*)\b",
+        "contract": r"\b(?:api|rest|grpc|proto(?:buf)?|schema|contract|openapi|swagger|front-lib|"
+        r"контракт\w*|схем\w*|эндпоинт\w*)\b",
+        "incident": r"\b(?:prod(?:uction)?|staging|incident|outage|degradation|crash|timeout|5\d\d|"
+        r"прод\w*|инцидент\w*|авари\w*|падени\w*|таймаут\w*|деградац\w*)\b",
+        "gitops": r"\b(?:k8s|kubernetes|helm|argo(?:\s*cd)?|gitops|manifest|values|ci/?cd|"
+        r"кубернетес\w*|манифест\w*)\b",
+        "deployment": r"\b(?:deploy(?:ment)?|rollout|release|ship|депло\w*|задепло\w*|раскат\w*|релиз\w*|разверн\w*)\b",
+    }
+    return {name: bool(re.search(pattern, prompt, re.IGNORECASE)) for name, pattern in patterns.items()}
+
+
+def workflow_profile(prompt: str, active_profile: Optional[str] = None) -> Optional[Tuple[str, str]]:
+    if BUGFIX_EXPLICIT.search(prompt):
+        return "bugfix", "explicit"
+    if IMPLEMENTATION_EXPLICIT.search(prompt):
+        return "implementation", "explicit"
+    if active_profile == "bugfix" and (IMPLEMENTATION_INTENT.search(prompt) or DEPLOYMENT_FOLLOWUP.search(prompt)):
+        return "bugfix", "followup"
+    if BUGFIX_ACTION.search(prompt) and BUG_SIGNAL.search(prompt):
+        return "bugfix", "inferred"
+    if IMPLEMENTATION_INTENT.search(prompt):
+        return "implementation", "inferred"
+    return None
 
 
 def read_input() -> Dict[str, Any]:
@@ -288,9 +345,11 @@ def update_state(
     path, lock = state_paths(payload, context)
     with file_lock(lock):
         state = read_state(path)
-        state.setdefault("version", 1)
+        state["version"] = 2
         state.setdefault("active", False)
         state.setdefault("activation", "none")
+        state.setdefault("profile", "implementation")
+        state.setdefault("bugfix_routes", {})
         state.setdefault("commands", [])
         state.setdefault("verification", {})
         state.setdefault("touched_paths", [])
@@ -729,6 +788,14 @@ def pre_tool_warning(payload: Dict[str, Any], command: str, context: Dict[str, A
         notes.append(
             "Git mutation requires explicit task authorization and separate repository boundaries; verify dirty state, exact branch, diff, and approval."
         )
+    if re.search(
+        r"(?:\bkubectl\b[^;&|\n]*\blogs\b|\bdocker(?:\s+compose)?\s+logs\b|\bjournalctl\b|\bargocd\b[^;&|\n]*\blogs\b)",
+        command,
+        re.IGNORECASE,
+    ):
+        notes.append(
+            "Runtime logs may contain credentials or personal data. Use the narrowest service, tenant-safe identifier, time range and line limit; redact output and persist only evidence handles or summaries."
+        )
     return " ".join(notes) if notes else None
 
 
@@ -758,6 +825,10 @@ def verification_tags(command: str) -> Set[str]:
     tags: Set[str] = set()
     if re.search(r"\b(test|jest|vitest|playwright|pytest|rspec)\b", lower):
         tags.add("test")
+    if re.search(r"\b(playwright|cypress|e2e)\b|test:e2e", lower):
+        tags.add("browser")
+    if re.search(r"\bsmoke(?:[-_: ]?test)?\b", lower):
+        tags.add("smoke")
     if "coverage" in lower or "--cov" in lower:
         tags.add("coverage")
     if "type-check" in lower or "typecheck" in lower or "tsc" in lower:
@@ -904,13 +975,15 @@ def parse_agent_result(message: str) -> Tuple[Optional[Dict[str, str]], Optional
     role = str(value.get("role") or "").lower().strip().replace("_", "-")
     verdict = str(value.get("verdict") or "").lower().strip()
     phase = str(value.get("phase") or "").lower().strip()
-    revision = str(value.get("input_revision") or "").strip()
+    revision = str(value.get("input_revision") or value.get("revision") or "").strip()
     if role not in ROLE_VERDICTS:
         return None, f"unknown WGC role: {role or '<empty>'}"
     if verdict not in ROLE_VERDICTS[role]:
         return None, f"invalid verdict '{verdict or '<empty>'}' for role {role}"
     if role == "architecture-guardian" and phase not in {"plan", "diff"}:
         return None, "architecture-guardian result requires phase plan or diff"
+    if role == "bug-investigator" and phase not in {"evidence", "rca"}:
+        return None, "bug-investigator result requires phase evidence or rca"
     if not revision:
         return None, "WGC_AGENT_RESULT requires input_revision from SubagentStart"
     return {
@@ -935,10 +1008,24 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
         role = result.get("role")
         verdict = result.get("verdict")
         phase = result.get("phase")
-        if role == "architect" and verdict == "proposed":
+        if role == "bug-triage" and verdict == "triaged":
+            gates.add("bug-triage")
+        elif role == "bug-investigator" and verdict == "evidence_ready" and phase == "evidence":
+            gates.add("evidence")
+        elif role == "bug-investigator" and verdict == "root_cause_supported" and phase == "rca":
+            gates.add("root-cause")
+        elif role == "reproducer" and verdict in {"reproduced", "characterized"}:
+            gates.add("reproducer")
+        elif role == "root-cause-reviewer" and verdict == "approved":
+            gates.add("root-cause-review")
+        elif role == "architect" and verdict in {"proposed", "planned"}:
             gates.add("architect")
-        elif role == "test-maker" and verdict == "baseline_ready":
+        elif role == "architecture-guardian" and verdict == "approved" and phase == "plan":
+            gates.add("architecture-plan")
+        elif role == "test-maker" and verdict in {"baseline_ready", "tests_ready"}:
             gates.add("test-maker")
+        elif role == "implementor" and verdict == "implemented":
+            gates.add("implementor")
         elif role == "reviewer" and verdict == "approved" and result.get("input_revision") == current_revision:
             gates.add("reviewer")
         elif (
@@ -950,12 +1037,30 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
             gates.add("architecture")
         elif role == "qa" and verdict == "pass" and result.get("input_revision") == current_revision:
             gates.add("qa")
+        elif role == "browser-qa" and verdict == "pass" and result.get("input_revision") == current_revision:
+            gates.add("browser")
+        elif (
+            role == "security-reviewer"
+            and verdict == "approved"
+            and result.get("input_revision") == current_revision
+        ):
+            gates.add("security")
+        elif role == "contract-qa" and verdict == "pass" and result.get("input_revision") == current_revision:
+            gates.add("contract")
+        elif role == "devops" and verdict == "prepared":
+            gates.add("devops")
         elif (
             role == "infrastructure-reviewer"
             and verdict == "approved"
             and result.get("input_revision") == current_revision
         ):
             gates.add("infrastructure")
+        elif (
+            role == "deployment-agent"
+            and verdict == "deployed_healthy"
+            and result.get("input_revision") == current_revision
+        ):
+            gates.add("deployment")
     return gates
 
 
@@ -964,35 +1069,56 @@ def handle_session_start(payload: Dict[str, Any], context: Dict[str, Any]) -> Di
         state["last_start_source"] = payload.get("source")
         state.setdefault("started_at", int(time.time()))
 
-    update_state(payload, context, updater)
-    return additional_context("SessionStart", context_text(context))
+    state = update_state(payload, context, updater)
+    active = f" Active workflow profile: {state.get('profile', 'implementation')}." if state.get("active") else ""
+    return additional_context("SessionStart", context_text(context) + active)
 
 
 def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     prompt = str(payload.get("prompt") or "")
-    explicit = bool(EXPLICIT_SKILL.search(prompt))
-    inferred = bool(IMPLEMENTATION_INTENT.search(prompt))
-    if not (explicit or inferred):
+    state_path, _ = state_paths(payload, context)
+    prior_state = read_state(state_path)
+    active_profile = str(prior_state.get("profile")) if prior_state.get("active") else None
+    selected = workflow_profile(prompt, active_profile)
+    if not selected:
         return None
+    profile, activation = selected
+    routes = bugfix_routes(prompt) if profile == "bugfix" else {}
 
     baseline = workspace_snapshot(context)
 
     def updater(state: Dict[str, Any]) -> None:
         already_active = bool(state.get("active"))
+        profile_changed = state.get("profile") != profile
         state["active"] = True
-        state["activation"] = "explicit" if explicit else "inferred"
+        state["activation"] = activation
+        state["profile"] = profile
         state["last_prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
-        if not already_active:
+        if profile == "bugfix":
+            previous_routes = state.get("bugfix_routes", {}) if already_active and not profile_changed else {}
+            state["bugfix_routes"] = {
+                name: bool(enabled or previous_routes.get(name)) for name, enabled in routes.items()
+            }
+        else:
+            state["bugfix_routes"] = {}
+        if not already_active or profile_changed:
             state["baseline_dirty"] = baseline
             state["current_dirty"] = baseline
             state["commands"] = []
             state["verification"] = {}
             state["touched_paths"] = []
             state["stop_turns"] = []
+            state["subagent_results"] = []
             state["activated_at"] = int(time.time())
 
     update_state(payload, context, updater)
-    mode = "explicitly" if explicit else "from implementation intent"
+    mode = "explicitly" if activation == "explicit" else "from task intent"
+    if profile == "bugfix":
+        enabled = ", ".join(name for name, value in routes.items() if value) or "local"
+        return additional_context(
+            "UserPromptSubmit",
+            f"WGC bugfix workflow activated {mode}; routes={enabled}. Build a redacted BugCase, reproduce before patching, support the root cause with scoped evidence, protect regression tests, then use independent architecture/review/QA gates. Runtime inspection is read-only and deployment still requires explicit human approval.",
+        )
     return additional_context(
         "UserPromptSubmit",
         f"WGC implementation workflow activated {mode}. Build a WorkItem, preserve baseline dirty paths, and use the architecture → tests → implementation → independent review → QA gates.",
@@ -1013,11 +1139,17 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> D
 
     state = update_state(payload, context, updater)
     active = " Active WGC workflow state is present." if state.get("active") else ""
+    profile = str(state.get("profile") or "implementation")
+    evidence = (
+        " For bugfix work, gather runtime evidence read-only with narrow time/service scope, redact secrets and personal data, and never persist raw logs or the user prompt."
+        if profile == "bugfix"
+        else ""
+    )
     message = (
-        f"WGC subagent boundary: project={context['project']}.{active} Read root and nested AGENTS.md before work. "
+        f"WGC subagent boundary: project={context['project']}; profile={profile}.{active} Read root and nested AGENTS.md before work. "
         "Stay inside the assigned repository/path scope, preserve existing changes, return evidence and a role verdict, and do not commit, push, deploy, or write to the cluster unless the assignment explicitly authorizes it."
-        f" Your exact input revision is {revision}."
-        ' End the final response with exactly one line: WGC_AGENT_RESULT: {"role":"<role>","verdict":"<allowed-verdict>","phase":"<plan-or-diff-if-architecture-guardian>","input_revision":"<exact-input-revision>"}'
+        f"{evidence} Your exact input revision is {revision}."
+        ' End the final response with exactly one line: WGC_AGENT_RESULT: {"role":"<role>","verdict":"<allowed-verdict>","phase":"<role-required-phase-or-empty>","input_revision":"<exact-input-revision>"}'
     )
     return additional_context("SubagentStart", message)
 
@@ -1097,15 +1229,32 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
         incremental = snapshot_since_baseline(snapshot, previous)
         incremental_classification = classify_paths(incremental, touched)
         if incremental_classification["paths"]:
-            invalidate = {"reviewer", "architecture-guardian", "qa"}
+            invalidate = {
+                "implementor",
+                "reviewer",
+                "qa",
+                "browser-qa",
+                "security-reviewer",
+                "contract-qa",
+                "deployment-agent",
+            }
             if incremental_classification["tests"]:
                 invalidate.add("test-maker")
             if incremental_classification["k8s"]:
-                invalidate.add("infrastructure-reviewer")
+                invalidate.update({"devops", "infrastructure-reviewer"})
+
+            def still_valid(result: Any) -> bool:
+                if not isinstance(result, dict):
+                    return False
+                role = result.get("role")
+                if role == "architecture-guardian" and result.get("phase") == "diff":
+                    return False
+                return role not in invalidate
+
             state["subagent_results"] = [
                 result
                 for result in state.get("subagent_results", [])
-                if isinstance(result, dict) and result.get("role") not in invalidate
+                if still_valid(result)
             ]
         state["current_dirty"] = snapshot
         if tool == "Bash" and command.strip():
@@ -1162,15 +1311,50 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
         update_state(payload, context, no_changes)
         return None
 
+    profile = str(state.get("profile") or "implementation")
+    routes = state.get("bugfix_routes", {}) if profile == "bugfix" else {}
+    routes = routes if isinstance(routes, dict) else {}
     required = required_checks(classification)
+    if profile == "bugfix" and routes.get("ui"):
+        required.add("browser")
+    if profile == "bugfix" and routes.get("deployment"):
+        required.add("smoke")
     completed = set(state.get("verification", {}).keys())
     missing = sorted(required - completed)
     last_message = str(payload.get("last_assistant_message") or "")
-    required_gates = {"architect", "test-maker", "reviewer", "architecture", "qa"}
-    if classification["k8s"]:
-        required_gates.add("infrastructure")
+    if profile == "bugfix":
+        required_gates = {
+            "bug-triage",
+            "evidence",
+            "root-cause",
+            "root-cause-review",
+            "reproducer",
+            "architect",
+            "architecture-plan",
+            "test-maker",
+            "implementor",
+            "reviewer",
+            "architecture",
+            "qa",
+        }
+        if routes.get("ui"):
+            required_gates.add("browser")
+        if routes.get("security"):
+            required_gates.add("security")
+        if routes.get("contract"):
+            required_gates.add("contract")
+        if routes.get("gitops") or classification["k8s"]:
+            required_gates.update({"devops", "infrastructure"})
+        if routes.get("deployment"):
+            required_gates.add("deployment")
+    else:
+        required_gates = {"architect", "test-maker", "reviewer", "architecture", "qa"}
+        if classification["k8s"]:
+            required_gates.add("infrastructure")
     current_revision = workspace_identity(context)
-    observed_gates = approved_agent_gates(state, current_revision) | gate_mentions(last_message)
+    observed_gates = approved_agent_gates(state, current_revision)
+    if profile == "implementation":
+        observed_gates |= gate_mentions(last_message)
     gate_missing = sorted(required_gates - observed_gates)
     if not missing and not gate_missing:
         def complete(value: Dict[str, Any]) -> None:
@@ -1198,11 +1382,12 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
 
     update_state(payload, context, updater)
 
-    parts = ["Before finishing the WGC implementation, close the observable completion gaps."]
+    workflow_name = "bugfix" if profile == "bugfix" else "implementation"
+    parts = [f"Before finishing the WGC {workflow_name}, close the observable completion gaps."]
     if missing:
         parts.append("Missing successful verification evidence: " + ", ".join(missing) + ".")
     if gate_missing:
-        parts.append("The final gate ledger does not mention: " + ", ".join(gate_missing) + ".")
+        parts.append("The structured gate ledger is missing: " + ", ".join(gate_missing) + ".")
     parts.append(
         "Run the applicable checks or state the exact blocker, verify protected-test hashes and repository scope, then produce a factual final report."
     )

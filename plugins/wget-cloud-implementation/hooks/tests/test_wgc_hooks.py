@@ -124,6 +124,14 @@ class WgcHooksTest(unittest.TestCase):
             cwd,
         )
 
+    def activate_bugfix(self, project="backend", prompt="Исправь баг: расчёт суммы возвращает неверное значение"):
+        cwd = self.projects[project]
+        return self.call(
+            "prompt-submit",
+            {"hook_event_name": "UserPromptSubmit", "turn_id": "turn-bugfix", "prompt": prompt},
+            cwd,
+        )
+
     def record_agent(self, cwd, role, verdict, phase=""):
         self.agent_counter += 1
         agent_id = f"agent-{self.agent_counter}"
@@ -213,6 +221,55 @@ class WgcHooksTest(unittest.TestCase):
         state = json.loads(states[0].read_text(encoding="utf-8"))
         self.assertIn("last_prompt_sha256", state)
         self.assertNotIn("last_prompt", state)
+
+    def test_prompt_submit_selects_bugfix_profile_and_privacy_safe_routes(self):
+        output = self.activate_bugfix(
+            prompt="Use $wgc-bugfix: production API/UI regression in PWA exposes another tenant after WebSocket reconnect; deploy through Argo after approval",
+        )
+        context = output["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("bugfix workflow activated", context)
+        self.assertIn("reproduce before patching", context)
+        state_path = next((self.data / "hook-state").glob("*.json"))
+        raw = state_path.read_text(encoding="utf-8")
+        state = json.loads(raw)
+        self.assertEqual(state["version"], 2)
+        self.assertEqual(state["profile"], "bugfix")
+        self.assertTrue(state["bugfix_routes"]["ui"])
+        self.assertTrue(state["bugfix_routes"]["security"])
+        self.assertTrue(state["bugfix_routes"]["contract"])
+        self.assertTrue(state["bugfix_routes"]["incident"])
+        self.assertTrue(state["bugfix_routes"]["gitops"])
+        self.assertTrue(state["bugfix_routes"]["deployment"])
+        self.assertNotIn("another tenant", raw)
+
+    def test_bugfix_inference_does_not_capture_generic_implementation(self):
+        bugfix = self.activate_bugfix(prompt="Почини ошибку: расчёт иногда падает")
+        self.assertIn("bugfix workflow", bugfix["hookSpecificOutput"]["additionalContext"])
+        implementation = self.call(
+            "prompt-submit",
+            {
+                "session_id": "session-generic-implementation",
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "Исправь документацию архитектуры",
+            },
+            self.projects["backend"],
+        )
+        self.assertIn("implementation workflow", implementation["hookSpecificOutput"]["additionalContext"])
+        states = [json.loads(path.read_text(encoding="utf-8")) for path in (self.data / "hook-state").glob("*.json")]
+        self.assertIn("implementation", {state["profile"] for state in states})
+
+    def test_deployment_followup_stays_in_active_bugfix_profile(self):
+        self.activate_bugfix()
+        output = self.call(
+            "prompt-submit",
+            {"hook_event_name": "UserPromptSubmit", "prompt": "Одобряю деплой исправления после показа revision"},
+            self.projects["backend"],
+        )
+        self.assertIn("bugfix workflow", output["hookSpecificOutput"]["additionalContext"])
+        state_path = next((self.data / "hook-state").glob("*.json"))
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertEqual(state["profile"], "bugfix")
+        self.assertTrue(state["bugfix_routes"]["deployment"])
 
     def test_blocks_direct_kubernetes_write_but_allows_read(self):
         blocked = self.call(
@@ -412,6 +469,20 @@ class WgcHooksTest(unittest.TestCase):
         )
         self.assertIn("Test-maker", output["hookSpecificOutput"]["additionalContext"])
 
+    def test_runtime_log_collection_warns_about_scope_and_redaction(self):
+        output = self.call(
+            "pre-tool",
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "kubectl -n backend logs deploy/gateway --since=10m --tail=200"},
+            },
+            self.projects["backend"],
+        )
+        context = output["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("personal data", context)
+        self.assertIn("redact", context)
+
     def test_stop_gate_ignores_preexisting_dirty_paths(self):
         source = self.projects["backend"] / "src.ts"
         source.write_text("export const before = true;\n", encoding="utf-8")
@@ -602,6 +673,219 @@ class WgcHooksTest(unittest.TestCase):
             cwd,
         )
         self.assertIsNone(output)
+
+    def test_successful_bugfix_requires_structured_rca_and_regression_gates(self):
+        cwd = self.projects["backend"]
+        self.activate_bugfix()
+        source = cwd / "src" / "price.ts"
+        source.parent.mkdir()
+        source.write_text("export const total = 1;\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {"command": "*** Begin Patch\n*** Add File: src/price.ts\n+x\n*** End Patch"},
+                "tool_response": {"ok": True},
+            },
+            cwd,
+        )
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "npm test -- --coverage"},
+                "tool_response": {"exit_code": 0},
+            },
+            cwd,
+        )
+        for role, verdict, phase in (
+            ("bug-triage", "triaged", ""),
+            ("bug-investigator", "evidence_ready", "evidence"),
+            ("bug-investigator", "root_cause_supported", "rca"),
+            ("root-cause-reviewer", "approved", ""),
+            ("reproducer", "reproduced", ""),
+            ("architect", "planned", ""),
+            ("architecture-guardian", "approved", "plan"),
+            ("test-maker", "tests_ready", ""),
+            ("implementor", "implemented", ""),
+            ("reviewer", "approved", ""),
+            ("architecture-guardian", "approved", "diff"),
+            ("qa", "pass", ""),
+        ):
+            self.record_agent(cwd, role, verdict, phase)
+        output = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-bugfix-success",
+                "stop_hook_active": False,
+                "last_assistant_message": "Bug fixed.",
+            },
+            cwd,
+        )
+        self.assertIsNone(output)
+
+    def test_ui_bugfix_adds_browser_check_and_agent_gate(self):
+        cwd = self.projects["frontend"]
+        self.activate_bugfix("frontend", "Исправь баг UI: форма не сохраняется после reconnect")
+        source = cwd / "src" / "form.tsx"
+        source.parent.mkdir()
+        source.write_text("export const Form = () => null;\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {"command": "*** Begin Patch\n*** Add File: src/form.tsx\n+x\n*** End Patch"},
+                "tool_response": {"ok": True},
+            },
+            cwd,
+        )
+        for command in ("npm test -- --coverage", "npm run type-check"):
+            self.call(
+                "post-tool",
+                {
+                    "hook_event_name": "PostToolUse",
+                    "tool_name": "Bash",
+                    "tool_input": {"command": command},
+                    "tool_response": {"exit_code": 0},
+                },
+                cwd,
+            )
+        output = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-ui-bugfix",
+                "stop_hook_active": False,
+                "last_assistant_message": "Done",
+            },
+            cwd,
+        )
+        self.assertIn("browser", output["reason"])
+
+    def test_deployment_bugfix_requires_smoke_and_deployment_gate(self):
+        cwd = self.projects["backend"]
+        self.activate_bugfix("backend", "Use $wgc-bugfix to fix this production incident and deploy the approved revision")
+        source = cwd / "src" / "health.ts"
+        source.parent.mkdir()
+        source.write_text("export const healthy = true;\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {"command": "*** Begin Patch\n*** Add File: src/health.ts\n+x\n*** End Patch"},
+                "tool_response": {"ok": True},
+            },
+            cwd,
+        )
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "npm test -- --coverage"},
+                "tool_response": {"exit_code": 0},
+            },
+            cwd,
+        )
+        output = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-deployment-bugfix",
+                "stop_hook_active": False,
+                "last_assistant_message": "Ready for delivery",
+            },
+            cwd,
+        )
+        self.assertIn("smoke", output["reason"])
+        self.assertIn("deployment", output["reason"])
+
+    def test_cross_tenant_api_bugfix_requires_security_and_contract_gates(self):
+        cwd = self.projects["backend"]
+        self.activate_bugfix(
+            "backend",
+            "Исправь production API баг: роль manager иногда получает данные другого tenant",
+        )
+        source = cwd / "src" / "client.ts"
+        source.parent.mkdir()
+        source.write_text("export const client = {};\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {"command": "*** Begin Patch\n*** Add File: src/client.ts\n+x\n*** End Patch"},
+                "tool_response": {"ok": True},
+            },
+            cwd,
+        )
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "npm test -- --coverage"},
+                "tool_response": {"exit_code": 0},
+            },
+            cwd,
+        )
+        output = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-security-contract-bugfix",
+                "stop_hook_active": False,
+                "last_assistant_message": "Fix complete",
+            },
+            cwd,
+        )
+        self.assertIn("security", output["reason"])
+        self.assertIn("contract", output["reason"])
+
+    def test_bugfix_write_invalidates_diff_gates_but_preserves_plan_and_rca(self):
+        cwd = self.projects["backend"]
+        self.activate_bugfix()
+        source = cwd / "src" / "price.ts"
+        source.parent.mkdir()
+        source.write_text("export const total = 1;\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {"command": "*** Begin Patch\n*** Add File: src/price.ts\n+x\n*** End Patch"},
+                "tool_response": {"ok": True},
+            },
+            cwd,
+        )
+        self.record_agent(cwd, "bug-investigator", "root_cause_supported", "rca")
+        self.record_agent(cwd, "architecture-guardian", "approved", "plan")
+        self.record_agent(cwd, "reviewer", "approved")
+        self.record_agent(cwd, "architecture-guardian", "approved", "diff")
+        self.record_agent(cwd, "qa", "pass")
+        source.write_text("export const total = 2;\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "npm test -- --coverage"},
+                "tool_response": {"exit_code": 0},
+            },
+            cwd,
+        )
+        state_path = next((self.data / "hook-state").glob("*.json"))
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        results = {(item["role"], item.get("phase")) for item in state["subagent_results"]}
+        self.assertIn(("bug-investigator", "rca"), results)
+        self.assertIn(("architecture-guardian", "plan"), results)
+        self.assertNotIn(("architecture-guardian", "diff"), results)
+        self.assertFalse(any(role in {"reviewer", "qa"} for role, _ in results))
 
     def test_write_after_review_invalidates_diff_gates(self):
         cwd = self.projects["backend"]

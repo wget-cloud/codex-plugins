@@ -1,7 +1,7 @@
 {
   "name": "wget-cloud-implementation",
-  "version": "0.2.0+codex.20260813165836",
-  "description": "Architecture-safe multi-agent implementation, review, QA, GitOps, and deployment workflow for Wget Cloud repositories.",
+  "version": "0.3.0+codex.20260813180210",
+  "description": "Architecture-safe multi-agent implementation and evidence-driven bugfix workflows for Wget Cloud repositories.",
   "author": {
     "name": "Wget Cloud",
     "url": "https://github.com/wget-cloud"
@@ -12,14 +12,16 @@
     "wget-cloud",
     "multi-agent",
     "implementation",
+    "bugfix",
+    "diagnostics",
     "architecture",
     "gitops"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Wget Cloud Implementation",
-    "shortDescription": "Multi-agent delivery with architecture and GitOps gates.",
-    "longDescription": "Coordinates discovery, architecture, protected tests, implementation, independent review, QA, GitOps infrastructure changes, and approval-gated deployment across the Wget Cloud repositories.",
+    "shortDescription": "Multi-agent delivery and evidence-driven bug fixes.",
+    "longDescription": "Coordinates planned implementation plus evidence-first bug diagnosis, reproduction, root-cause analysis, protected regression tests, independent architecture/review/QA, GitOps infrastructure changes, and approval-gated deployment across the Wget Cloud repositories.",
     "developerName": "Wget Cloud",
     "category": "Developer Tools",
     "capabilities": [
@@ -27,6 +29,6 @@
       "Write"
     ],
     "websiteURL": "https://github.com/wget-cloud/codex-plugins",
-    "defaultPrompt": "Use $wgc-implementation to deliver this Wget Cloud task through the required architecture, test, review, QA, and GitOps gates."
+    "defaultPrompt": "Use $wgc-implementation for planned delivery or $wgc-bugfix for a reported defect, with the required architecture, test, review, QA, and GitOps gates."
   }
 }
