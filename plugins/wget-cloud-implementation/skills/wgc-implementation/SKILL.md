@@ -1,9 +1,9 @@
 ---
-name: wget-cloud-implementation
+name: wgc-implementation
 description: Coordinate architecture-safe implementation work across the Wget Cloud frontend, backend microservices, shared front-lib, public sites, and Kubernetes GitOps repositories. Use for feature development, bug fixes, refactors, contracts, cross-repository changes, tests, reviews, QA, infrastructure preparation, rollout, or any task that benefits from specialized architect, architecture guardian, test-maker, implementor, reviewer, QA, DevOps, infrastructure reviewer, and deployment agents. Do not use for a simple explanation or read-only question that needs no implementation workflow.
 ---
 
-# Wget Cloud Implementation
+# WGC Implementation
 
 Организуй задачу как управляемый конвейер специализированных агентов. Главный агент остаётся оркестратором: он владеет состоянием задачи, назначает работу, проверяет границы изменений и единолично переводит задачу между этапами. Субагенты выдают артефакты и verdict, но не принимают решение о завершении или деплое.
 

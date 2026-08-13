@@ -27,6 +27,6 @@
       "Write"
     ],
     "websiteURL": "https://github.com/wget-cloud/codex-plugins",
-    "defaultPrompt": "Use $wget-cloud-implementation to deliver this Wget Cloud task through the required architecture, test, review, QA, and GitOps gates."
+    "defaultPrompt": "Use $wgc-implementation to deliver this Wget Cloud task through the required architecture, test, review, QA, and GitOps gates."
   }
 }

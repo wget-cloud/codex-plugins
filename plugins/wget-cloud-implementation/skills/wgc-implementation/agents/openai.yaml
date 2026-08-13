@@ -1,0 +1,4 @@
+interface:
+  display_name: "WGC Implementation"
+  short_description: "Architecture-safe multi-agent delivery for Wget Cloud"
+  default_prompt: "Use $wgc-implementation to implement this task across Wget Cloud with architecture, tests, review, QA, and GitOps gates."
