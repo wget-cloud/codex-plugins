@@ -12,7 +12,13 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 ROOT = Path(__file__).resolve().parents[1]
 MARKETPLACE = ROOT / ".agents" / "plugins" / "marketplace.json"
-SEMVER = re.compile(r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$")
+SEMVER = re.compile(
+    r"^(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)"
+    r"(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
+)
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 REQUIRED_ROLE_SECTIONS = ("## Назначение", "## Полномочия", "## Запреты", "## Результат")
@@ -146,6 +152,40 @@ def validate_skill(skill: Path, errors: List[str]) -> int:
     return validate_agent_registry(skill, errors)
 
 
+def validate_hooks(path: Path, errors: List[str]) -> None:
+    try:
+        config = load_json(path)
+    except ValidationError as error:
+        errors.append(str(error))
+        return
+    events = config.get("hooks")
+    if not isinstance(events, dict):
+        errors.append(f"{path.relative_to(ROOT)}: hooks must be an object")
+        return
+    for event, groups in events.items():
+        if not isinstance(groups, list):
+            errors.append(f"{path.relative_to(ROOT)}: {event} groups must be an array")
+            continue
+        for group_index, group in enumerate(groups):
+            if not isinstance(group, dict) or not isinstance(group.get("hooks"), list):
+                errors.append(
+                    f"{path.relative_to(ROOT)}: {event}[{group_index}].hooks must be an array"
+                )
+                continue
+            for handler_index, handler in enumerate(group["hooks"]):
+                if not isinstance(handler, dict):
+                    errors.append(
+                        f"{path.relative_to(ROOT)}: "
+                        f"{event}[{group_index}].hooks[{handler_index}] must be an object"
+                    )
+                    continue
+                if "async" in handler:
+                    errors.append(
+                        f"{path.relative_to(ROOT)}: "
+                        f"{event}[{group_index}].hooks[{handler_index}] must not declare async"
+                    )
+
+
 def validate_plugin(plugin: Path, errors: List[str]) -> Tuple[int, int]:
     manifest_path = plugin / ".codex-plugin" / "plugin.json"
     if not manifest_path.is_file():
@@ -159,7 +199,10 @@ def validate_plugin(plugin: Path, errors: List[str]) -> Tuple[int, int]:
     if manifest.get("name") != plugin.name:
         errors.append(f"{manifest_path.relative_to(ROOT)}: name must match plugin folder")
     if not SEMVER.fullmatch(str(manifest.get("version") or "")):
-        errors.append(f"{manifest_path.relative_to(ROOT)}: version must be strict semver")
+        errors.append(
+            f"{manifest_path.relative_to(ROOT)}: "
+            "version must be plain SemVer without build metadata"
+        )
     prompts = (manifest.get("interface") or {}).get("defaultPrompt") if isinstance(manifest.get("interface"), dict) else None
     if not isinstance(prompts, list) or not 1 <= len(prompts) <= 3:
         errors.append(f"{manifest_path.relative_to(ROOT)}: interface.defaultPrompt must be an array of 1-3 strings")
@@ -173,10 +216,7 @@ def validate_plugin(plugin: Path, errors: List[str]) -> Tuple[int, int]:
     roles = sum(validate_skill(skill, errors) for skill in skills)
     hooks = plugin / "hooks" / "hooks.json"
     if hooks.exists():
-        try:
-            load_json(hooks)
-        except ValidationError as error:
-            errors.append(str(error))
+        validate_hooks(hooks, errors)
     return len(skills), roles
 
 

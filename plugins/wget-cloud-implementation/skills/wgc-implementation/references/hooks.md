@@ -27,7 +27,7 @@ Hooks работают только если `cwd` распознан как coo
 | `SubagentStart` | `subagent-start` | Добавляет repository/scope/Git/deployment boundaries каждому субагенту. |
 | `SubagentStop` | `subagent-stop` | Проверяет профильный `WGC_AGENT_RESULT`, точный набор role/verdict/phase и назначенную revision; сохраняет структурированный verdict или один раз возвращает агента для исправления. |
 | `PreToolUse` | `pre-tool` | До Bash/edit блокирует однозначно опасные действия; для test/legacy/generated/publication changes добавляет предупреждение. |
-| `PostToolUse` | `post-tool` | Асинхронно фиксирует touched paths и успешные verification commands; сообщает только релевантные gaps. |
+| `PostToolUse` | `post-tool` | Синхронно и в пределах bounded timeout фиксирует touched paths и успешные verification commands; сообщает только релевантные gaps. |
 | `Stop` | `stop` | Для активной implementation/bugfix-задачи один раз продолжает turn, если не хватает observable checks или profile-specific gate ledger. |
 | `SessionEnd` | `session-end` | Деактивирует и компактно архивирует session ledger в `PLUGIN_DATA`. |
 
@@ -65,7 +65,7 @@ Hook не auto-approve permissions и не выполняет tests, formatting,
 
 State хранится только в `${PLUGIN_DATA}/hook-state/<session-id>.json`. В product repositories не создаются lock, cache или ledger files. Исходный prompt, текст shell-команд и runtime output не сохраняются — только SHA-256, безопасное имя runner, exit code, профиль, route flags и verification tags.
 
-Async `PostToolUse` не задерживает основную tool operation. JSON updates защищены platform-specific lock и atomic replace. Ledger ограничивает количество commands, paths и guard events.
+`PostToolUse` выполняется синхронно с timeout 10 секунд и делает только ограниченное bookkeeping без запуска tests или других длительных команд. JSON updates защищены platform-specific lock и atomic replace. Ledger ограничивает количество commands, paths и guard events.
 
 При активации сохраняется baseline Git status всех пяти repositories. Completion logic учитывает новые/touched paths, а не уже существовавший dirty state пользователя.
 

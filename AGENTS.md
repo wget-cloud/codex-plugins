@@ -14,7 +14,7 @@
 ## Изменения
 
 - Используй `plugin-creator` для manifest/marketplace и `skill-creator` для skills.
-- Не редактируй marketplace entry при обычном cachebuster update.
+- При изменении plugin bundle повышай manifest `version` как plain SemVer без `+` build metadata; cachebuster helper не используй и marketplace entry ради версии не редактируй.
 - При добавлении plugin/skill применяй штатные scaffold scripts; не оставляй TODO placeholders.
 - Изменение role verdict/phase обязано синхронно обновить role file, hook profile contract и tests.
 - Не объединяй роли с конфликтом независимости и не создавай общий shared role file за пределами skill: skill должен оставаться переносимым.
@@ -26,6 +26,8 @@
 make validate
 ```
 
-Также запусти official quick validator каждого изменённого skill, plugin validator и `git diff --check`. Cachebuster обновляй последним, после содержательных правок.
+Также запусти official quick validator каждого изменённого skill, plugin validator и `git diff --check`.
+
+После публикации переустанови plugin через `codex plugin add <plugin>@<marketplace>` и выполняй smoke только в новой задаче: уже активные задачи продолжают ссылаться на загруженную при старте cache-версию. Smoke обязан проверить manifest version и отсутствие warning/error на lifecycle hooks. Не удаляй cache, используемый активной задачей.
 
 Commit/push выполняй только по явному разрешению пользователя. Marketplace publication и deployment внешних Wget Cloud приложений — разные операции.

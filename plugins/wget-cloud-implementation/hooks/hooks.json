@@ -80,7 +80,6 @@
             "type": "command",
             "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" post-tool",
             "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" post-tool",
-            "async": true,
             "timeout": 10,
             "statusMessage": "Tracking WGC changes and checks",
             "additionalContextLimit": 1200

@@ -39,7 +39,15 @@ scripts/validate_marketplace.py           # structural validation всего к�
 make validate
 ```
 
-Дополнительно перед публикацией запусти официальные `quick_validate.py` для каждого скилла и `validate_plugin.py` для bundle. При изменении plugin bundle обнови cachebuster через `plugin-creator/scripts/update_plugin_cachebuster.py`, не редактируя marketplace entry ради переустановки.
+Дополнительно перед публикацией запусти официальные `quick_validate.py` для каждого скилла и `validate_plugin.py` для bundle. При изменении plugin bundle повысь `version` в manifest как обычный SemVer (`0.4.0` → `0.4.1` или prerelease вроде `0.5.0-rc.1`) без `+` build metadata. Cachebuster helper для этого marketplace не используется, а entry в `marketplace.json` ради переустановки не меняется.
+
+После публикации переустанови plugin из marketplace:
+
+```bash
+codex plugin add wget-cloud-implementation@wget-cloud
+```
+
+Проверяй новую версию в новой задаче: активная задача продолжает использовать загруженный при старте plugin cache. В smoke-проверке убедись, что версия manifest ожидаемая, hooks запускаются без warning об unsupported `async`, а `SessionStart`, `PostToolUse` и `Stop` завершаются без ошибок. Не удаляй cache-каталог, пока на него ссылается активная задача.
 
 GitHub Actions выполняет тот же `make validate` для pull request и push в `main`.
 

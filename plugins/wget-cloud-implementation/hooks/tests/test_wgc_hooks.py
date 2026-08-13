@@ -11,6 +11,7 @@ from pathlib import Path
 
 SCRIPT = Path(__file__).resolve().parents[1] / "wgc_hooks.py"
 HOOKS_JSON = SCRIPT.parent / "hooks.json"
+PLUGIN_JSON = SCRIPT.parent.parent / ".codex-plugin" / "plugin.json"
 
 
 class HooksConfigTest(unittest.TestCase):
@@ -46,16 +47,25 @@ class HooksConfigTest(unittest.TestCase):
                     configured_actions.add(handler["command"].rsplit(" ", 1)[-1])
         self.assertEqual(configured_actions, actions)
 
-    def test_only_post_tool_runs_async(self):
+    def test_all_handlers_are_synchronous(self):
         config = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))["hooks"]
-        async_events = {
-            event
-            for event, groups in config.items()
-            for group in groups
-            for handler in group["hooks"]
-            if handler.get("async")
-        }
-        self.assertEqual(async_events, {"PostToolUse"})
+        for event, groups in config.items():
+            for group in groups:
+                for handler in group["hooks"]:
+                    self.assertNotIn("async", handler, f"{event} hook must run synchronously")
+
+    def test_manifest_uses_plain_semver_without_build_metadata(self):
+        manifest = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
+        plain_semver = re.compile(
+            r"^(0|[1-9]\d*)\."
+            r"(0|[1-9]\d*)\."
+            r"(0|[1-9]\d*)"
+            r"(?:-(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)"
+            r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
+        )
+        version = manifest["version"]
+        self.assertNotIn("+", version, "plugin version must not contain build metadata")
+        self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
     def test_profile_contracts_match_separate_role_files(self):
         spec = importlib.util.spec_from_file_location("wgc_hooks_contracts", SCRIPT)
