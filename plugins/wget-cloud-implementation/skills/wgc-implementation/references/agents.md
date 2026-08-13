@@ -38,6 +38,14 @@ OUTPUT_CONTRACT: <название артефакта и verdict enum>
 Работай только в выданном scope. Сначала прочитай все указанные локальные инструкции и source-of-truth файлы. Не присваивай существующие изменения. Не выполняй commit, push, PR, merge, release или deployment, если это явно не входит в роль и не приложено разрешение. Не объявляй всю задачу завершённой: верни только свой артефакт, evidence и допустимый verdict. Если scope недостаточен, остановись с needs_input вместо самовольного расширения.
 ```
 
+В самом конце ответа добавь одну машинно-читаемую строку, используя exact revision, переданный `SubagentStart` hook:
+
+```text
+WGC_AGENT_RESULT: {"role":"<role>","verdict":"<verdict из контракта роли>","phase":"<plan|diff только для architecture-guardian>","input_revision":"<exact-input-revision>"}
+```
+
+Строка не заменяет содержательный артефакт и evidence. Не добавляй после неё другой текст. `SubagentStop` проверяет role/verdict/phase/revision и один раз возвращает агента для исправления невалидного результата.
+
 Оркестратор не должен принимать самооценку агента без собственного diff/evidence check.
 
 ## Explorer

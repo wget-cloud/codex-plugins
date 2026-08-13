@@ -1,0 +1,119 @@
+{
+  "description": "Fast Wget Cloud context, safety, change tracking, and completion gates.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" session-start",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" session-start",
+            "timeout": 5,
+            "statusMessage": "Loading WGC workspace context",
+            "additionalContextLimit": 1800
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" prompt-submit",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" prompt-submit",
+            "timeout": 5,
+            "statusMessage": "Classifying WGC task",
+            "additionalContextLimit": 1200
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" subagent-start",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" subagent-start",
+            "timeout": 5,
+            "statusMessage": "Loading WGC agent boundaries",
+            "additionalContextLimit": 1200
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" subagent-stop",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" subagent-stop",
+            "timeout": 5,
+            "statusMessage": "Recording WGC agent verdict"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" pre-tool",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" pre-tool",
+            "timeout": 8,
+            "statusMessage": "Checking WGC safety policy",
+            "additionalContextLimit": 1200
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(Bash|apply_patch|Edit|Write)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" post-tool",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" post-tool",
+            "async": true,
+            "timeout": 10,
+            "statusMessage": "Tracking WGC changes and checks",
+            "additionalContextLimit": 1200
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" stop",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" stop",
+            "timeout": 8,
+            "statusMessage": "Checking WGC completion gates"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "other",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/hooks/wgc_hooks.py\" session-end",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\hooks\\wgc_hooks.py\" session-end",
+            "timeout": 3,
+            "statusMessage": "Archiving WGC workflow state"
+          }
+        ]
+      }
+    ]
+  }
+}

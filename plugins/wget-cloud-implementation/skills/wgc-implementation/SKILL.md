@@ -14,6 +14,7 @@ description: Coordinate architecture-safe implementation work across the Wget Cl
 3. Прочитай [project-map.md](references/project-map.md). Это карта, проверенная 2026-08-13, а не замена текущему коду и локальным инструкциям.
 4. Прочитай [workflow.md](references/workflow.md), [agents.md](references/agents.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md).
 5. Если затронуты `k8s`, CI/CD, release или rollout, дополнительно полностью прочитай [gitops-and-deployment.md](references/gitops-and-deployment.md).
+6. Lifecycle hooks плагина автоматически добавляют workspace-контекст, safety checks и completion reminders. При блокировке или диагностике прочитай [hooks.md](references/hooks.md).
 
 Не полагайся на запомненную структуру: проверь фактические package manifests, точки входа, contracts/schema, тесты, CI и текущий Git status.
 
@@ -77,6 +78,18 @@ description: Coordinate architecture-safe implementation work across the Wget Cl
 - повторить критичные команды, не доверяя только текстовому заявлению агента;
 - вести gate ledger и не интерпретировать отсутствие ответа как approval;
 - сообщать пользователю о существенной неопределённости, существующем dirty state, недоступной проверке или необходимом разрешении.
+
+## Использовать lifecycle hooks
+
+Hooks являются механическими guardrails, а не заменой ролей и gates:
+
+- не обходи `PreToolUse` denial; выбери безопасный GitOps/Git путь или запроси изменение policy;
+- учитывай дополнительный context от `SessionStart`, `SubagentStart` и `PostToolUse`, но самостоятельно сверяй факты;
+- после одноразового продолжения от `Stop` закрой недостающие проверки либо явно зафиксируй точный blocker;
+- не считай hook-tracker доказательством review или QA — verdicts остаются отдельными агентными артефактами;
+- `PreToolUse` не получает надёжную роль субагента, поэтому защищённые тесты окончательно контролируются оркестратором по allowlist, diff и SHA-256, а hook только предупреждает об их изменении.
+
+Подробное поведение, ограничения и команда self-test находятся в [hooks.md](references/hooks.md).
 
 ## Условие готовности
 
