@@ -544,6 +544,343 @@ def suspicious_secret(command: str) -> bool:
     return False
 
 
+BOOTSTRAP_APPROVAL = "WGC_GITOPS_BOOTSTRAP_APPROVED=1"
+BOOTSTRAP_SECRET_NAME = "wget-cloud-k8s-repository"
+BOOTSTRAP_REPOSITORY_URL = "ssh://git@github.com/wget-cloud/k8s"
+
+
+def option_values(args: Sequence[str], names: Set[str]) -> List[str]:
+    values: List[str] = []
+    index = 0
+    while index < len(args):
+        token = args[index]
+        option = token.split("=", 1)[0]
+        if option not in names:
+            index += 1
+            continue
+        if "=" in token:
+            values.append(token.split("=", 1)[1])
+            index += 1
+        elif index + 1 < len(args):
+            values.append(args[index + 1])
+            index += 2
+        else:
+            values.append("")
+            index += 1
+    return values
+
+
+def exact_option(args: Sequence[str], names: Set[str], expected: str) -> bool:
+    return option_values(args, names) == [expected]
+
+
+def command_positionals(
+    args: Sequence[str], value_options: Set[str], boolean_options: Set[str]
+) -> Optional[List[str]]:
+    positionals: List[str] = []
+    index = 0
+    while index < len(args):
+        token = args[index]
+        option = token.split("=", 1)[0]
+        if option in value_options:
+            if "=" not in token:
+                index += 1
+                if index >= len(args):
+                    return None
+            index += 1
+            continue
+        if option in boolean_options and "=" not in token:
+            index += 1
+            continue
+        if token.startswith("-"):
+            return None
+        positionals.append(token)
+        index += 1
+    return positionals
+
+
+def bootstrap_make_contract(repo: Path) -> Optional[Dict[str, str]]:
+    argocd = repo / "infrastructure" / "k8s" / "bootstrap" / "argocd"
+    makefile = argocd / "makefile"
+    values_path = argocd / "values.yaml"
+    if repo.name != "k8s" or not makefile.is_file() or not values_path.is_file():
+        return None
+    try:
+        text = makefile.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    contract: Dict[str, str] = {}
+    for name in ("NAMESPACE", "RELEASE", "CHART", "CHART_VERSION", "VALUES", "TIMEOUT"):
+        match = re.search(rf"(?m)^{name}\s*\?=\s*([^\s#]+)\s*$", text)
+        if not match:
+            return None
+        contract[name.lower()] = match.group(1)
+    if contract["values"] != "values.yaml":
+        return None
+    contract["values_path"] = str(values_path.resolve())
+    return contract
+
+
+def simple_yaml_scalars(text: str) -> Optional[Dict[Tuple[str, ...], str]]:
+    scalars: Dict[Tuple[str, ...], str] = {}
+    seen: Set[Tuple[str, ...]] = set()
+    stack: List[Tuple[int, str]] = []
+    for raw_line in text.splitlines():
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+        if "\t" in raw_line[: len(raw_line) - len(raw_line.lstrip())]:
+            return None
+        match = re.match(r"^( *)([A-Za-z0-9_./-]+):(?:\s*(.*))?$", raw_line)
+        if not match:
+            if raw_line.lstrip().startswith("-"):
+                continue
+            return None
+        indent = len(match.group(1))
+        key = match.group(2)
+        while stack and indent <= stack[-1][0]:
+            stack.pop()
+        path = tuple(item[1] for item in stack) + (key,)
+        if path in seen:
+            return None
+        seen.add(path)
+        value = (match.group(3) or "").strip()
+        if value:
+            scalars[path] = value.strip("\"'")
+        else:
+            stack.append((indent, key))
+    scalars[("__seen__",)] = "\n".join(".".join(path) for path in sorted(seen))
+    return scalars
+
+
+def immutable_bootstrap_root(repo: Path, context: str) -> Optional[Path]:
+    if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", context):
+        return None
+    root = repo / "infrastructure" / "k8s" / "bootstrap" / "roots" / f"{context}.yaml"
+    if not root.is_file():
+        return None
+    try:
+        text = root.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    if re.search(r"(?m)^\s*---(?:\s|#|$)", text):
+        return None
+    scalars = simple_yaml_scalars(text)
+    if not scalars:
+        return None
+    expected = {
+        ("apiVersion",): "argoproj.io/v1alpha1",
+        ("kind",): "Application",
+        ("metadata", "name"): f"{context}-cluster",
+        ("metadata", "namespace"): "argocd",
+        ("spec", "project"): "default",
+        ("spec", "source", "repoURL"): BOOTSTRAP_REPOSITORY_URL,
+        ("spec", "source", "path"): f"infrastructure/k8s/gitops/clusters/{context}/root",
+    }
+    if any(scalars.get(path) != value for path, value in expected.items()):
+        return None
+    seen = set(scalars.pop(("__seen__",), "").splitlines())
+    if not {"apiVersion", "kind", "metadata", "spec"}.issubset(seen):
+        return None
+    top_level = {path for path in seen if "." not in path}
+    if top_level != {"apiVersion", "kind", "metadata", "spec"} or "spec.sources" in seen:
+        return None
+    source_paths = {path for path in seen if path == "spec.source" or path.startswith("spec.source.")}
+    allowed_source_paths = {
+        "spec.source", "spec.source.repoURL", "spec.source.targetRevision", "spec.source.path", "spec.source.directory"
+    }
+    if not source_paths.issubset(allowed_source_paths):
+        return None
+    directory = scalars.get(("spec", "source", "directory"))
+    if directory is not None and not re.fullmatch(r"\{recurse:\s*true\}", directory):
+        return None
+    destination_flow = scalars.get(("spec", "destination"))
+    destination_mapping = (
+        scalars.get(("spec", "destination", "namespace")) == "argocd"
+        and scalars.get(("spec", "destination", "server")) == "https://kubernetes.default.svc"
+    )
+    if destination_flow is not None:
+        normalized_destination = re.sub(r"\s+", " ", destination_flow)
+        destination_mapping = bool(
+            re.fullmatch(
+                r"\{namespace:\s*argocd,\s*server:\s*['\"]?https://kubernetes\.default\.svc['\"]?\}",
+                normalized_destination,
+            )
+        )
+    sync_paths = {path for path in seen if path == "spec.syncPolicy" or path.startswith("spec.syncPolicy.")}
+    if sync_paths:
+        if scalars.get(("spec", "syncPolicy")) is not None:
+            return None
+        if sync_paths != {"spec.syncPolicy", "spec.syncPolicy.syncOptions"}:
+            return None
+        if scalars.get(("spec", "syncPolicy", "syncOptions")) != "[CreateNamespace=true]":
+            return None
+    if not destination_mapping:
+        return None
+    target = scalars.get(("spec", "source", "targetRevision"), "")
+    if target.lower() in {"head", "main", "master", "latest", "develop", "dev"}:
+        return None
+    immutable_sha = bool(re.fullmatch(r"[0-9a-f]{40,64}", target, re.IGNORECASE))
+    dated_tag = bool(re.search(r"(?:^|[-_.])\d{4}-\d{2}-\d{2}(?:[.-]\d+)?$", target))
+    if dated_tag:
+        code, _ = run(["git", "show-ref", "--verify", "--quiet", f"refs/tags/{target}"], repo, timeout=2.0)
+        dated_tag = code == 0
+    if not (immutable_sha or dated_tag):
+        return None
+    revision = target if immutable_sha else f"refs/tags/{target}"
+    bootstrap_inputs = (
+        root,
+        repo / "infrastructure" / "k8s" / "bootstrap" / "argocd" / "makefile",
+        repo / "infrastructure" / "k8s" / "bootstrap" / "argocd" / "values.yaml",
+    )
+    for path in bootstrap_inputs:
+        relative = path.relative_to(repo).as_posix()
+        work_code, working_blob = run(["git", "hash-object", "--", str(path)], repo, timeout=2.0)
+        ref_code, published_blob = run(["git", "rev-parse", f"{revision}:{relative}"], repo, timeout=2.0)
+        if work_code != 0 or ref_code != 0 or working_blob != published_blob:
+            return None
+    return root.resolve()
+
+
+def bootstrap_kube_scope(args: Sequence[str], context: str, kubeconfig: str) -> bool:
+    kubeconfig_path = Path(kubeconfig).expanduser()
+    if not kubeconfig_path.is_absolute() or not kubeconfig_path.is_file():
+        return False
+    return (
+        exact_option(args, {"--kubeconfig"}, str(kubeconfig_path))
+        and exact_option(args, {"--context", "--kube-context"}, context)
+        and exact_option(args, {"-n", "--namespace"}, "argocd")
+    )
+
+
+def approved_helm_bootstrap(args: Sequence[str], repo: Path, contract: Dict[str, str]) -> bool:
+    value_options = {
+        "--kubeconfig", "--kube-context", "-n", "--namespace", "-f", "--values",
+        "--timeout", "--version",
+    }
+    boolean_options = {"--install", "--create-namespace", "--wait"}
+    if command_positionals(args, value_options, boolean_options) != [
+        "upgrade", contract["release"], contract["chart"]
+    ]:
+        return False
+    context_values = option_values(args, {"--kube-context"})
+    kubeconfigs = option_values(args, {"--kubeconfig"})
+    if len(context_values) != 1 or len(kubeconfigs) != 1:
+        return False
+    context = context_values[0]
+    if not immutable_bootstrap_root(repo, context):
+        return False
+    values = option_values(args, {"-f", "--values"})
+    if len(values) != 1:
+        return False
+    values_path = Path(values[0]).expanduser()
+    if not values_path.is_absolute():
+        values_path = repo / values_path
+    return (
+        bootstrap_kube_scope(args, context, kubeconfigs[0])
+        and values_path.resolve(strict=False) == Path(contract["values_path"])
+        and exact_option(args, {"--version"}, contract["chart_version"])
+        and exact_option(args, {"--timeout"}, contract["timeout"])
+        and "--install" in args
+        and "--create-namespace" in args
+        and "--wait" in args
+    )
+
+
+def approved_repository_bootstrap(commands: Sequence[Tuple[str, List[str]]], repo: Path) -> bool:
+    if len(commands) != 3 or any(executable != "kubectl" for executable, _ in commands):
+        return False
+    create, label, apply = (args for _, args in commands)
+    common_values = {"--kubeconfig", "--context", "-n", "--namespace"}
+    contexts = option_values(create, {"--context"})
+    kubeconfigs = option_values(create, {"--kubeconfig"})
+    if len(contexts) != 1 or len(kubeconfigs) != 1 or not immutable_bootstrap_root(repo, contexts[0]):
+        return False
+    for args in (create, label, apply):
+        if not bootstrap_kube_scope(args, contexts[0], kubeconfigs[0]):
+            return False
+
+    create_values = common_values | {"--from-literal", "--from-file", "--dry-run", "-o", "--output"}
+    if command_positionals(create, create_values, set()) != [
+        "create", "secret", "generic", BOOTSTRAP_SECRET_NAME
+    ]:
+        return False
+    literals = option_values(create, {"--from-literal"})
+    key_files = option_values(create, {"--from-file"})
+    if sorted(literals) != ["type=git", f"url={BOOTSTRAP_REPOSITORY_URL}"] or len(key_files) != 1:
+        return False
+    key_match = re.fullmatch(r"sshPrivateKey=(.+)", key_files[0])
+    if not key_match:
+        return False
+    key_path = Path(key_match.group(1)).expanduser()
+    if not key_path.is_absolute() or not key_path.is_file():
+        return False
+    if not exact_option(create, {"--dry-run"}, "client") or not exact_option(create, {"-o", "--output"}, "yaml"):
+        return False
+
+    label_values = common_values | {"-f", "--filename", "-o", "--output"}
+    if command_positionals(label, label_values, {"--local"}) != [
+        "label", "argocd.argoproj.io/secret-type=repository"
+    ]:
+        return False
+    if "--local" not in label or not exact_option(label, {"-f", "--filename"}, "-"):
+        return False
+    if not exact_option(label, {"-o", "--output"}, "yaml"):
+        return False
+
+    apply_values = common_values | {"-f", "--filename"}
+    return (
+        command_positionals(apply, apply_values, set()) == ["apply"]
+        and exact_option(apply, {"-f", "--filename"}, "-")
+    )
+
+
+def approved_root_bootstrap(args: Sequence[str], repo: Path) -> bool:
+    value_options = {"--kubeconfig", "--context", "-n", "--namespace", "-f", "--filename"}
+    if command_positionals(args, value_options, set()) != ["apply"]:
+        return False
+    contexts = option_values(args, {"--context"})
+    kubeconfigs = option_values(args, {"--kubeconfig"})
+    filenames = option_values(args, {"-f", "--filename"})
+    if len(contexts) != 1 or len(kubeconfigs) != 1 or len(filenames) != 1:
+        return False
+    root = immutable_bootstrap_root(repo, contexts[0])
+    if not root or not bootstrap_kube_scope(args, contexts[0], kubeconfigs[0]):
+        return False
+    supplied = Path(filenames[0]).expanduser()
+    if not supplied.is_absolute():
+        supplied = repo / supplied
+    return supplied.resolve(strict=False) == root
+
+
+def approved_gitops_bootstrap(command: str, cwd: Path) -> bool:
+    marker = re.match(rf"^\s*{re.escape(BOOTSTRAP_APPROVAL)}\s+", command)
+    if not marker:
+        return False
+    repo = git_root(cwd)
+    if not repo or repo.name != "k8s" or cwd.resolve() != repo.resolve():
+        return False
+    contract = bootstrap_make_contract(repo)
+    if not contract:
+        return False
+    commands = shell_commands(command)
+    body = command[marker.end() :].strip()
+    if re.search(r"[$`\n\r<>*?\[\]{}#]", body):
+        return False
+    if len(commands) == 1:
+        executable, args = commands[0]
+        if executable == "helm" and re.match(r"^helm(?:\s|$)", body):
+            return approved_helm_bootstrap(args, repo, contract)
+        if executable == "kubectl" and re.match(r"^kubectl(?:\s|$)", body):
+            return approved_root_bootstrap(args, repo)
+        return False
+    if ";" in body or "&" in body:
+        return False
+    raw_segments = re.split(r"\s*\|\s*", body)
+    if len(raw_segments) != 3 or any(not re.match(r"^kubectl(?:\s|$)", segment) for segment in raw_segments):
+        return False
+    return approved_repository_bootstrap(commands, repo)
+
+
 def shell_commands(command: str, depth: int = 0) -> List[Tuple[str, List[str]]]:
     if depth > 2:
         return []
@@ -714,6 +1051,8 @@ def command_violation(command: str, cwd: Path) -> Optional[str]:
         return None
     if suspicious_secret(command):
         return "Possible credential material in a command is blocked. Use an approved environment or secret manager without exposing the value."
+    if approved_gitops_bootstrap(command, cwd):
+        return None
 
     for executable, args in shell_commands(command):
         if executable == "kubectl":

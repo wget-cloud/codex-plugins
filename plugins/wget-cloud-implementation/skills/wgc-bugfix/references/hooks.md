@@ -25,7 +25,7 @@ Route flags:
 - `SessionStart`: краткая карта WGC и текущий active profile.
 - `SubagentStart`: repository boundaries, роль, запрет на prompt/log persistence и напоминание read-only evidence rules.
 - `SubagentStop`: принимает только валидный для профиля `bugfix` набор role/verdict/phase и записывает verdict/revision; verdict из implementation-профиля не может закрыть bugfix gate.
-- `PreToolUse`: запрещает destructive Git и прямые cluster mutations; предупреждает о broad log collection, protected tests и deployment permission.
+- `PreToolUse`: запрещает destructive Git и прямые cluster mutations; допускает только точный human-approved clean-cluster Argo bootstrap, описанный в GitOps reference; предупреждает о broad log collection, protected tests и deployment permission.
 - `PostToolUse`: классифицирует изменённые repositories, protected-test hashes и выполненные проверки; изменение diff инвалидирует устаревшие approvals.
 - `Stop`: один раз продолжает задачу, если для текущего профиля не закрыты применимые checks/gates; затем позволяет честно сообщить blocker.
 - `SessionEnd`: сохраняет только минимальное локальное состояние в `.codex/wgc-implementation/state.json`.
@@ -35,6 +35,8 @@ Route flags:
 Core structured gates: bug-triage, bug-investigator `evidence`, reproducer, bug-investigator `rca`, root-cause reviewer, architect, architecture guardian `plan`, test-maker, implementor, reviewer, architecture guardian `diff`, QA. Route flags добавляют browser/security/contract/DevOps/infrastructure/deployment gates. Для production source hooks также ожидают релевантные tests/coverage; дополнительные typecheck/lint/build определяются типом проекта.
 
 Hooks не могут доказать качество RCA, корректность теста или фактическое здоровье rollout. Оркестратор обязан читать reports, перепроверять команды и сопоставлять revision.
+
+Clean-cluster marker `WGC_GITOPS_BOOTSTRAP_APPROVED=1` не является общим bypass: hook разрешает только repo-defined Argo chart/version/values, file-backed repository credential pipeline и immutable root Application с explicit kubeconfig/context. Marker без exact human approval, incident repair и любые near-miss mutations запрещены.
 
 ## Диагностика
 

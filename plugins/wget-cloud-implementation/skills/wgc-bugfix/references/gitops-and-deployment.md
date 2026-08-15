@@ -8,7 +8,7 @@
 - Человек разрешает commit/push/PR/merge/release/deployment в требуемой гранулярности.
 - Deployment agent публикует только явно разрешённую revision и наблюдает доставку; код и manifests он не пишет.
 
-Ни одна из ролей не выполняет `kubectl apply/edit/patch/delete/scale`, ручной `helm upgrade`, прямое изменение Argo Application или secret в кластере. Read-only диагностика допустима при наличии доступа и узкого scope.
+Ни одна из ролей не выполняет `kubectl apply/edit/patch/delete/scale`, ручной `helm upgrade`, прямое изменение Argo Application или secret в кластере. Единственное исключение — fixed-point bootstrap пустого кластера: после exact human approval marker `WGC_GITOPS_BOOTSTRAP_APPROVED=1` разрешает только repo-defined Argo chart/version/values, file-backed `wget-cloud-k8s-repository` credential pipeline и exact immutable `bootstrap/roots/<context>.yaml` с explicit kubeconfig/context. Это исключение нельзя использовать для bugfix, incident repair, Argo sync или workload mutation. Read-only диагностика допустима при наличии доступа и узкого scope.
 
 ## DevOps plan
 

@@ -30,7 +30,7 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 - Test-maker владеет регрессионными тестами и фиксирует их SHA-256. Implementor не изменяет защищённые тесты; изменение возвращается test-maker и инвалидирует downstream gates.
 - Architecture guardian, reviewer, security reviewer, contract QA и infrastructure reviewer ничего не пишут. QA и browser QA не исправляют найденные дефекты.
 - Любое исправление должно быть минимальным относительно доказанной первопричины. Сопутствующий refactor выноси из bugfix, если без него можно безопасно устранить дефект.
-- Kubernetes изменяется строго GitOps. Deployment agent не пишет код или манифесты и работает только после явного deployment-запроса либо отдельного человеческого approval, привязанного к commit, environment и image digest/tag.
+- Kubernetes изменяется строго GitOps. Одноразовый clean-cluster bootstrap Argo CD допускается только по точному контракту из [gitops-and-deployment.md](references/gitops-and-deployment.md); это не разрешение исправлять incident или drift вручную. Deployment agent не пишет код или манифесты и работает только после явного deployment-запроса либо отдельного человеческого approval, привязанного к commit, environment и image digest/tag.
 
 ## Сформировать BugCase и выбрать маршрут
 

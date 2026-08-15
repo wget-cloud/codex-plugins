@@ -20,7 +20,7 @@
 
 ## Общие hooks
 
-Hooks автоматически выбирают профиль `implementation` или `bugfix`, но role/verdict contract проверяется отдельно для активного профиля. State не хранит исходный prompt, command text или tool output. Direct Kubernetes/Helm/Argo mutations и destructive Git operations блокируются; publication/deployment требуют явного human approval.
+Hooks автоматически выбирают профиль `implementation` или `bugfix`, но role/verdict contract проверяется отдельно для активного профиля. State не хранит исходный prompt, command text или tool output. Direct Kubernetes/Helm/Argo mutations и destructive Git operations блокируются; единственное исключение — fail-closed bootstrap Argo CD и immutable cluster root в чистом кластере после точного human approval. Publication/deployment требуют явного human approval.
 
 ## Проверка bundle
 

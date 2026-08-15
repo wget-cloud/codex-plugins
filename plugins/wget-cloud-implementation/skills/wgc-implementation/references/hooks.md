@@ -37,8 +37,8 @@ Hooks работают только если `cwd` распознан как coo
 
 ### Блокируется
 
-- прямые Kubernetes mutations; разрешены read-only `get`, `describe`, `logs`, `events`, `top`, `wait`, `diff`, `rollout status`, `auth can-i` и безопасные config queries;
-- `helm install/upgrade/uninstall/rollback`;
+- прямые Kubernetes mutations вне точного clean-cluster bootstrap-контракта; разрешены read-only `get`, `describe`, `logs`, `events`, `top`, `wait`, `diff`, `rollout status`, `auth can-i` и безопасные config queries;
+- `helm install/upgrade/uninstall/rollback` вне exact bootstrap-команды;
 - mutating `argocd app` и Flux commands;
 - `git reset --hard`, forced `git clean`, force-push, worktree-discarding checkout/restore, forced branch deletion;
 - `git submodule update --remote` и массовый `submodule foreach`;
@@ -58,6 +58,18 @@ Hooks работают только если `cwd` распознан как coo
 - k8s change без renderer/validation/infrastructure review.
 
 Hook не auto-approve permissions и не выполняет tests, formatting, commit, push или deployment.
+
+### Clean-cluster bootstrap exception
+
+Исключение существует только для fixed point: новый WGC cluster ещё не имеет Argo CD, поэтому GitOps reconciler физически не может применить первый root. Перед каждым разрешённым вызовом человек должен одобрить exact cluster context, kubeconfig, repository revision и bootstrap action. Команда обязана начинаться с `WGC_GITOPS_BOOTSTRAP_APPROVED=1`; marker без такого approval запрещён процессом и не является auto-approval.
+
+Hook fail-closed сверяет repository-owned `infrastructure/k8s/bootstrap/argocd/makefile`, `values.yaml` и `bootstrap/roots/<context>.yaml`; blobs всех трёх файлов должны точно совпасть с immutable `targetRevision` root Application. Shell expansions, redirections, alternate executable paths и любые separators кроме двух exact pipes запрещены. Разрешены только:
+
+- `helm upgrade --install` exact release/chart/version/values в namespace `argocd`, с explicit kubeconfig/context, wait и timeout;
+- exact pipeline, который строит repository Secret локально из SSH key file, добавляет только Argo repository label и применяет stdin в `argocd`; inline key запрещён;
+- `kubectl apply` exact root Application `<context>.yaml`, если repo URL/path/context согласованы, а `targetRevision` — immutable SHA или датированный release tag.
+
+Любой дополнительный segment, другой chart/version/namespace/context/path/secret/label/URL, mutable revision или обычная cluster mutation по-прежнему получает `deny`. После появления root Application все workload/controller/app изменения выполняются через Git и Argo; marker нельзя использовать для repair, sync или обхода ownership.
 
 При внутренней ошибке `PreToolUse` работает fail-closed и блокирует call до исправления hook. Остальные информационные handlers работают fail-open, чтобы ошибка bookkeeping не ломала рабочую сессию.
 

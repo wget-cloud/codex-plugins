@@ -25,7 +25,7 @@ description: Coordinate architecture-safe planned implementation work across the
 - Не создавай commit, push, PR, merge, release или deployment, если пользователь явно этого не разрешил. Разрешение на реализацию не означает разрешение на публикацию.
 - Вся межсервисная orchestration принадлежит backend-сервису `orchestrator`; доменные сервисы предоставляют activities и собственные инварианты.
 - Переиспользуемый браузерный код и публичные TypeScript-контракты принадлежат `wget-cloud-front-lib`; application-specific код остаётся в потребителе.
-- Kubernetes изменяется строго GitOps: DevOps правит только Git-источник желаемого состояния. Никаких `kubectl apply/edit/patch/delete/scale`, прямого Helm upgrade или ручного исправления кластера.
+- Kubernetes изменяется строго GitOps: DevOps правит только Git-источник желаемого состояния. Единственное исключение — одноразовый clean-cluster bootstrap Argo CD, repository credential и immutable cluster root по точному контракту из [gitops-and-deployment.md](references/gitops-and-deployment.md) после явного human approval. Любые другие `kubectl apply/edit/patch/delete/scale`, прямой Helm upgrade или ручное исправление кластера запрещены.
 - Production-код нельзя считать законченным без немедленной проверки актуальности тестов и покрытия изменённых веток.
 - Implementor не изменяет тесты, созданные или защищённые test-maker. Любое изменение такого теста возвращается test-maker и заново проходит gate.
 - Architecture guardian, reviewer и infrastructure reviewer ничего не пишут. QA не исправляет найденные дефекты.

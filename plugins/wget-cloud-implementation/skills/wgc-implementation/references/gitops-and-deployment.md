@@ -13,7 +13,7 @@
 
 ## Неподвижные ограничения
 
-Wget Cloud управляет Kubernetes через GitOps. Git repository содержит желаемое состояние, Argo CD применяет его. Ни один агент этого workflow не исправляет cluster state вручную.
+Wget Cloud управляет Kubernetes через GitOps. Git repository содержит желаемое состояние, Argo CD применяет его. Ни один агент этого workflow не исправляет cluster state вручную. Для нового пустого кластера допускается только минимальный fixed-point bootstrap ниже; после создания root все изменения снова выполняются исключительно через GitOps.
 
 Запрещены write operations, включая:
 
@@ -23,6 +23,18 @@ Wget Cloud управляет Kubernetes через GitOps. Git repository со�
 - изменение live state «временно», даже если обещан последующий commit;
 - plaintext secret/token/key в Git, diff, logs или отчёте;
 - mutable release identity вроде floating `latest`.
+
+### Единственное bootstrap-исключение
+
+Bootstrap разрешён только когда read-only preflight подтвердил отсутствие управляющего Argo root, опубликованный `k8s` revision immutable, infrastructure review относится к этой revision и человек одобрил exact kubeconfig/context/actions. Root, Argo makefile и values должны байт-в-байт совпадать с blobs этой revision. Каждый mutating command начинается с `WGC_GITOPS_BOOTSTRAP_APPROVED=1` и содержит explicit kubeconfig/context; shell expansion/redirection запрещены.
+
+Разрешён ровно такой порядок:
+
+1. Установить repo-defined Argo CD release/chart/version/values в namespace `argocd` с `--wait` и repository timeout.
+2. Создать exact `wget-cloud-k8s-repository` Secret pipeline: manifest генерируется client-side, SSH private key читается только из file path, local label равен `argocd.argoproj.io/secret-type=repository`, затем единственный stdin применяется в `argocd`. Key нельзя выводить или передавать inline.
+3. Применить exact `infrastructure/k8s/bootstrap/roots/<context>.yaml`, если Application name/path/context согласованы, а `targetRevision` — immutable SHA или датированный release tag.
+
+Другие values/flags, второй root, `argocd app sync`, workload apply, secret edit, repair и DNAT этим исключением не разрешены. После bootstrap агент только read-only наблюдает Argo; sync/rollout выполняется отдельным одобренным GitOps этапом. Временный key file удаляется после подтверждения repository access.
 
 Read-only команды `kubectl get/describe/logs/events`, Argo status/history, CI/registry/metrics/health queries допустимы deployment agent только в утверждённом environment.
 

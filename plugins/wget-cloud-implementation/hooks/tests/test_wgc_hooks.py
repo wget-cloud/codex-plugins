@@ -141,6 +141,130 @@ class WgcHooksTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout) if result.stdout else None
 
+    def _bootstrap_fixture(self):
+        k8s = self.projects["k8s"]
+        argocd = k8s / "infrastructure" / "k8s" / "bootstrap" / "argocd"
+        roots = k8s / "infrastructure" / "k8s" / "bootstrap" / "roots"
+        argocd.mkdir(parents=True)
+        roots.mkdir(parents=True)
+        (argocd / "makefile").write_text(
+            """NAMESPACE ?= argocd
+RELEASE ?= argo-cd
+CHART ?= argo/argo-cd
+CHART_VERSION ?= 8.0.0
+VALUES ?= values.yaml
+WAIT ?= true
+TIMEOUT ?= 10m
+""",
+            encoding="utf-8",
+        )
+        (argocd / "values.yaml").write_text("crds:\n  install: true\n", encoding="utf-8")
+        root = roots / "twc-wise-finch.yaml"
+        root.write_text(
+            """apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: twc-wise-finch-cluster
+  namespace: argocd
+  labels:
+    wget-cloud.io/profile: twc-wise-finch
+spec:
+  project: default
+  source:
+    repoURL: ssh://git@github.com/wget-cloud/k8s
+    targetRevision: twc-wise-finch-ingress-2026-08-15.1
+    path: infrastructure/k8s/gitops/clusters/twc-wise-finch/root
+  destination:
+    namespace: argocd
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    syncOptions: [CreateNamespace=true]
+""",
+            encoding="utf-8",
+        )
+        self._git_commit(
+            k8s,
+            [
+                "infrastructure/k8s/bootstrap/argocd/makefile",
+                "infrastructure/k8s/bootstrap/argocd/values.yaml",
+                "infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+            ],
+        )
+        self._run(["git", "tag", "twc-wise-finch-ingress-2026-08-15.1"], k8s)
+
+        kubeconfig = Path(self.temp.name) / "twc-wise-finch.kubeconfig"
+        kubeconfig.write_text(
+            """apiVersion: v1
+kind: Config
+current-context: twc-wise-finch
+contexts:
+- name: twc-wise-finch
+  context:
+    cluster: twc-wise-finch
+    user: bootstrap
+""",
+            encoding="utf-8",
+        )
+        key = Path(self.temp.name) / "wget-cloud-k8s-repository.key"
+        key.write_text("synthetic-test-key-file\n", encoding="utf-8")
+        return {
+            "k8s": k8s,
+            "kubeconfig": kubeconfig,
+            "key": key,
+            "root": root,
+            "makefile": argocd / "makefile",
+            "values_file": argocd / "values.yaml",
+            "values": "infrastructure/k8s/bootstrap/argocd/values.yaml",
+            "root_path": "infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+        }
+
+    def _bootstrap_command(self, command, cwd=None):
+        return self.call(
+            "pre-tool",
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": command},
+            },
+            cwd or self.projects["k8s"],
+        )
+
+    def _assert_bootstrap_denied(self, command, cwd=None):
+        output = self._bootstrap_command(command, cwd)
+        self.assertIsNotNone(output, f"unsafe bootstrap command was allowed: {command}")
+        self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def _approved_helm_bootstrap(self, fixture):
+        return (
+            f"WGC_GITOPS_BOOTSTRAP_APPROVED=1 helm --kubeconfig {fixture['kubeconfig']} "
+            "--kube-context twc-wise-finch upgrade --install argo-cd argo/argo-cd "
+            f"--namespace argocd --create-namespace --values {fixture['values']} "
+            "--wait --timeout 10m --version 8.0.0"
+        )
+
+    def _approved_repository_bootstrap(self, fixture):
+        common = f"--kubeconfig {fixture['kubeconfig']} --context twc-wise-finch"
+        return (
+            f"WGC_GITOPS_BOOTSTRAP_APPROVED=1 kubectl {common} --namespace argocd create secret generic "
+            "wget-cloud-k8s-repository --from-literal=type=git "
+            "--from-literal=url=ssh://git@github.com/wget-cloud/k8s "
+            f"--from-file=sshPrivateKey={fixture['key']} --dry-run=client --output=yaml | "
+            f"kubectl {common} --namespace argocd label --local --filename=- "
+            "argocd.argoproj.io/secret-type=repository --output=yaml | "
+            f"kubectl {common} --namespace argocd apply --filename=-"
+        )
+
+    def _approved_root_bootstrap(self, fixture):
+        return (
+            f"WGC_GITOPS_BOOTSTRAP_APPROVED=1 kubectl --kubeconfig {fixture['kubeconfig']} "
+            f"--context twc-wise-finch --namespace argocd apply --filename={fixture['root_path']}"
+        )
+
+    def _tag_bootstrap_root(self, fixture, content, tag):
+        fixture["root"].write_text(content, encoding="utf-8")
+        self._git_commit(fixture["k8s"], [fixture["root_path"]])
+        self._run(["git", "tag", tag], fixture["k8s"])
+
     def activate(self, project="backend"):
         cwd = self.projects[project]
         return self.call(
@@ -464,6 +588,224 @@ class WgcHooksTest(unittest.TestCase):
             self.projects["k8s"],
         )
         self.assertIsNone(safe_template)
+
+    def test_allows_only_exact_human_approved_argocd_helm_bootstrap(self):
+        fixture = self._bootstrap_fixture()
+        self.assertIsNone(self._bootstrap_command(self._approved_helm_bootstrap(fixture)))
+
+    def test_allows_exact_repository_credential_and_immutable_root_bootstrap(self):
+        fixture = self._bootstrap_fixture()
+        for command in (
+            self._approved_repository_bootstrap(fixture),
+            self._approved_root_bootstrap(fixture),
+        ):
+            with self.subTest(command=command):
+                self.assertIsNone(self._bootstrap_command(command))
+
+    def test_denies_dirty_repo_owned_helm_contract_after_tag(self):
+        fixture = self._bootstrap_fixture()
+        helm = self._approved_helm_bootstrap(fixture)
+        tagged_values = fixture["values_file"].read_text(encoding="utf-8")
+        tagged_makefile = fixture["makefile"].read_text(encoding="utf-8")
+
+        fixture["values_file"].write_text(
+            tagged_values + "server:\n  extraArgs: [--insecure]\n",
+            encoding="utf-8",
+        )
+        with self.subTest(input="dirty values.yaml"):
+            self._assert_bootstrap_denied(helm)
+        fixture["values_file"].write_text(tagged_values, encoding="utf-8")
+
+        fixture["makefile"].write_text(
+            tagged_makefile.replace("CHART ?= argo/argo-cd", "CHART ?= attacker/argo-cd").replace(
+                "CHART_VERSION ?= 8.0.0",
+                "CHART_VERSION ?= 9.9.9",
+            ),
+            encoding="utf-8",
+        )
+        dirty_contract_command = helm.replace("argo/argo-cd", "attacker/argo-cd", 1).replace(
+            "--version 8.0.0",
+            "--version 9.9.9",
+            1,
+        )
+        with self.subTest(input="dirty makefile contract"):
+            self._assert_bootstrap_denied(dirty_contract_command)
+
+    def test_denies_tagged_roots_with_yaml_document_or_field_smuggling(self):
+        fixture = self._bootstrap_fixture()
+        root = self._approved_root_bootstrap(fixture)
+        tagged_root = fixture["root"].read_text(encoding="utf-8")
+
+        document_tag = "twc-wise-finch-ingress-2026-08-17.1"
+        second_document = tagged_root.replace(
+            "targetRevision: twc-wise-finch-ingress-2026-08-15.1",
+            f"targetRevision: {document_tag}",
+        ) + """--- # second document
+{apiVersion: v1, kind: ConfigMap, metadata: {name: smuggled, namespace: argocd}}
+"""
+        self._tag_bootstrap_root(fixture, second_document, document_tag)
+        with self.subTest(input="commented separator and flow ConfigMap"):
+            self._assert_bootstrap_denied(root)
+
+        annotations_tag = "twc-wise-finch-ingress-2026-08-18.1"
+        annotation_smuggling = f"""apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: twc-wise-finch-cluster
+  namespace: argocd
+  annotations:
+    repoURL: ssh://git@github.com/wget-cloud/k8s
+    targetRevision: {annotations_tag}
+    path: infrastructure/k8s/gitops/clusters/twc-wise-finch/root
+spec:
+  project: default
+  source:
+    repoURL: ssh://git@github.com/attacker/k8s
+    targetRevision: main
+    path: infrastructure/k8s/gitops/clusters/twc-wise-finch/attacker
+  destination:
+    namespace: argocd
+    server: https://kubernetes.default.svc
+"""
+        self._tag_bootstrap_root(fixture, annotation_smuggling, annotations_tag)
+        with self.subTest(input="expected source fields only in metadata annotations"):
+            self._assert_bootstrap_denied(root)
+
+    def test_denies_tagged_root_with_automated_sync_policy(self):
+        fixture = self._bootstrap_fixture()
+        root = self._approved_root_bootstrap(fixture)
+        automated_tag = "twc-wise-finch-ingress-2026-08-19.1"
+        automated_root = fixture["root"].read_text(encoding="utf-8").replace(
+            "targetRevision: twc-wise-finch-ingress-2026-08-15.1",
+            f"targetRevision: {automated_tag}",
+        ).replace(
+            "  syncPolicy:\n    syncOptions: [CreateNamespace=true]\n",
+            "  syncPolicy: {automated: {prune: true, selfHeal: true}}\n",
+        )
+        self._tag_bootstrap_root(fixture, automated_root, automated_tag)
+        self._assert_bootstrap_denied(root)
+
+    def test_relative_bootstrap_paths_are_bound_to_invocation_cwd(self):
+        fixture = self._bootstrap_fixture()
+        nested = fixture["k8s"] / "nested"
+        nested_values = nested / fixture["values"]
+        nested_root = nested / fixture["root_path"]
+        nested_values.parent.mkdir(parents=True)
+        nested_root.parent.mkdir(parents=True)
+        nested_values.write_text("server:\n  extraArgs: [--insecure]\n", encoding="utf-8")
+        nested_root.write_text(
+            """apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nested-path-shadow
+  namespace: argocd
+""",
+            encoding="utf-8",
+        )
+
+        for command in (
+            self._approved_helm_bootstrap(fixture),
+            self._approved_root_bootstrap(fixture),
+        ):
+            with self.subTest(command=command):
+                self._assert_bootstrap_denied(command, nested)
+
+    def test_gitops_bootstrap_exception_denies_every_near_miss_and_extra_mutation(self):
+        fixture = self._bootstrap_fixture()
+        helm = self._approved_helm_bootstrap(fixture)
+        repository = self._approved_repository_bootstrap(fixture)
+        root = self._approved_root_bootstrap(fixture)
+        tagged_root = fixture["root"].read_text(encoding="utf-8")
+        denied = (
+            helm.replace("WGC_GITOPS_BOOTSTRAP_APPROVED=1 ", "", 1),
+            helm.replace("WGC_GITOPS_BOOTSTRAP_APPROVED=1", "WGC_GITOPS_BOOTSTRAP_APPROVED=0", 1),
+            helm.replace("argo/argo-cd", "bitnami/argo-cd", 1),
+            helm.replace("--version 8.0.0", "--version 8.1.0", 1),
+            helm.replace("--namespace argocd", "--namespace kube-system", 1),
+            helm.replace("--kube-context twc-wise-finch", "--kube-context dev", 1),
+            helm.replace(f"--kubeconfig {fixture['kubeconfig']} ", "", 1),
+            helm.replace(
+                str(fixture["kubeconfig"]),
+                f"$(printf %s {fixture['kubeconfig']})",
+                1,
+            ),
+            helm.replace(fixture["values"], "infrastructure/k8s/bootstrap/argocd/other-values.yaml", 1),
+            helm.replace(" helm ", " /tmp/helm ", 1),
+            repository.replace("wget-cloud-k8s-repository", "other-repository", 1),
+            repository.replace(
+                "argocd.argoproj.io/secret-type=repository",
+                "argocd.argoproj.io/secret-type=repo-creds",
+                1,
+            ),
+            repository.replace(
+                "url=ssh://git@github.com/wget-cloud/k8s",
+                "url=ssh://git@github.com/other/k8s",
+                1,
+            ),
+            repository.replace("--namespace argocd", "--namespace default", 1),
+            repository.replace("--context twc-wise-finch", "--context dev", 1),
+            repository.replace(
+                f"--from-file=sshPrivateKey={fixture['key']}",
+                "--from-literal=sshPrivateKey=inline-key-material",
+                1,
+            ),
+            repository.replace(
+                str(fixture["key"]),
+                f"`printf %s {fixture['key']}`",
+                1,
+            ),
+            repository.replace(" | ", " ; "),
+            repository.replace(" | ", " & "),
+            repository.replace(" kubectl ", " ./kubectl "),
+            root.replace(fixture["root_path"], "infrastructure/k8s/bootstrap/roots/dev.yaml", 1),
+            root + " > /tmp/wgc-bootstrap-output.yaml",
+            root + "\nkubectl --context twc-wise-finch delete namespace backend",
+            root + " ; kubectl --context twc-wise-finch delete namespace backend",
+            "WGC_GITOPS_BOOTSTRAP_APPROVED=1 argocd app sync twc-wise-finch-cluster",
+            "WGC_GITOPS_BOOTSTRAP_APPROVED=1 kubectl --context twc-wise-finch delete pod gateway-0",
+        )
+        for command in denied:
+            with self.subTest(command=command):
+                self._assert_bootstrap_denied(command)
+
+        self._assert_bootstrap_denied(helm, self.projects["backend"])
+        fixture["root"].write_text(
+            fixture["root"].read_text(encoding="utf-8").replace(
+                "targetRevision: twc-wise-finch-ingress-2026-08-15.1",
+                "targetRevision: twc-wise-finch-ingress-2026-08-16.1",
+            ),
+            encoding="utf-8",
+        )
+        self._assert_bootstrap_denied(root)
+        fixture["root"].write_text(
+            tagged_root.replace(
+                "targetRevision: twc-wise-finch-ingress-2026-08-15.1",
+                "targetRevision: main",
+            ),
+            encoding="utf-8",
+        )
+        self._assert_bootstrap_denied(root)
+        fixture["root"].write_text(
+            tagged_root
+            + """---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: smuggled-bootstrap-mutation
+  namespace: argocd
+""",
+            encoding="utf-8",
+        )
+        self._assert_bootstrap_denied(root)
+        fixture["root"].write_text(
+            tagged_root.replace(
+                "repoURL: ssh://git@github.com/wget-cloud/k8s",
+                "repoURL: ssh://git@github.com/attacker/k8s\n"
+                "    # expected repoURL: ssh://git@github.com/wget-cloud/k8s",
+            ),
+            encoding="utf-8",
+        )
+        self._assert_bootstrap_denied(root)
 
     def test_git_c_commit_preflight_uses_target_repository(self):
         target = self.projects["backend"]
