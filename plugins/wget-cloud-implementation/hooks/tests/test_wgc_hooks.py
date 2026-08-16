@@ -7,15 +7,91 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from copy import deepcopy
 from pathlib import Path
+from unittest import mock
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "wgc_hooks.py"
 HOOKS_JSON = SCRIPT.parent / "hooks.json"
 PLUGIN_JSON = SCRIPT.parent.parent / ".codex-plugin" / "plugin.json"
 WORKDIR_ABSENT = object()
+STAGED_SYNC_REVISION = "6c2c3e9dadde2eec3d13fde830bc6db0392b13b8"
+STAGED_SYNC_APPS = (
+    "twc-wise-finch-cluster",
+    "twc-wise-finch-core",
+    "twc-wise-finch-local-path-storage",
+    "twc-wise-finch-local-path-smoke",
+    "local-path-storage-smoke",
+)
+STAGED_SYNC_RUNNER = "/usr/local/libexec/wget-cloud-staged-sync/runner.py"
+STAGED_SYNC_KUBECONFIG = "/usr/local/etc/wget-cloud-staged-sync/twc-wise-finch.kubeconfig"
+STAGED_SYNC_ENV_SHA256 = "540f3b55630775d9b2a3aa08cbbe87928ea62c615cd4d13c11f68e2b4571aebc"
+STAGED_SYNC_PYTHON_SHA256 = "506cb2ddd061e2992c8ee7c53853340688b53d9fcec94c3aa936524cea5b40cb"
+STAGED_SYNC_SYSTEM_ANCESTORS = ("/", "/usr", "/usr/bin")
 
 
+def staged_sync_runner_command(stage, app):
+    return (
+        "/usr/bin/env -i WGC_GITOPS_STAGED_SYNC_APPROVED=1 HOME=/var/empty "
+        "PATH=/usr/bin:/bin LANG=C LC_ALL=C "
+        f"KUBECONFIG={STAGED_SYNC_KUBECONFIG} /usr/bin/python3 {STAGED_SYNC_RUNNER} "
+        f"--stage {stage} --app {app} --revision {STAGED_SYNC_REVISION}"
+    )
+
+
+def system_binary_evidence(path, digest, link_count):
+    identity = {
+        "device": 1,
+        "inode": 100 if path == "/usr/bin/env" else 101,
+        "uid": 0,
+        "gid": 0,
+        "mode": "0755",
+        "linkCount": link_count,
+    }
+    return {
+        "path": path,
+        "canonicalPath": path,
+        "kind": "file",
+        "symlink": False,
+        "owner": "root",
+        "group": "wheel",
+        "mode": "0755",
+        "linkCount": link_count,
+        "sha256": digest,
+        "pathIdentity": deepcopy(identity),
+        "descriptorIdentity": deepcopy(identity),
+        "postDescriptorIdentity": deepcopy(identity),
+        "descriptorSha256": digest,
+        "postDescriptorSha256": digest,
+        "descriptorVerified": True,
+        "effectiveWritable": False,
+    }
+
+
+def system_ancestor_evidence(path):
+    identity = {
+        "device": 1,
+        "inode": {"/": 1, "/usr": 2, "/usr/bin": 3}[path],
+        "uid": 0,
+        "gid": 0,
+        "mode": "0755",
+    }
+    return {
+        "path": path,
+        "canonicalPath": path,
+        "kind": "directory",
+        "symlink": False,
+        "owner": "root",
+        "group": "wheel",
+        "mode": "0755",
+        "acl": [],
+        "pathIdentity": deepcopy(identity),
+        "postPathIdentity": deepcopy(identity),
+        "identityVerified": True,
+        "effectiveWritable": False,
+        "effectiveDeletable": False,
+    }
 class HooksConfigTest(unittest.TestCase):
     def test_all_configured_handlers_resolve_to_runner_actions(self):
         config = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
@@ -1729,6 +1805,408 @@ metadata:
         state = json.loads(states[0].read_text(encoding="utf-8"))
         self.assertFalse(state["active"])
         self.assertIn("ended_at", state)
+
+
+class StagedSyncRunnerHookContractTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("wgc_hooks_runner_contract", SCRIPT)
+        cls.module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.module)
+
+    def test_parser_accepts_only_exact_root_owned_stage_commands(self):
+        parser = getattr(self.module, "parse_staged_sync_runner_command", None)
+        self.assertIsNotNone(parser, "root-owned staged-sync parser contract is missing")
+        for stage, app in enumerate(STAGED_SYNC_APPS, start=1):
+            with self.subTest(stage=stage, app=app):
+                self.assertEqual(
+                    parser(staged_sync_runner_command(stage, app)),
+                    (stage, app, STAGED_SYNC_REVISION),
+                )
+
+    def test_parser_rejects_raw_argocd_ingress_and_command_near_misses(self):
+        parser = getattr(self.module, "parse_staged_sync_runner_command", None)
+        self.assertIsNotNone(parser, "root-owned staged-sync parser contract is missing")
+        exact = staged_sync_runner_command(1, STAGED_SYNC_APPS[0])
+        denied = {
+            "raw-argocd": (
+                "WGC_GITOPS_STAGED_SYNC_APPROVED=1 KUBECONFIG=/tmp/kubeconfig "
+                "/tmp/argocd --core app sync twc-wise-finch-cluster"
+            ),
+            "ingress": staged_sync_runner_command(6, "twc-wise-finch-ingress"),
+            "stage-app-mismatch": staged_sync_runner_command(2, STAGED_SYNC_APPS[0]),
+            "stage-zero": staged_sync_runner_command(0, STAGED_SYNC_APPS[0]),
+            "missing-env-i": exact.replace("/usr/bin/env -i ", "", 1),
+            "extra-environment": exact.replace("HOME=/var/empty", "HOME=/var/empty FOO=bar", 1),
+            "reordered-environment": exact.replace(
+                "PATH=/usr/bin:/bin LANG=C", "LANG=C PATH=/usr/bin:/bin", 1
+            ),
+            "wrong-home": exact.replace("HOME=/var/empty", "HOME=/tmp"),
+            "wrong-path": exact.replace("PATH=/usr/bin:/bin", "PATH=/usr/local/bin:/usr/bin:/bin"),
+            "wrong-kubeconfig": exact.replace(STAGED_SYNC_KUBECONFIG, "/tmp/kubeconfig"),
+            "wrong-python": exact.replace("/usr/bin/python3", "/usr/local/bin/python3"),
+            "wrong-runner": exact.replace(STAGED_SYNC_RUNNER, "/tmp/runner.py"),
+            "wrong-revision": exact.replace(STAGED_SYNC_REVISION, "1" * 40),
+            "extra-flag": exact + " --timeout 601",
+            "semicolon": exact + "; id",
+            "and": exact + " && id",
+            "or": exact + " || id",
+            "pipe": exact + " | id",
+            "newline": exact + "\nid",
+            "subshell": exact + " $(id)",
+        }
+        for case, command in denied.items():
+            with self.subTest(case=case):
+                self.assertIsNone(parser(command))
+
+    def test_system_binary_verifier_requires_fd_identity_hash_and_effective_nonwrite(self):
+        verifier = getattr(self.module, "pinned_system_binary", None)
+        self.assertIsNotNone(
+            verifier,
+            "PreToolUse must expose a fail-closed descriptor verifier for env and python3",
+        )
+        contracts = (
+            ("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 1),
+            ("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 78),
+        )
+        for path, digest, link_count in contracts:
+            evidence = system_binary_evidence(path, digest, link_count)
+            with self.subTest(binary=path, case="valid"):
+                self.assertTrue(
+                    verifier(
+                        path,
+                        digest,
+                        0o755,
+                        link_count,
+                        inspect_binary=lambda requested, evidence=evidence: deepcopy(evidence),
+                    )
+                )
+
+            mutations = {
+                "canonical-alias": ("canonicalPath", "/tmp/replaced"),
+                "symlink": ("symlink", True),
+                "owner": ("owner", "estev"),
+                "group": ("group", "staff"),
+                "mode": ("mode", "0775"),
+                "link-count": ("linkCount", link_count + 1),
+                "effective-write": ("effectiveWritable", True),
+                "descriptor-unverified": ("descriptorVerified", False),
+                "path-fd-identity": (
+                    "descriptorIdentity",
+                    {**evidence["descriptorIdentity"], "inode": 999999},
+                ),
+                "descriptor-owner": (
+                    "descriptorIdentity",
+                    {**evidence["descriptorIdentity"], "uid": 501},
+                ),
+                "descriptor-group": (
+                    "descriptorIdentity",
+                    {**evidence["descriptorIdentity"], "gid": 20},
+                ),
+                "descriptor-mode": (
+                    "descriptorIdentity",
+                    {**evidence["descriptorIdentity"], "mode": "0775"},
+                ),
+                "descriptor-link-count": (
+                    "descriptorIdentity",
+                    {**evidence["descriptorIdentity"], "linkCount": link_count + 1},
+                ),
+                "post-fstat-identity": (
+                    "postDescriptorIdentity",
+                    {**evidence["descriptorIdentity"], "inode": 999998},
+                ),
+                "descriptor-hash": ("descriptorSha256", "0" * 64),
+                "post-descriptor-hash": ("postDescriptorSha256", "0" * 64),
+                "path-hash": ("sha256", "0" * 64),
+            }
+            for case, (field, value) in mutations.items():
+                broken = deepcopy(evidence)
+                broken[field] = value
+                with self.subTest(binary=path, case=case):
+                    self.assertFalse(
+                        verifier(
+                            path,
+                            digest,
+                            0o755,
+                            link_count,
+                            inspect_binary=lambda requested, broken=broken: deepcopy(broken),
+                        )
+                    )
+
+    def test_system_ancestor_chain_pins_ls_first_and_accepts_only_the_exact_chain(self):
+        verifier = getattr(self.module, "pinned_system_ancestor_chain", None)
+        self.assertIsNotNone(
+            verifier,
+            "system ancestor attestation is required before staged-sync can be allowed",
+        )
+        for binary in ("/usr/bin/env", "/usr/bin/python3"):
+            events = []
+            evidence = {
+                path: system_ancestor_evidence(path) for path in STAGED_SYNC_SYSTEM_ANCESTORS
+            }
+
+            def inspect(path):
+                events.append(f"inspect:{path}")
+                return deepcopy(evidence[path])
+
+            with self.subTest(binary=binary):
+                self.assertTrue(
+                    verifier(
+                        binary,
+                        inspect_ancestor=inspect,
+                        attest_ls=lambda: events.append("ls") or True,
+                    )
+                )
+                self.assertEqual(
+                    events,
+                    ["ls", "inspect:/", "inspect:/usr", "inspect:/usr/bin"],
+                )
+
+        self.assertFalse(
+            verifier(
+                "/usr/bin/ruby",
+                inspect_ancestor=lambda path: system_ancestor_evidence(path),
+                attest_ls=lambda: True,
+            )
+        )
+
+    def test_system_ancestor_chain_rejects_unsafe_acl_identity_and_toctou_evidence(self):
+        verifier = getattr(self.module, "pinned_system_ancestor_chain", None)
+        self.assertIsNotNone(verifier, "system ancestor attestation contract is missing")
+        base = {path: system_ancestor_evidence(path) for path in STAGED_SYNC_SYSTEM_ANCESTORS}
+        mutations = {}
+        for case, field, value in (
+            ("symlink", "symlink", True),
+            ("canonical-alias", "canonicalPath", "/tmp/usr"),
+            ("wrong-owner", "owner", "estev"),
+            ("wrong-group", "group", "staff"),
+            ("group-write-mode", "mode", "0775"),
+            ("world-write-mode", "mode", "0777"),
+            ("effective-write", "effectiveWritable", True),
+            ("effective-delete", "effectiveDeletable", True),
+            ("identity-unverified", "identityVerified", False),
+            (
+                "post-lstat-toctou",
+                "postPathIdentity",
+                {**base["/usr"]["pathIdentity"], "inode": 999999},
+            ),
+            (
+                "unexpected-read-acl",
+                "acl",
+                [
+                    {
+                        "principal": "user:estev",
+                        "type": "allow",
+                        "permissions": ["read"],
+                    }
+                ],
+            ),
+            (
+                "write-acl",
+                "acl",
+                [
+                    {
+                        "principal": "user:estev",
+                        "type": "allow",
+                        "permissions": ["write", "writeattr", "writeextattr"],
+                    }
+                ],
+            ),
+            (
+                "delete-acl",
+                "acl",
+                [
+                    {
+                        "principal": "user:estev",
+                        "type": "allow",
+                        "permissions": ["delete", "delete_child"],
+                    }
+                ],
+            ),
+        ):
+            broken = deepcopy(base)
+            broken["/usr"][field] = value
+            mutations[case] = broken
+
+        wrong_uid = deepcopy(base)
+        wrong_uid["/usr"]["pathIdentity"]["uid"] = 501
+        wrong_uid["/usr"]["postPathIdentity"]["uid"] = 501
+        mutations["wrong-uid"] = wrong_uid
+        wrong_gid = deepcopy(base)
+        wrong_gid["/usr"]["pathIdentity"]["gid"] = 20
+        wrong_gid["/usr"]["postPathIdentity"]["gid"] = 20
+        mutations["wrong-gid"] = wrong_gid
+        identity_mode = deepcopy(base)
+        identity_mode["/usr"]["pathIdentity"]["mode"] = "0775"
+        identity_mode["/usr"]["postPathIdentity"]["mode"] = "0775"
+        mutations["identity-mode"] = identity_mode
+        missing = deepcopy(base)
+        missing.pop("/usr")
+        mutations["missing-evidence"] = missing
+
+        for case, evidence in mutations.items():
+            with self.subTest(case=case):
+                self.assertFalse(
+                    verifier(
+                        "/usr/bin/env",
+                        inspect_ancestor=lambda path, evidence=evidence: deepcopy(
+                            evidence.get(path, {})
+                        ),
+                        attest_ls=lambda: True,
+                    )
+                )
+
+        inspected = []
+        self.assertFalse(
+            verifier(
+                "/usr/bin/env",
+                inspect_ancestor=lambda path: inspected.append(path) or system_ancestor_evidence(path),
+                attest_ls=lambda: False,
+            )
+        )
+        self.assertEqual(inspected, [], "ancestor evidence was read before /bin/ls attestation")
+
+    def test_system_ancestor_chain_accepts_the_current_safe_host(self):
+        verifier = getattr(self.module, "pinned_system_ancestor_chain", None)
+        self.assertIsNotNone(verifier, "system ancestor attestation contract is missing")
+        self.assertTrue(verifier("/usr/bin/env"))
+        self.assertTrue(verifier("/usr/bin/python3"))
+
+    def test_pretooluse_pins_ls_then_both_system_ancestor_chains_before_allow(self):
+        command = staged_sync_runner_command(1, STAGED_SYNC_APPS[0])
+        events = []
+        with mock.patch.object(
+            self.module,
+            "pinned_ls_before_acl",
+            side_effect=lambda: events.append("ls") or True,
+        ), mock.patch.object(
+            self.module,
+            "pinned_system_ancestor_chain",
+            side_effect=lambda path: events.append(f"ancestor:{path}") or True,
+            create=True,
+        ), mock.patch.object(
+            self.module,
+            "pinned_system_binary",
+            side_effect=lambda path, *args: events.append(f"binary:{path}") or True,
+        ), mock.patch.object(self.module, "pinned_root_file", return_value=True):
+            self.assertTrue(self.module.approved_gitops_staged_sync(command))
+        self.assertEqual(
+            events[:5],
+            [
+                "ls",
+                "ancestor:/usr/bin/env",
+                "ancestor:/usr/bin/python3",
+                "binary:/usr/bin/env",
+                "binary:/usr/bin/python3",
+            ],
+        )
+
+        for failed_gate in ("ls", "ancestor:/usr/bin/env", "ancestor:/usr/bin/python3"):
+            events = []
+
+            def gate(name):
+                events.append(name)
+                return name != failed_gate
+
+            with self.subTest(failed_gate=failed_gate), mock.patch.object(
+                self.module,
+                "pinned_ls_before_acl",
+                side_effect=lambda: gate("ls"),
+            ), mock.patch.object(
+                self.module,
+                "pinned_system_ancestor_chain",
+                side_effect=lambda path: gate(f"ancestor:{path}"),
+                create=True,
+            ), mock.patch.object(
+                self.module,
+                "pinned_system_binary",
+                return_value=True,
+            ), mock.patch.object(self.module, "pinned_root_file", return_value=True):
+                self.assertIsNotNone(
+                    self.module.command_violation(
+                        command,
+                        Path("/tmp"),
+                        Path("/tmp"),
+                        Path("/tmp"),
+                    )
+                )
+
+    def test_pretooluse_allows_runner_only_after_both_system_binaries_are_attested(self):
+        command = staged_sync_runner_command(1, STAGED_SYNC_APPS[0])
+        expected_calls = [
+            mock.call("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 0o755, 1),
+            mock.call("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 0o755, 78),
+        ]
+        with mock.patch.object(self.module, "pinned_root_file", return_value=True), mock.patch.object(
+            self.module,
+            "pinned_ls_before_acl",
+            return_value=True,
+        ), mock.patch.object(
+            self.module,
+            "pinned_system_ancestor_chain",
+            return_value=True,
+            create=True,
+        ), mock.patch.object(
+            self.module,
+            "pinned_system_binary",
+            return_value=True,
+            create=True,
+        ) as verifier:
+            self.assertTrue(self.module.approved_gitops_staged_sync(command))
+            self.assertEqual(verifier.call_count, 2)
+            verifier.assert_has_calls(expected_calls, any_order=True)
+
+        for failed_binary in ("/usr/bin/env", "/usr/bin/python3"):
+            with self.subTest(failed_binary=failed_binary), mock.patch.object(
+                self.module,
+                "pinned_root_file",
+                return_value=True,
+            ), mock.patch.object(
+                self.module,
+                "pinned_ls_before_acl",
+                return_value=True,
+            ), mock.patch.object(
+                self.module,
+                "pinned_system_ancestor_chain",
+                return_value=True,
+                create=True,
+            ), mock.patch.object(
+                self.module,
+                "pinned_system_binary",
+                side_effect=lambda path, *args: path != failed_binary,
+                create=True,
+            ):
+                violation = self.module.command_violation(
+                    command,
+                    Path("/tmp"),
+                    Path("/tmp"),
+                    Path("/tmp"),
+                )
+                self.assertIsNotNone(
+                    violation,
+                    f"PreToolUse allowed the runner with unattested {failed_binary}",
+                )
+
+    def test_command_policy_delegates_exact_runner_before_argocd_blanket_deny(self):
+        command = staged_sync_runner_command(1, STAGED_SYNC_APPS[0])
+        with mock.patch.object(
+            self.module,
+            "approved_gitops_staged_sync",
+            return_value=True,
+        ) as policy:
+            self.assertIsNone(
+                self.module.command_violation(command, Path("/tmp"), Path("/tmp"), Path("/tmp"))
+            )
+            policy.assert_called_once()
+
+    def test_raw_argocd_mutation_remains_denied(self):
+        violation = self.module.command_violation(
+            "argocd app sync twc-wise-finch-cluster",
+            Path("/tmp"),
+            Path("/tmp"),
+            Path("/tmp"),
+        )
+        self.assertIsNotNone(violation)
 
 
 if __name__ == "__main__":

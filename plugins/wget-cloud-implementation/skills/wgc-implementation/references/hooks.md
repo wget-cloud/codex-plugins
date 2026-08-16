@@ -39,7 +39,7 @@ Hooks работают только если `cwd` распознан как coo
 
 - прямые Kubernetes mutations вне точного clean-cluster bootstrap-контракта; разрешены read-only `get`, `describe`, `logs`, `events`, `top`, `wait`, `diff`, `rollout status`, `auth can-i` и безопасные config queries;
 - `helm install/upgrade/uninstall/rollback` вне exact bootstrap-команды;
-- mutating `argocd app` и Flux commands;
+- mutating `argocd app` и Flux commands вне точного storage-only staged-sync исключения;
 - `git reset --hard`, forced `git clean`, force-push, worktree-discarding checkout/restore, forced branch deletion;
 - `git submodule update --remote` и массовый `submodule foreach`;
 - broad Docker prune, Terraform apply/destroy и broad recursive deletion;
@@ -70,6 +70,14 @@ Hook fail-closed сверяет repository-owned `infrastructure/k8s/bootstrap/a
 - `kubectl apply` exact root Application `<context>.yaml`, если repo URL/path/context согласованы, а `targetRevision` — immutable SHA или датированный release tag.
 
 Любой дополнительный segment, другой chart/version/namespace/context/path/secret/label/URL, mutable revision или обычная cluster mutation по-прежнему получает `deny`. После появления root Application все workload/controller/app изменения выполняются через Git и Argo; marker нельзя использовать для repair, sync или обхода ownership.
+
+### Storage-only staged-sync exception
+
+После отдельного human approval hook разрешает только пять последовательных операций для `twc-wise-finch`: cluster root → core bundle → local-path storage → local-path smoke bundle → storage smoke. Команда обязана байт-в-байт совпадать с `/usr/bin/env -i` contract, содержать только фиксированную среду и запускать root-owned `/usr/bin/python3 /usr/local/libexec/wget-cloud-staged-sync/runner.py` с согласованной парой `--stage`/`--app` и immutable revision `6c2c3e9dadde2eec3d13fde830bc6db0392b13b8`.
+
+Hook сначала fd-attests `/bin/ls`, затем exact canonical ancestor chain `/`, `/usr`, `/usr/bin` как stable root:wheel `0755` directories с пустым ACL, совпадающей pre/post-lstat identity и одновременно `effectiveWritable=false`/`effectiveDeletable=false`; только после этого fd-attests `/usr/bin/env` и `/usr/bin/python3`. Затем проверяются SHA-256, root/wheel ownership, read-only mode и отсутствие symlink/hardlink для установленного runner и manifest. Runner повторно fail-closed проверяет root-owned non-writable ancestor chain, directory/file modes, exact Darwin UUID read-only ACL, link counts, fd-based pre/post hashes/device/inode identity, effective non-writability, versioned `argocd-v3.0.0-darwin-arm64` и системные binaries, exact kubeconfig hash/context/server/CA и безопасную embedded-cert schema. Live Argo evidence обязано подтверждать полный normalized desired-state contract каждого predecessor/target, exact app-of-apps owner tracking label для stages 2–5 и отсутствие tracking label у root, их status/revision и повторный полный target contract после sync; target до sync ровно OutOfSync с допустимым health, conditions пусты и нет незавершённой либо failed operation. Child processes используют только sanitized environment, `shell=False` и exact argv для одного sync, wait и read-only state checks. Raw `argocd`, selectors, multi-app sync, wrappers, дополнительные flags, shell extensions, proxy/Argo environment overrides, ingress apps `twc-wise-finch-ingress`, `traefik`, `ingress-canary` и любые шаги после storage smoke получают `deny`.
+
+Staged-sync exception, как и bootstrap, использует top-level event cwd и trusted session k8s root, игнорируя supplied tool `workdir`. Marker фиксирует уже полученное человеческое разрешение, но не создаёт его.
 
 Stable Bash hook contract передаёт только `tool_input.command`, а top-level `cwd` остаётся cwd задачи; при таком payload обычная policy использует cwd события. Если расширенный payload содержит `workdir`, значение должно быть непустой строкой, разрешаться в существующий каталог внутри активного WGC workspace и используется как cwd только для обычных non-bootstrap checks. Некорректное, несуществующее, файловое либо внешнее значение блокируется без раскрытия пути.
 
