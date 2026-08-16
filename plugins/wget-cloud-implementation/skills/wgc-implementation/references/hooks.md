@@ -71,6 +71,8 @@ Hook fail-closed сверяет repository-owned `infrastructure/k8s/bootstrap/a
 
 Любой дополнительный segment, другой chart/version/namespace/context/path/secret/label/URL, mutable revision или обычная cluster mutation по-прежнему получает `deny`. После появления root Application все workload/controller/app изменения выполняются через Git и Argo; marker нельзя использовать для repair, sync или обхода ownership.
 
+Для Bash hook вычисляет cwd команды из `tool_input.workdir`: абсолютный путь используется напрямую, относительный разрешается от cwd события. Перед policy-проверкой путь обязан существовать, быть каталогом и оставаться внутри активного WGC workspace; некорректное или внешнее значение блокируется без раскрытия самого пути. Если `workdir` отсутствует, сохраняется прежнее поведение с cwd события. Bootstrap exception дополнительно привязан к каноническому repository: `<coordinator>/k8s` для coordinator context либо exact `repo_root` для standalone `k8s` context. Вложенный или подставной Git repository с именем `k8s` не получает исключение; обычные non-bootstrap Bash policy checks продолжают использовать валидный tool workdir.
+
 При внутренней ошибке `PreToolUse` работает fail-closed и блокирует call до исправления hook. Остальные информационные handlers работают fail-open, чтобы ошибка bookkeeping не ломала рабочую сессию.
 
 ## State и производительность

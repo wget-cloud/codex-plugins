@@ -38,6 +38,8 @@ Hooks не могут доказать качество RCA, корректно�
 
 Clean-cluster marker `WGC_GITOPS_BOOTSTRAP_APPROVED=1` не является общим bypass: hook разрешает только repo-defined Argo chart/version/values, file-backed repository credential pipeline и immutable root Application с explicit kubeconfig/context. Marker без exact human approval, incident repair и любые near-miss mutations запрещены.
 
+Для Bash policy использует проверенный `tool_input.workdir`: абсолютный путь берётся как есть, относительный разрешается от cwd события. Путь должен существовать, быть каталогом и находиться внутри активного WGC workspace; некорректное или внешнее значение получает privacy-safe deny. При отсутствии `workdir` сохраняется fallback на cwd события. Bootstrap exception разрешается только в каноническом `<coordinator>/k8s` либо в exact `repo_root` standalone `k8s` context; одноимённый вложенный repository исключение не получает. Обычные non-bootstrap проверки по-прежнему выполняются относительно валидного tool workdir.
+
 ## Диагностика
 
 Запустить все unit tests:

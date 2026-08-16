@@ -490,6 +490,28 @@ def tool_command(payload: Dict[str, Any]) -> str:
     return value if isinstance(value, str) else ""
 
 
+def effective_bash_workdir(payload: Dict[str, Any], context: Dict[str, Any]) -> Tuple[Optional[Path], Optional[str]]:
+    current = Path(context["cwd"]).resolve()
+    tool_input = payload.get("tool_input")
+    if not isinstance(tool_input, dict) or "workdir" not in tool_input:
+        return current, None
+
+    raw = tool_input.get("workdir")
+    if not isinstance(raw, str) or not raw.strip():
+        return None, "Bash workdir is invalid or outside the active WGC workspace; the command is blocked."
+
+    try:
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = current / candidate
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        return None, "Bash workdir is invalid or outside the active WGC workspace; the command is blocked."
+    if not resolved.is_dir() or not path_within(resolved, workspace_boundary(context)):
+        return None, "Bash workdir is invalid or outside the active WGC workspace; the command is blocked."
+    return resolved, None
+
+
 def command_record(command: str) -> Dict[str, str]:
     known = re.search(
         r"(?:^|[;&|]\s*)(?:[A-Z_][A-Z0-9_]*=[^\s]+\s+)*"
@@ -530,6 +552,14 @@ def path_within(path: Path, root: Path) -> bool:
 def workspace_boundary(context: Dict[str, Any]) -> Path:
     coordinator = context.get("coordinator_root")
     return Path(coordinator or context["repo_root"]).resolve()
+
+
+def canonical_bootstrap_repo(context: Dict[str, Any]) -> Optional[Path]:
+    if context.get("coordinator_root"):
+        return (Path(context["coordinator_root"]) / "k8s").resolve()
+    if context.get("project") == "k8s":
+        return Path(context["repo_root"]).resolve()
+    return None
 
 
 def suspicious_secret(command: str) -> bool:
@@ -852,12 +882,18 @@ def approved_root_bootstrap(args: Sequence[str], repo: Path) -> bool:
     return supplied.resolve(strict=False) == root
 
 
-def approved_gitops_bootstrap(command: str, cwd: Path) -> bool:
+def approved_gitops_bootstrap(command: str, cwd: Path, expected_repo: Optional[Path]) -> bool:
     marker = re.match(rf"^\s*{re.escape(BOOTSTRAP_APPROVAL)}\s+", command)
     if not marker:
         return False
     repo = git_root(cwd)
-    if not repo or repo.name != "k8s" or cwd.resolve() != repo.resolve():
+    if (
+        not repo
+        or expected_repo is None
+        or repo.name != "k8s"
+        or cwd.resolve() != repo.resolve()
+        or repo.resolve() != expected_repo.resolve()
+    ):
         return False
     contract = bootstrap_make_contract(repo)
     if not contract:
@@ -1046,12 +1082,12 @@ def broad_delete_violation(args: Sequence[str], cwd: Path) -> bool:
     return False
 
 
-def command_violation(command: str, cwd: Path) -> Optional[str]:
+def command_violation(command: str, cwd: Path, bootstrap_repo: Optional[Path] = None) -> Optional[str]:
     if not command.strip():
         return None
     if suspicious_secret(command):
         return "Possible credential material in a command is blocked. Use an approved environment or secret manager without exposing the value."
-    if approved_gitops_bootstrap(command, cwd):
+    if approved_gitops_bootstrap(command, cwd, bootstrap_repo):
         return None
 
     for executable, args in shell_commands(command):
@@ -1551,7 +1587,12 @@ def handle_pre_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Optiona
     tool = str(payload.get("tool_name") or "")
     command = tool_command(payload)
     if tool == "Bash":
-        violation = command_violation(command, Path(context["cwd"]))
+        command_cwd, workdir_violation = effective_bash_workdir(payload, context)
+        violation = workdir_violation or command_violation(
+            command,
+            command_cwd or Path(context["cwd"]),
+            canonical_bootstrap_repo(context),
+        )
     elif tool in {"apply_patch", "Edit", "Write"}:
         violation = patch_violation(command, context)
     else:

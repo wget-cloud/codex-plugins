@@ -12,6 +12,7 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parents[1] / "wgc_hooks.py"
 HOOKS_JSON = SCRIPT.parent / "hooks.json"
 PLUGIN_JSON = SCRIPT.parent.parent / ".codex-plugin" / "plugin.json"
+WORKDIR_ABSENT = object()
 
 
 class HooksConfigTest(unittest.TestCase):
@@ -227,6 +228,20 @@ contexts:
                 "tool_input": {"command": command},
             },
             cwd or self.projects["k8s"],
+        )
+
+    def _bootstrap_command_with_workdir(self, command, payload_cwd, workdir=WORKDIR_ABSENT):
+        tool_input = {"command": command}
+        if workdir is not WORKDIR_ABSENT:
+            tool_input["workdir"] = workdir
+        return self.call(
+            "pre-tool",
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": tool_input,
+            },
+            payload_cwd,
         )
 
     def _assert_bootstrap_denied(self, command, cwd=None):
@@ -601,6 +616,183 @@ contexts:
         ):
             with self.subTest(command=command):
                 self.assertIsNone(self._bootstrap_command(command))
+
+    def test_gitops_bootstrap_uses_absolute_tool_workdir_from_coordinator(self):
+        fixture = self._bootstrap_fixture()
+        for command in (
+            self._approved_helm_bootstrap(fixture),
+            self._approved_repository_bootstrap(fixture),
+            self._approved_root_bootstrap(fixture),
+        ):
+            with self.subTest(command=command):
+                self.assertIsNone(
+                    self._bootstrap_command_with_workdir(
+                        command,
+                        self.root,
+                        str(fixture["k8s"]),
+                    )
+                )
+
+    def test_gitops_bootstrap_resolves_relative_tool_workdir_from_payload_cwd(self):
+        fixture = self._bootstrap_fixture()
+        for command in (
+            self._approved_helm_bootstrap(fixture),
+            self._approved_repository_bootstrap(fixture),
+            self._approved_root_bootstrap(fixture),
+        ):
+            with self.subTest(command=command):
+                self.assertIsNone(
+                    self._bootstrap_command_with_workdir(
+                        command,
+                        self.root,
+                        "k8s",
+                    )
+                )
+
+    def test_gitops_bootstrap_without_tool_workdir_keeps_existing_coordinator_denial(self):
+        fixture = self._bootstrap_fixture()
+        for command in (
+            self._approved_helm_bootstrap(fixture),
+            self._approved_repository_bootstrap(fixture),
+            self._approved_root_bootstrap(fixture),
+        ):
+            with self.subTest(command=command):
+                output = self._bootstrap_command_with_workdir(command, self.root)
+                self.assertIsNotNone(output)
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_gitops_bootstrap_denies_untrusted_tool_workdir_values(self):
+        fixture = self._bootstrap_fixture()
+        nested = fixture["k8s"] / "nested"
+        nested.mkdir()
+        outside = Path(self.temp.name) / "outside"
+        outside.mkdir()
+        nonexistent = Path(self.temp.name) / "nonexistent"
+        command = self._approved_helm_bootstrap(fixture)
+        denied_workdirs = {
+            "backend": str(self.projects["backend"]),
+            "other-project": str(self.projects["frontend"]),
+            "nested-k8s": str(nested),
+            "outside-coordinator": str(outside),
+            "nonexistent": str(nonexistent),
+            "file": str(fixture["kubeconfig"]),
+            "non-string-number": 7,
+            "non-string-list": [str(fixture["k8s"])],
+            "blank": "",
+            "whitespace": "   ",
+        }
+        for case, workdir in denied_workdirs.items():
+            with self.subTest(case=case, workdir=workdir):
+                output = self._bootstrap_command_with_workdir(command, self.root, workdir)
+                self.assertIsNotNone(output)
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_gitops_bootstrap_tool_workdir_preserves_near_miss_denials(self):
+        fixture = self._bootstrap_fixture()
+        helm = self._approved_helm_bootstrap(fixture)
+        repository = self._approved_repository_bootstrap(fixture)
+        root = self._approved_root_bootstrap(fixture)
+        denied = (
+            helm.replace("WGC_GITOPS_BOOTSTRAP_APPROVED=1 ", "", 1),
+            helm.replace("argo/argo-cd", "bitnami/argo-cd", 1),
+            repository.replace("wget-cloud-k8s-repository", "other-repository", 1),
+            repository.replace(" | ", " ; "),
+            root.replace(fixture["root_path"], "infrastructure/k8s/bootstrap/roots/dev.yaml", 1),
+            root + " ; kubectl --context twc-wise-finch delete namespace backend",
+        )
+        for command in denied:
+            with self.subTest(command=command):
+                output = self._bootstrap_command_with_workdir(
+                    command,
+                    self.root,
+                    str(fixture["k8s"]),
+                )
+                self.assertIsNotNone(output)
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_gitops_bootstrap_rejects_nested_shadow_k8s_repository(self):
+        fixture = self._bootstrap_fixture()
+        canonical_command = self._approved_helm_bootstrap(fixture)
+        self.assertIsNone(
+            self._bootstrap_command_with_workdir(
+                canonical_command,
+                self.root,
+                str(fixture["k8s"]),
+            )
+        )
+
+        shadow = self.root / "shadow" / "k8s"
+        shadow.mkdir(parents=True)
+        self._git_init(shadow)
+        argocd = shadow / "infrastructure" / "k8s" / "bootstrap" / "argocd"
+        roots = shadow / "infrastructure" / "k8s" / "bootstrap" / "roots"
+        argocd.mkdir(parents=True)
+        roots.mkdir(parents=True)
+        (argocd / "makefile").write_text(
+            """NAMESPACE ?= argocd
+RELEASE ?= argo-cd
+CHART ?= attacker/argo-cd
+CHART_VERSION ?= 9.9.9
+VALUES ?= values.yaml
+WAIT ?= true
+TIMEOUT ?= 10m
+""",
+            encoding="utf-8",
+        )
+        (argocd / "values.yaml").write_text("crds:\n  install: true\n", encoding="utf-8")
+        shadow_tag = "twc-wise-finch-shadow-2026-08-20.1"
+        (roots / "twc-wise-finch.yaml").write_text(
+            f"""apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: twc-wise-finch-cluster
+  namespace: argocd
+  labels:
+    wget-cloud.io/profile: twc-wise-finch
+spec:
+  project: default
+  source:
+    repoURL: ssh://git@github.com/wget-cloud/k8s
+    targetRevision: {shadow_tag}
+    path: infrastructure/k8s/gitops/clusters/twc-wise-finch/root
+  destination:
+    namespace: argocd
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    syncOptions: [CreateNamespace=true]
+""",
+            encoding="utf-8",
+        )
+        self._git_commit(
+            shadow,
+            [
+                "infrastructure/k8s/bootstrap/argocd/makefile",
+                "infrastructure/k8s/bootstrap/argocd/values.yaml",
+                "infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+            ],
+        )
+        self._run(["git", "tag", shadow_tag], shadow)
+
+        attacker_command = canonical_command.replace("argo/argo-cd", "attacker/argo-cd", 1).replace(
+            "--version 8.0.0",
+            "--version 9.9.9",
+            1,
+        )
+        shadow_attempts = {
+            "coordinator-event-with-shadow-workdir": self._bootstrap_command_with_workdir(
+                attacker_command,
+                self.root,
+                str(shadow),
+            ),
+            "shadow-event-without-workdir": self._bootstrap_command_with_workdir(
+                attacker_command,
+                shadow,
+            ),
+        }
+        for case, output in shadow_attempts.items():
+            with self.subTest(case=case):
+                self.assertIsNotNone(output)
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
 
     def test_denies_dirty_repo_owned_helm_contract_after_tag(self):
         fixture = self._bootstrap_fixture()

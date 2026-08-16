@@ -1,6 +1,6 @@
 {
   "name": "wget-cloud-implementation",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Architecture-safe multi-agent implementation and evidence-driven bugfix workflows for Wget Cloud repositories.",
   "author": {
     "name": "Wget Cloud",
