@@ -490,7 +490,10 @@ def tool_command(payload: Dict[str, Any]) -> str:
     return value if isinstance(value, str) else ""
 
 
-def effective_bash_workdir(payload: Dict[str, Any], context: Dict[str, Any]) -> Tuple[Optional[Path], Optional[str]]:
+def resolve_bash_workdir(
+    payload: Dict[str, Any], context: Dict[str, Any]
+) -> Tuple[Optional[Path], Optional[str]]:
+    """Resolve a supplied runner workdir for ordinary policy, or use the event cwd."""
     current = Path(context["cwd"]).resolve()
     tool_input = payload.get("tool_input")
     if not isinstance(tool_input, dict) or "workdir" not in tool_input:
@@ -547,6 +550,22 @@ def path_within(path: Path, root: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def canonical_absolute_file(value: Any) -> Optional[Path]:
+    try:
+        candidate = Path(value)
+    except (TypeError, ValueError):
+        return None
+    if not candidate.is_absolute():
+        return None
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        return None
+    if not resolved.is_file():
+        return None
+    return resolved
 
 
 def workspace_boundary(context: Dict[str, Any]) -> Path:
@@ -631,9 +650,9 @@ def command_positionals(
 
 def bootstrap_make_contract(repo: Path) -> Optional[Dict[str, str]]:
     argocd = repo / "infrastructure" / "k8s" / "bootstrap" / "argocd"
-    makefile = argocd / "makefile"
-    values_path = argocd / "values.yaml"
-    if repo.name != "k8s" or not makefile.is_file() or not values_path.is_file():
+    makefile = canonical_absolute_file(argocd / "makefile")
+    values_path = canonical_absolute_file(argocd / "values.yaml")
+    if repo.name != "k8s" or makefile is None or values_path is None:
         return None
     try:
         text = makefile.read_text(encoding="utf-8")
@@ -685,8 +704,10 @@ def simple_yaml_scalars(text: str) -> Optional[Dict[Tuple[str, ...], str]]:
 def immutable_bootstrap_root(repo: Path, context: str) -> Optional[Path]:
     if not re.fullmatch(r"[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?", context):
         return None
-    root = repo / "infrastructure" / "k8s" / "bootstrap" / "roots" / f"{context}.yaml"
-    if not root.is_file():
+    root = canonical_absolute_file(
+        repo / "infrastructure" / "k8s" / "bootstrap" / "roots" / f"{context}.yaml"
+    )
+    if root is None:
         return None
     try:
         text = root.read_text(encoding="utf-8")
@@ -757,12 +778,18 @@ def immutable_bootstrap_root(repo: Path, context: str) -> Optional[Path]:
     if not (immutable_sha or dated_tag):
         return None
     revision = target if immutable_sha else f"refs/tags/{target}"
-    bootstrap_inputs = (
-        root,
-        repo / "infrastructure" / "k8s" / "bootstrap" / "argocd" / "makefile",
-        repo / "infrastructure" / "k8s" / "bootstrap" / "argocd" / "values.yaml",
+    bootstrap_inputs = tuple(
+        canonical_absolute_file(path)
+        for path in (
+            root,
+            repo / "infrastructure" / "k8s" / "bootstrap" / "argocd" / "makefile",
+            repo / "infrastructure" / "k8s" / "bootstrap" / "argocd" / "values.yaml",
+        )
     )
+    if any(path is None for path in bootstrap_inputs):
+        return None
     for path in bootstrap_inputs:
+        assert path is not None
         relative = path.relative_to(repo).as_posix()
         work_code, working_blob = run(["git", "hash-object", "--", str(path)], repo, timeout=2.0)
         ref_code, published_blob = run(["git", "rev-parse", f"{revision}:{relative}"], repo, timeout=2.0)
@@ -772,11 +799,11 @@ def immutable_bootstrap_root(repo: Path, context: str) -> Optional[Path]:
 
 
 def bootstrap_kube_scope(args: Sequence[str], context: str, kubeconfig: str) -> bool:
-    kubeconfig_path = Path(kubeconfig).expanduser()
-    if not kubeconfig_path.is_absolute() or not kubeconfig_path.is_file():
+    kubeconfig_path = canonical_absolute_file(kubeconfig)
+    if kubeconfig_path is None:
         return False
     return (
-        exact_option(args, {"--kubeconfig"}, str(kubeconfig_path))
+        exact_option(args, {"--kubeconfig"}, kubeconfig)
         and exact_option(args, {"--context", "--kube-context"}, context)
         and exact_option(args, {"-n", "--namespace"}, "argocd")
     )
@@ -802,12 +829,11 @@ def approved_helm_bootstrap(args: Sequence[str], repo: Path, contract: Dict[str,
     values = option_values(args, {"-f", "--values"})
     if len(values) != 1:
         return False
-    values_path = Path(values[0]).expanduser()
-    if not values_path.is_absolute():
-        values_path = repo / values_path
+    values_path = canonical_absolute_file(values[0])
     return (
-        bootstrap_kube_scope(args, context, kubeconfigs[0])
-        and values_path.resolve(strict=False) == Path(contract["values_path"])
+        values_path is not None
+        and bootstrap_kube_scope(args, context, kubeconfigs[0])
+        and values_path == Path(contract["values_path"]).resolve()
         and exact_option(args, {"--version"}, contract["chart_version"])
         and exact_option(args, {"--timeout"}, contract["timeout"])
         and "--install" in args
@@ -841,8 +867,8 @@ def approved_repository_bootstrap(commands: Sequence[Tuple[str, List[str]]], rep
     key_match = re.fullmatch(r"sshPrivateKey=(.+)", key_files[0])
     if not key_match:
         return False
-    key_path = Path(key_match.group(1)).expanduser()
-    if not key_path.is_absolute() or not key_path.is_file():
+    key_path = canonical_absolute_file(key_match.group(1))
+    if key_path is None:
         return False
     if not exact_option(create, {"--dry-run"}, "client") or not exact_option(create, {"-o", "--output"}, "yaml"):
         return False
@@ -876,24 +902,29 @@ def approved_root_bootstrap(args: Sequence[str], repo: Path) -> bool:
     root = immutable_bootstrap_root(repo, contexts[0])
     if not root or not bootstrap_kube_scope(args, contexts[0], kubeconfigs[0]):
         return False
-    supplied = Path(filenames[0]).expanduser()
-    if not supplied.is_absolute():
-        supplied = repo / supplied
-    return supplied.resolve(strict=False) == root
+    supplied = canonical_absolute_file(filenames[0])
+    return supplied is not None and supplied == root.resolve()
 
 
 def approved_gitops_bootstrap(command: str, cwd: Path, expected_repo: Optional[Path]) -> bool:
     marker = re.match(rf"^\s*{re.escape(BOOTSTRAP_APPROVAL)}\s+", command)
     if not marker:
         return False
-    repo = git_root(cwd)
-    if (
-        not repo
-        or expected_repo is None
-        or repo.name != "k8s"
-        or cwd.resolve() != repo.resolve()
-        or repo.resolve() != expected_repo.resolve()
-    ):
+    if expected_repo is None:
+        return False
+    try:
+        repo = expected_repo.resolve(strict=True)
+        event_cwd = cwd.resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    allowed_event_roots = {repo}
+    coordinator = repo.parent
+    if repo == coordinator / "k8s" and is_coordinator(coordinator):
+        allowed_event_roots.add(coordinator.resolve())
+    if repo.name != "k8s" or not repo.is_dir() or event_cwd not in allowed_event_roots:
+        return False
+    repo_git_root = git_root(repo)
+    if repo_git_root is None or repo_git_root.resolve() != repo:
         return False
     contract = bootstrap_make_contract(repo)
     if not contract:
@@ -1082,12 +1113,17 @@ def broad_delete_violation(args: Sequence[str], cwd: Path) -> bool:
     return False
 
 
-def command_violation(command: str, cwd: Path, bootstrap_repo: Optional[Path] = None) -> Optional[str]:
+def command_violation(
+    command: str,
+    cwd: Path,
+    bootstrap_repo: Optional[Path] = None,
+    bootstrap_cwd: Optional[Path] = None,
+) -> Optional[str]:
     if not command.strip():
         return None
     if suspicious_secret(command):
         return "Possible credential material in a command is blocked. Use an approved environment or secret manager without exposing the value."
-    if approved_gitops_bootstrap(command, cwd, bootstrap_repo):
+    if approved_gitops_bootstrap(command, bootstrap_cwd or cwd, bootstrap_repo):
         return None
 
     for executable, args in shell_commands(command):
@@ -1587,11 +1623,13 @@ def handle_pre_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Optiona
     tool = str(payload.get("tool_name") or "")
     command = tool_command(payload)
     if tool == "Bash":
-        command_cwd, workdir_violation = effective_bash_workdir(payload, context)
+        event_cwd = Path(context["cwd"]).resolve()
+        command_cwd, workdir_violation = resolve_bash_workdir(payload, context)
         violation = workdir_violation or command_violation(
             command,
-            command_cwd or Path(context["cwd"]),
+            command_cwd or event_cwd,
             canonical_bootstrap_repo(context),
+            event_cwd,
         )
     elif tool in {"apply_patch", "Edit", "Write"}:
         violation = patch_violation(command, context)

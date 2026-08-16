@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -253,8 +254,15 @@ contexts:
         return (
             f"WGC_GITOPS_BOOTSTRAP_APPROVED=1 helm --kubeconfig {fixture['kubeconfig']} "
             "--kube-context twc-wise-finch upgrade --install argo-cd argo/argo-cd "
-            f"--namespace argocd --create-namespace --values {fixture['values']} "
+            f"--namespace argocd --create-namespace --values {fixture['values_file']} "
             "--wait --timeout 10m --version 8.0.0"
+        )
+
+    def _relative_helm_bootstrap(self, fixture):
+        return self._approved_helm_bootstrap(fixture).replace(
+            str(fixture["values_file"]),
+            fixture["values"],
+            1,
         )
 
     def _approved_repository_bootstrap(self, fixture):
@@ -272,7 +280,14 @@ contexts:
     def _approved_root_bootstrap(self, fixture):
         return (
             f"WGC_GITOPS_BOOTSTRAP_APPROVED=1 kubectl --kubeconfig {fixture['kubeconfig']} "
-            f"--context twc-wise-finch --namespace argocd apply --filename={fixture['root_path']}"
+            f"--context twc-wise-finch --namespace argocd apply --filename={fixture['root']}"
+        )
+
+    def _relative_root_bootstrap(self, fixture):
+        return self._approved_root_bootstrap(fixture).replace(
+            str(fixture["root"]),
+            fixture["root_path"],
+            1,
         )
 
     def _tag_bootstrap_root(self, fixture, content, tag):
@@ -617,7 +632,7 @@ contexts:
             with self.subTest(command=command):
                 self.assertIsNone(self._bootstrap_command(command))
 
-    def test_gitops_bootstrap_uses_absolute_tool_workdir_from_coordinator(self):
+    def test_gitops_bootstrap_exact_absolute_inputs_ignore_absolute_tool_workdir(self):
         fixture = self._bootstrap_fixture()
         for command in (
             self._approved_helm_bootstrap(fixture),
@@ -633,7 +648,7 @@ contexts:
                     )
                 )
 
-    def test_gitops_bootstrap_resolves_relative_tool_workdir_from_payload_cwd(self):
+    def test_gitops_bootstrap_exact_absolute_inputs_ignore_relative_tool_workdir(self):
         fixture = self._bootstrap_fixture()
         for command in (
             self._approved_helm_bootstrap(fixture),
@@ -649,7 +664,7 @@ contexts:
                     )
                 )
 
-    def test_gitops_bootstrap_without_tool_workdir_keeps_existing_coordinator_denial(self):
+    def test_gitops_bootstrap_without_tool_workdir_allows_only_canonical_absolute_repo_inputs(self):
         fixture = self._bootstrap_fixture()
         for command in (
             self._approved_helm_bootstrap(fixture),
@@ -658,21 +673,97 @@ contexts:
         ):
             with self.subTest(command=command):
                 output = self._bootstrap_command_with_workdir(command, self.root)
+                self.assertIsNone(output)
+
+    def test_gitops_bootstrap_without_tool_workdir_denies_relative_repo_inputs(self):
+        fixture = self._bootstrap_fixture()
+        nested = fixture["k8s"] / "nested-relative-workdir"
+        nested.mkdir()
+        relative_key = os.path.relpath(fixture["key"], self.root)
+        relative_kubeconfig = os.path.relpath(fixture["kubeconfig"], self.root)
+        repository = self._approved_repository_bootstrap(fixture)
+        denied = {
+            "relative-helm-values": self._relative_helm_bootstrap(fixture),
+            "relative-root-filename": self._relative_root_bootstrap(fixture),
+            "relative-repository-key": repository.replace(str(fixture["key"]), relative_key, 1),
+            "relative-repository-kubeconfig": repository.replace(
+                str(fixture["kubeconfig"]),
+                relative_kubeconfig,
+            ),
+        }
+        ignored_workdirs = {
+            "absent": WORKDIR_ABSENT,
+            "canonical-k8s": str(fixture["k8s"]),
+            "mismatched-project": str(self.projects["backend"]),
+            "nested-k8s": str(nested),
+        }
+        for case, command in denied.items():
+            for workdir_case, workdir in ignored_workdirs.items():
+                with self.subTest(case=case, workdir_case=workdir_case, command=command):
+                    output = self._bootstrap_command_with_workdir(command, self.root, workdir)
+                    self.assertIsNotNone(output)
+                    self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_gitops_bootstrap_without_tool_workdir_preserves_shadow_and_near_miss_denials(self):
+        fixture = self._bootstrap_fixture()
+        absolute_helm = self._approved_helm_bootstrap(fixture)
+        absolute_root = self._approved_root_bootstrap(fixture)
+        shadow = self.root / "shadow" / "k8s"
+        shadow.mkdir(parents=True)
+        self._git_init(shadow)
+        denied = {
+            "shadow-event-cwd": self._bootstrap_command_with_workdir(absolute_helm, shadow),
+            "missing-approval-marker": self._bootstrap_command_with_workdir(
+                absolute_helm.replace("WGC_GITOPS_BOOTSTRAP_APPROVED=1 ", "", 1),
+                self.root,
+            ),
+            "wrong-chart": self._bootstrap_command_with_workdir(
+                absolute_helm.replace("argo/argo-cd", "bitnami/argo-cd", 1),
+                self.root,
+            ),
+            "extra-mutation": self._bootstrap_command_with_workdir(
+                absolute_root + " ; kubectl --context twc-wise-finch delete namespace backend",
+                self.root,
+            ),
+        }
+        for case, output in denied.items():
+            with self.subTest(case=case):
                 self.assertIsNotNone(output)
                 self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
 
-    def test_gitops_bootstrap_denies_untrusted_tool_workdir_values(self):
+    def test_gitops_bootstrap_exact_absolute_inputs_ignore_valid_tool_workdir_values(self):
         fixture = self._bootstrap_fixture()
         nested = fixture["k8s"] / "nested"
         nested.mkdir()
+        commands = (
+            self._approved_helm_bootstrap(fixture),
+            self._approved_repository_bootstrap(fixture),
+            self._approved_root_bootstrap(fixture),
+        )
+        ignored_workdirs = {
+            "coordinator": str(self.root),
+            "backend": str(self.projects["backend"]),
+            "other-project": str(self.projects["frontend"]),
+            "canonical-k8s": str(fixture["k8s"]),
+            "nested-k8s": str(nested),
+        }
+        for command in commands:
+            for case, workdir in ignored_workdirs.items():
+                with self.subTest(case=case, workdir=workdir, command=command):
+                    output = self._bootstrap_command_with_workdir(command, self.root, workdir)
+                    self.assertIsNone(output)
+
+    def test_gitops_bootstrap_malformed_or_outside_tool_workdir_stays_fail_closed(self):
+        fixture = self._bootstrap_fixture()
         outside = Path(self.temp.name) / "outside"
         outside.mkdir()
         nonexistent = Path(self.temp.name) / "nonexistent"
-        command = self._approved_helm_bootstrap(fixture)
+        commands = (
+            self._approved_helm_bootstrap(fixture),
+            self._approved_repository_bootstrap(fixture),
+            self._approved_root_bootstrap(fixture),
+        )
         denied_workdirs = {
-            "backend": str(self.projects["backend"]),
-            "other-project": str(self.projects["frontend"]),
-            "nested-k8s": str(nested),
             "outside-coordinator": str(outside),
             "nonexistent": str(nonexistent),
             "file": str(fixture["kubeconfig"]),
@@ -681,11 +772,12 @@ contexts:
             "blank": "",
             "whitespace": "   ",
         }
-        for case, workdir in denied_workdirs.items():
-            with self.subTest(case=case, workdir=workdir):
-                output = self._bootstrap_command_with_workdir(command, self.root, workdir)
-                self.assertIsNotNone(output)
-                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+        for command in commands:
+            for case, workdir in denied_workdirs.items():
+                with self.subTest(case=case, workdir=workdir, command=command):
+                    output = self._bootstrap_command_with_workdir(command, self.root, workdir)
+                    self.assertIsNotNone(output)
+                    self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
 
     def test_gitops_bootstrap_tool_workdir_preserves_near_miss_denials(self):
         fixture = self._bootstrap_fixture()
@@ -697,7 +789,7 @@ contexts:
             helm.replace("argo/argo-cd", "bitnami/argo-cd", 1),
             repository.replace("wget-cloud-k8s-repository", "other-repository", 1),
             repository.replace(" | ", " ; "),
-            root.replace(fixture["root_path"], "infrastructure/k8s/bootstrap/roots/dev.yaml", 1),
+            root.replace(str(fixture["root"]), "infrastructure/k8s/bootstrap/roots/dev.yaml", 1),
             root + " ; kubectl --context twc-wise-finch delete namespace backend",
         )
         for command in denied:
@@ -773,10 +865,14 @@ spec:
         )
         self._run(["git", "tag", shadow_tag], shadow)
 
-        attacker_command = canonical_command.replace("argo/argo-cd", "attacker/argo-cd", 1).replace(
-            "--version 8.0.0",
-            "--version 9.9.9",
-            1,
+        attacker_command = (
+            canonical_command.replace(str(fixture["values_file"]), str(argocd / "values.yaml"), 1)
+            .replace("argo/argo-cd", "attacker/argo-cd", 1)
+            .replace(
+                "--version 8.0.0",
+                "--version 9.9.9",
+                1,
+            )
         )
         shadow_attempts = {
             "coordinator-event-with-shadow-workdir": self._bootstrap_command_with_workdir(
@@ -791,6 +887,42 @@ spec:
         }
         for case, output in shadow_attempts.items():
             with self.subTest(case=case):
+                self.assertIsNotNone(output)
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_gitops_bootstrap_requires_canonical_k8s_path_to_be_exact_git_root(self):
+        fixture = self._bootstrap_fixture()
+        shutil.rmtree(fixture["k8s"] / ".git")
+
+        duplicate_argocd = self.root / "infrastructure" / "k8s" / "bootstrap" / "argocd"
+        duplicate_roots = self.root / "infrastructure" / "k8s" / "bootstrap" / "roots"
+        duplicate_argocd.mkdir(parents=True)
+        duplicate_roots.mkdir(parents=True)
+        duplicate_makefile = duplicate_argocd / "makefile"
+        duplicate_values = duplicate_argocd / "values.yaml"
+        duplicate_root = duplicate_roots / "twc-wise-finch.yaml"
+        shutil.copyfile(fixture["makefile"], duplicate_makefile)
+        shutil.copyfile(fixture["values_file"], duplicate_values)
+        shutil.copyfile(fixture["root"], duplicate_root)
+
+        coordinator_owned = (
+            "k8s/infrastructure/k8s/bootstrap/argocd/makefile",
+            "k8s/infrastructure/k8s/bootstrap/argocd/values.yaml",
+            "k8s/infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+            "infrastructure/k8s/bootstrap/argocd/makefile",
+            "infrastructure/k8s/bootstrap/argocd/values.yaml",
+            "infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+        )
+        self._git_commit(self.root, coordinator_owned)
+        self._run(["git", "tag", "twc-wise-finch-ingress-2026-08-15.1"], self.root)
+
+        for command in (
+            self._approved_helm_bootstrap(fixture),
+            self._approved_repository_bootstrap(fixture),
+            self._approved_root_bootstrap(fixture),
+        ):
+            with self.subTest(command=command):
+                output = self._bootstrap_command_with_workdir(command, self.root)
                 self.assertIsNotNone(output)
                 self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
 
@@ -896,8 +1028,8 @@ metadata:
         )
 
         for command in (
-            self._approved_helm_bootstrap(fixture),
-            self._approved_root_bootstrap(fixture),
+            self._relative_helm_bootstrap(fixture),
+            self._relative_root_bootstrap(fixture),
         ):
             with self.subTest(command=command):
                 self._assert_bootstrap_denied(command, nested)
@@ -921,7 +1053,7 @@ metadata:
                 f"$(printf %s {fixture['kubeconfig']})",
                 1,
             ),
-            helm.replace(fixture["values"], "infrastructure/k8s/bootstrap/argocd/other-values.yaml", 1),
+            helm.replace(str(fixture["values_file"]), "infrastructure/k8s/bootstrap/argocd/other-values.yaml", 1),
             helm.replace(" helm ", " /tmp/helm ", 1),
             repository.replace("wget-cloud-k8s-repository", "other-repository", 1),
             repository.replace(
@@ -949,7 +1081,7 @@ metadata:
             repository.replace(" | ", " ; "),
             repository.replace(" | ", " & "),
             repository.replace(" kubectl ", " ./kubectl "),
-            root.replace(fixture["root_path"], "infrastructure/k8s/bootstrap/roots/dev.yaml", 1),
+            root.replace(str(fixture["root"]), "infrastructure/k8s/bootstrap/roots/dev.yaml", 1),
             root + " > /tmp/wgc-bootstrap-output.yaml",
             root + "\nkubectl --context twc-wise-finch delete namespace backend",
             root + " ; kubectl --context twc-wise-finch delete namespace backend",
@@ -1013,6 +1145,28 @@ metadata:
             },
             self.root,
         )
+        self.assertIn("permissionDecision", output["hookSpecificOutput"])
+        self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+        self.assertIn("staged diff", output["hookSpecificOutput"]["permissionDecisionReason"])
+
+    def test_git_commit_preflight_uses_valid_supplied_workdir_for_non_bootstrap_policy(self):
+        target = self.projects["backend"]
+        bad = target / "bad-workdir.txt"
+        bad.write_text("trailing whitespace   \n", encoding="utf-8")
+        self._run(["git", "add", "bad-workdir.txt"], target)
+        output = self.call(
+            "pre-tool",
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {
+                    "command": "git commit -m test",
+                    "workdir": str(target),
+                },
+            },
+            self.root,
+        )
+        self.assertIn("permissionDecision", output["hookSpecificOutput"])
         self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
         self.assertIn("staged diff", output["hookSpecificOutput"]["permissionDecisionReason"])
 
