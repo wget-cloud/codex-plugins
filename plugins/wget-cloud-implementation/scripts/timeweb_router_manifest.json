@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "installedPaths": {
+    "runner": "/usr/local/libexec/wget-cloud-ingress-recovery/router_runner.py",
+    "manifest": "/usr/local/libexec/wget-cloud-ingress-recovery/router-manifest.json",
+    "credential": "/usr/local/etc/wget-cloud-ingress-recovery/timeweb-cloud-token"
+  },
+  "artifacts": {
+    "runner": {"sha256": "2e29de635f8b14e275b19d93e8efbd72333bf94dc012f98dd98981864d223365", "owner": "root", "group": "wheel", "mode": "0555", "acl": [], "linkCount": 1},
+    "manifest": {"owner": "root", "group": "wheel", "mode": "0444", "acl": [], "linkCount": 1},
+    "credential": {"owner": "root", "group": "wheel", "mode": "0600", "acl": [{"inherited": false, "principal": "user:FFFFEEEE-DDDD-CCCC-BBBB-AAAA000001F5", "type": "allow", "permissions": ["read", "readattr", "readextattr", "readsecurity"]}], "linkCount": 1}
+  },
+  "api": {
+    "baseUrl": "https://api.timeweb.cloud",
+    "routersPath": "/api/v1/routers",
+    "dnatPath": "/api/v1/routers/{router_id}/dnat-rules"
+  },
+  "router": {"publicIp": "72.56.0.250", "localIp": "192.168.0.16"},
+  "desiredRules": [
+    {"protocol": "tcp", "local": {"ip": "192.168.0.16", "port": "30080"}, "public": {"ip": "72.56.0.250", "port": "80"}},
+    {"protocol": "tcp", "local": {"ip": "192.168.0.16", "port": "30443"}, "public": {"ip": "72.56.0.250", "port": "443"}}
+  ],
+  "approvalTemplate": {
+    "id": "twc-wise-finch-argocd-recovery-2026-08-17.1",
+    "maxAgeSeconds": 300,
+    "requiredRouterSnapshot": true
+  }
+}

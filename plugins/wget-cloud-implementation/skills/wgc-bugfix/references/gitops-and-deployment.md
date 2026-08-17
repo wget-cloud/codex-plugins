@@ -10,6 +10,10 @@
 
 Ни одна из ролей не выполняет `kubectl apply/edit/patch/delete/scale`, ручной `helm upgrade`, прямое изменение Argo Application или secret в кластере. Единственное исключение — fixed-point bootstrap пустого кластера: после exact human approval marker `WGC_GITOPS_BOOTSTRAP_APPROVED=1` разрешает только repo-defined Argo chart/version/values, file-backed `wget-cloud-k8s-repository` credential pipeline и exact immutable `bootstrap/roots/<context>.yaml` с explicit kubeconfig/context. Это исключение нельзя использовать для bugfix, incident repair, Argo sync или workload mutation. Read-only диагностика допустима при наличии доступа и узкого scope.
 
+Узкий reviewed ingress/router recovery — отдельный контракт, не расширение обычного bugfix deployment. Он разрешает только семь Argo core-mode стадий `twc-wise-finch` до `argocd-public` по annotated tag `twc-wise-finch-argocd-recovery-2026-08-17.1` / tag object `344a7e5f87e6c9212dd1ac22256336faad0eb002` / peeled commit `925f7a2949c6ff50b76e55ccec80abdfff59178b`, с единственным stage-1 `app set`, sync без revision/prune, wait и свежими pre/post/full-state attestations. Поздние bundles `controllers`, `vault-restore`, `eso-ready`, `data`, `apps`, `full` не разрешены.
+
+Router mutation требует отдельного свежего ≤300s materialized approval из exact published foundation/router evidence и generated `TimewebRouterRecoveryPlan`; source `approvalTemplate` неисполняем. Production main stable-FD читает manifest, выполняет только ordered adopt/create actions, динамически подтверждает уникальный router и FD-only читает credential из root:wheel `0600` файла с exact ACL user `FFFFEEEE-DDDD-CCCC-BBBB-AAAA000001F5`, не раскрывая его в Git/argv/env/log. Только conflict-free final GET и exact `TimewebRouterRecoveryPoststate` с recomputed router-plan/poststate/promotion lineage допускаются как gate stage 7. Commit/push/publication, reinstall, materialization, router mutation, Argo sync и deployment остаются разными approvals; обновлённый hook проверяется новой задачей после reinstall.
+
 ## DevOps plan
 
 До изменения `k8s` DevOps устанавливает:

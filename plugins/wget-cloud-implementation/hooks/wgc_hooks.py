@@ -616,6 +616,29 @@ STAGED_SYNC_APPS = (
     "local-path-storage-smoke",
 )
 
+INGRESS_RECOVERY_APPROVAL = "WGC_GITOPS_INGRESS_RECOVERY_APPROVED=1"
+INGRESS_RECOVERY_REVISION = "925f7a2949c6ff50b76e55ccec80abdfff59178b"
+INGRESS_RECOVERY_RUNNER = "/usr/local/libexec/wget-cloud-ingress-recovery/promotion_runner.py"
+INGRESS_RECOVERY_MANIFEST = "/usr/local/libexec/wget-cloud-ingress-recovery/promotion-manifest.json"
+INGRESS_RECOVERY_KUBECONFIG = "/usr/local/etc/wget-cloud-ingress-recovery/twc-wise-finch.kubeconfig"
+INGRESS_RECOVERY_RUNNER_SHA256 = "5547f8cbe3b8164669126788419e19b00321c438c25968ab5c11f63c173e7474"
+INGRESS_RECOVERY_MANIFEST_SHA256 = "b3186ea9f5de290e0e7e51cfea715276afc8d40f9f56481c8c52210b27545cbe"
+INGRESS_RECOVERY_APPS = (
+    "twc-wise-finch-cluster",
+    "twc-wise-finch-ingress",
+    "cert-manager",
+    "traefik",
+    "ingress-canary",
+    "twc-wise-finch-ingress-issuer",
+    "argocd-public",
+)
+
+TIMEWEB_ROUTER_APPROVAL = "WGC_TIMEWEB_ROUTER_RECOVERY_APPROVED=1"
+TIMEWEB_ROUTER_RUNNER = "/usr/local/libexec/wget-cloud-ingress-recovery/router_runner.py"
+TIMEWEB_ROUTER_MANIFEST = "/usr/local/libexec/wget-cloud-ingress-recovery/router-manifest.json"
+TIMEWEB_ROUTER_RUNNER_SHA256 = "2e29de635f8b14e275b19d93e8efbd72333bf94dc012f98dd98981864d223365"
+TIMEWEB_ROUTER_TEMPLATE_SHA256 = "cfeb01d23ba633b3f6779a1f3def026337e808ebad7e519bdade5bd00c7b4402"
+
 
 def staged_sync_runner_command(stage: int, app: str) -> str:
     return (
@@ -631,6 +654,33 @@ def parse_staged_sync_runner_command(command: str) -> Optional[Tuple[int, str, s
         if command == staged_sync_runner_command(stage, app):
             return stage, app, STAGED_SYNC_REVISION
     return None
+
+
+def ingress_recovery_runner_command(stage: int, app: str, revision: str) -> str:
+    return (
+        "/usr/bin/env -i WGC_GITOPS_INGRESS_RECOVERY_APPROVED=1 HOME=/var/empty "
+        "PATH=/usr/bin:/bin LANG=C LC_ALL=C "
+        f"KUBECONFIG={INGRESS_RECOVERY_KUBECONFIG} /usr/bin/python3 {INGRESS_RECOVERY_RUNNER} "
+        f"--stage {stage} --app {app} --revision {revision}"
+    )
+
+
+def parse_ingress_recovery_runner_command(command: str) -> Optional[Tuple[int, str, str]]:
+    for stage, app in enumerate(INGRESS_RECOVERY_APPS, start=1):
+        if command == ingress_recovery_runner_command(stage, app, INGRESS_RECOVERY_REVISION):
+            return stage, app, INGRESS_RECOVERY_REVISION
+    return None
+
+
+def timeweb_router_runner_command() -> str:
+    return (
+        "/usr/bin/env -i WGC_TIMEWEB_ROUTER_RECOVERY_APPROVED=1 HOME=/var/empty "
+        f"PATH=/usr/bin:/bin LANG=C LC_ALL=C /usr/bin/python3 {TIMEWEB_ROUTER_RUNNER}"
+    )
+
+
+def parse_timeweb_router_runner_command(command: str) -> bool:
+    return command == timeweb_router_runner_command()
 
 
 def effectively_writable(path: Path) -> bool:
@@ -973,6 +1023,30 @@ def pinned_root_file(path_value: str, expected_sha256: str, expected_mode: int) 
     return digest.hexdigest() == expected_sha256
 
 
+def current_root_file_digest(path_value: str, *, fallback: str) -> str:
+    """Read a candidate digest; pinned_root_file performs the authoritative attestation."""
+    path = Path(path_value)
+    descriptor = -1
+    digest = hashlib.sha256()
+    try:
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(str(path), flags)
+        opened = os.fstat(descriptor)
+        if not stat.S_ISREG(opened.st_mode):
+            return fallback
+        for chunk in iter(lambda: os.read(descriptor, 1024 * 1024), b""):
+            digest.update(chunk)
+        return digest.hexdigest()
+    except OSError:
+        return fallback
+    finally:
+        if descriptor >= 0:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+
+
 def approved_gitops_staged_sync(command: str) -> bool:
     if parse_staged_sync_runner_command(command) is None:
         return False
@@ -988,6 +1062,42 @@ def approved_gitops_staged_sync(command: str) -> bool:
             STAGED_SYNC_MANIFEST_SHA256,
             0o444,
         )
+    )
+
+
+def approved_gitops_ingress_recovery(command: str) -> bool:
+    if parse_ingress_recovery_runner_command(command) is None:
+        return False
+    return (
+        pinned_ls_before_acl()
+        and pinned_system_ancestor_chain("/usr/bin/env")
+        and pinned_system_ancestor_chain("/usr/bin/python3")
+        and pinned_system_binary("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 0o755, 1)
+        and pinned_system_binary("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 0o755, 78)
+        and pinned_root_file(INGRESS_RECOVERY_RUNNER, INGRESS_RECOVERY_RUNNER_SHA256, 0o555)
+        and pinned_root_file(INGRESS_RECOVERY_MANIFEST, INGRESS_RECOVERY_MANIFEST_SHA256, 0o444)
+    )
+
+
+def approved_timeweb_router_recovery(command: str) -> bool:
+    if not parse_timeweb_router_runner_command(command):
+        return False
+    materialized_digest = current_root_file_digest(
+        TIMEWEB_ROUTER_MANIFEST,
+        fallback=TIMEWEB_ROUTER_TEMPLATE_SHA256,
+    )
+    if re.fullmatch(r"[0-9a-f]{64}", materialized_digest) is None:
+        return False
+    if materialized_digest == TIMEWEB_ROUTER_TEMPLATE_SHA256:
+        return False
+    return (
+        pinned_ls_before_acl()
+        and pinned_system_ancestor_chain("/usr/bin/env")
+        and pinned_system_ancestor_chain("/usr/bin/python3")
+        and pinned_system_binary("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 0o755, 1)
+        and pinned_system_binary("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 0o755, 78)
+        and pinned_root_file(TIMEWEB_ROUTER_RUNNER, TIMEWEB_ROUTER_RUNNER_SHA256, 0o555)
+        and pinned_root_file(TIMEWEB_ROUTER_MANIFEST, materialized_digest, 0o444)
     )
 
 
@@ -1516,6 +1626,14 @@ def command_violation(
         return None
     if suspicious_secret(command):
         return "Possible credential material in a command is blocked. Use an approved environment or secret manager without exposing the value."
+    if approved_gitops_ingress_recovery(command):
+        return None
+    if INGRESS_RECOVERY_APPROVAL in command or INGRESS_RECOVERY_RUNNER in command:
+        return "Ingress recovery is blocked unless the exact pinned root-owned promotion runner contract passes."
+    if approved_timeweb_router_recovery(command):
+        return None
+    if TIMEWEB_ROUTER_APPROVAL in command or TIMEWEB_ROUTER_RUNNER in command:
+        return "Timeweb router recovery is blocked unless the exact pinned root-owned router runner contract passes."
     if approved_gitops_staged_sync(command):
         return None
     if STAGED_SYNC_APPROVAL in command or STAGED_SYNC_RUNNER in command:
