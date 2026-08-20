@@ -28,7 +28,7 @@ ROUTERS_PATH = "/api/v1/routers"
 DNAT_PATH = "/api/v1/routers/{router_id}/dnat-rules"
 PUBLIC_IP = "72.56.0.250"
 LOCAL_IP = "192.168.0.16"
-APPROVAL_ID = "twc-wise-finch-argocd-recovery-2026-08-17.1"
+APPROVAL_ID = "twc-wise-finch-argocd-recovery-2026-08-20.2"
 DARWIN_USER_UUID = "FFFFEEEE-DDDD-CCCC-BBBB-AAAA000001F5"
 SAFE_ACL = [{
     "inherited": False,
@@ -49,8 +49,8 @@ SYSTEM_DIRECTORIES = (
     "/usr/local/libexec/wget-cloud-ingress-recovery", "/usr/local/etc",
     "/usr/local/etc/wget-cloud-ingress-recovery",
 )
-TARGET_TAG_OBJECT = "344a7e5f87e6c9212dd1ac22256336faad0eb002"
-TARGET_COMMIT = "925f7a2949c6ff50b76e55ccec80abdfff59178b"
+TARGET_TAG_OBJECT = "37c2ee42cb542d30ca200c06e1430d151428a70c"
+TARGET_COMMIT = "6247abd4aec30e6a75aeba70123676019762f1a6"
 INFRA_API_VERSION = "infrastructure.wget-cloud/v1alpha1"
 WORKER_HOSTNAME = "worker-192.168.0.16"
 

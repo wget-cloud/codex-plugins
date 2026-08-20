@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+from urllib.parse import quote
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
@@ -19,15 +20,20 @@ MANIFEST_SOURCE = PLUGIN_ROOT / "scripts" / "ingress_recovery_manifest.json"
 HOOK_SOURCE = PLUGIN_ROOT / "hooks" / "wgc_hooks.py"
 
 CONTEXT = "twc-wise-finch"
-TARGET_TAG = "twc-wise-finch-argocd-recovery-2026-08-17.1"
-TARGET_TAG_OBJECT = "344a7e5f87e6c9212dd1ac22256336faad0eb002"
-TARGET_COMMIT = "925f7a2949c6ff50b76e55ccec80abdfff59178b"
-PREVIOUS_TAG_OBJECT = "6915208f32428e9ecf498eee7e95618183a14491"
-PREVIOUS_COMMIT = "6c2c3e9dadde2eec3d13fde830bc6db0392b13b8"
+TARGET_TAG = "twc-wise-finch-argocd-recovery-2026-08-20.2"
+TARGET_TAG_OBJECT = "37c2ee42cb542d30ca200c06e1430d151428a70c"
+TARGET_COMMIT = "6247abd4aec30e6a75aeba70123676019762f1a6"
+PREVIOUS_TAG = "twc-wise-finch-argocd-recovery-2026-08-17.1"
+PREVIOUS_TAG_OBJECT = "344a7e5f87e6c9212dd1ac22256336faad0eb002"
+PREVIOUS_COMMIT = "925f7a2949c6ff50b76e55ccec80abdfff59178b"
 RUNNER = "/usr/local/libexec/wget-cloud-ingress-recovery/promotion_runner.py"
 MANIFEST = "/usr/local/libexec/wget-cloud-ingress-recovery/promotion-manifest.json"
 CLI = "/usr/local/libexec/wget-cloud-ingress-recovery/argocd-v3.0.0-darwin-arm64"
 KUBECONFIG = "/usr/local/etc/wget-cloud-ingress-recovery/twc-wise-finch.kubeconfig"
+GIT_CREDENTIAL = "/usr/local/etc/wget-cloud-ingress-recovery/github-k8s-token"
+GITHUB_API_BASE = "https://api.github.com"
+GITHUB_REPOSITORY = "wget-cloud/k8s"
+GITHUB_TOKEN = "github_pat_SYNTHETIC_SECRET_MUST_NEVER_LEAK"
 ROOT_APP = "twc-wise-finch-cluster"
 APPS = (
     ROOT_APP,
@@ -38,6 +44,68 @@ APPS = (
     "twc-wise-finch-ingress-issuer",
     "argocd-public",
 )
+PREVIOUS_STORAGE_OWNERS = (
+    "twc-wise-finch-local-path-storage",
+    "twc-wise-finch-local-path-smoke",
+    "local-path-storage-smoke",
+)
+GITHUB_COMMIT_URL = (
+    f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/commits/{TARGET_COMMIT}"
+)
+ENCODED_TARGET_TAG = quote(TARGET_TAG, safe="")
+GITHUB_REF_REQUEST_URL = (
+    f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/ref/tags/{ENCODED_TARGET_TAG}"
+)
+GITHUB_REF_CANONICAL_URL = (
+    f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/refs/tags/{ENCODED_TARGET_TAG}"
+)
+MAX_GITHUB_RESPONSE_BYTES = 64 * 1024
+
+
+def github_ref_payload():
+    tag_url = (
+        f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/tags/{TARGET_TAG_OBJECT}"
+    )
+    return {
+        "ref": f"refs/tags/{TARGET_TAG}",
+        "node_id": "REF_kwDOK8sYN7ByZWZzL3RhZ3MvcmVjb3Zlcnk",
+        "url": GITHUB_REF_CANONICAL_URL,
+        "object": {
+            "sha": TARGET_TAG_OBJECT,
+            "type": "tag",
+            "url": tag_url,
+        },
+    }
+
+
+def github_tag_payload():
+    tag_url = (
+        f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/tags/{TARGET_TAG_OBJECT}"
+    )
+    return {
+        "node_id": "TA_kwDOK8sYN9oAKDM3YzJlZTQyY2I1NDJkMzA",
+        "tag": TARGET_TAG,
+        "sha": TARGET_TAG_OBJECT,
+        "url": tag_url,
+        "message": "Reviewed twc-wise-finch ingress recovery promotion",
+        "tagger": {
+            "name": "Wget Cloud Release",
+            "email": "release@wget-cloud.invalid",
+            "date": "2026-08-20T12:00:00Z",
+        },
+        "object": {
+            "sha": TARGET_COMMIT,
+            "type": "commit",
+            "url": GITHUB_COMMIT_URL,
+        },
+        "verification": {
+            "verified": False,
+            "reason": "unsigned",
+            "signature": None,
+            "payload": None,
+            "verified_at": None,
+        },
+    }
 ESTEV_DARWIN_UUID = "FFFFEEEE-DDDD-CCCC-BBBB-AAAA000001F5"
 SAFE_READ_ACL = [
     {
@@ -432,6 +500,7 @@ def policy():
             "manifest": MANIFEST,
             "kubeconfig": KUBECONFIG,
         },
+        "paths": {"gitCredential": GIT_CREDENTIAL},
         "artifacts": {
             "runner": artifact("1" * 64, "0555"),
             "cli": artifact("2" * 64, "0555"),
@@ -443,6 +512,13 @@ def policy():
                 "linkCount": 1,
             },
             "kubeconfig": {**artifact("3" * 64, "0400"), "acl": deepcopy(SAFE_READ_ACL)},
+            "gitCredential": {
+                "owner": "root",
+                "group": "wheel",
+                "mode": "0600",
+                "acl": deepcopy(SAFE_READ_ACL),
+                "linkCount": 1,
+            },
         },
         "cluster": {
             "context": CONTEXT,
@@ -599,9 +675,12 @@ def evidence(contract):
             "descriptorIdentity": {"device": 1, "inode": len(result) + 1},
             "postDescriptorIdentity": {"device": 1, "inode": len(result) + 1},
         }
-    for name, path in contract["installedPaths"].items():
+    installed = {
+        **contract["installedPaths"],
+        "gitCredential": contract["paths"]["gitCredential"],
+    }
+    for name, path in installed.items():
         item = contract["artifacts"][name]
-        sha = item.get("sha256", "a" * 64)
         result[path] = {
             "path": path,
             "canonicalPath": path,
@@ -611,9 +690,6 @@ def evidence(contract):
             "mode": item["mode"],
             "acl": deepcopy(item["acl"]),
             "linkCount": item["linkCount"],
-            "sha256": sha,
-            "descriptorSha256": sha,
-            "postDescriptorSha256": sha,
             "symlink": False,
             "effectiveWritable": False,
             "descriptorVerified": True,
@@ -621,6 +697,12 @@ def evidence(contract):
             "descriptorIdentity": {"device": 1, "inode": len(result) + 1},
             "postDescriptorIdentity": {"device": 1, "inode": len(result) + 1},
         }
+        if "sha256" in item:
+            result[path].update(
+                sha256=item["sha256"],
+                descriptorSha256=item["sha256"],
+                postDescriptorSha256=item["sha256"],
+            )
     return result
 
 
@@ -680,7 +762,7 @@ def published_live_scope(stage, pending_resolved=None, historical_terminal=False
         return [
             application(
                 ROOT_APP,
-                "twc-wise-finch-ingress-2026-08-15.1",
+                PREVIOUS_TAG,
                 PREVIOUS_TAG_OBJECT,
                 sync="OutOfSync",
                 health="Healthy",
@@ -735,6 +817,12 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         self.assertTrue(hasattr(module, "PolicyError"))
+        if hasattr(module, "_attest_tag"):
+            module._production_attest_tag = module._attest_tag
+            module._attest_tag = mock.Mock()
+        if hasattr(module, "read_git_credential_fd"):
+            module._production_read_git_credential_fd = module.read_git_credential_fd
+            module.read_git_credential_fd = mock.Mock(return_value=GITHUB_TOKEN)
         return module
 
     def assert_policy_error(self, module, callback):
@@ -754,6 +842,7 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
         module.validate_manifest(source)
         self.assertEqual(source["schemaVersion"], 1)
         self.assertEqual(source["installedPaths"], policy()["installedPaths"])
+        self.assertEqual(source["paths"], {"gitCredential": GIT_CREDENTIAL})
         self.assertEqual(
             [(item["stage"], item["name"], item["operation"]) for item in source["stages"]],
             [
@@ -779,6 +868,17 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
             },
         )
         self.assertEqual(source["artifacts"]["kubeconfig"]["acl"], SAFE_READ_ACL)
+        self.assertEqual(
+            source["artifacts"]["gitCredential"],
+            {
+                "owner": "root",
+                "group": "wheel",
+                "mode": "0600",
+                "acl": SAFE_READ_ACL,
+                "linkCount": 1,
+            },
+        )
+        self.assertNotIn("sha256", source["artifacts"]["gitCredential"])
 
     def test_all_seven_live_applications_match_the_exact_normalized_tag_contract(self):
         module = self.module()
@@ -876,10 +976,10 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
         module = self.module()
         validator = module.validate_application_contract
         contract = deepcopy(application_contracts()[ROOT_APP])
-        contract["source"]["targetRevision"] = "twc-wise-finch-ingress-2026-08-15.1"
+        contract["source"]["targetRevision"] = PREVIOUS_TAG
         live = application(
             ROOT_APP,
-            "twc-wise-finch-ingress-2026-08-15.1",
+            PREVIOUS_TAG,
             PREVIOUS_TAG_OBJECT,
             sync="OutOfSync",
             health="Healthy",
@@ -904,7 +1004,7 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
             "reportedRevision": PREVIOUS_TAG_OBJECT,
             "reportedRevisions": [PREVIOUS_TAG_OBJECT],
             "commitSha": PREVIOUS_COMMIT,
-            "sourceRevisions": ["twc-wise-finch-ingress-2026-08-15.1"],
+            "sourceRevisions": [PREVIOUS_TAG],
             "sync": "OutOfSync",
             "health": "Healthy",
             "operation": None,
@@ -1220,7 +1320,7 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
 
         old = application(
             ROOT_APP,
-            "twc-wise-finch-ingress-2026-08-15.1",
+            PREVIOUS_TAG,
             PREVIOUS_TAG_OBJECT,
             sync="OutOfSync",
             health="Healthy",
@@ -1229,6 +1329,24 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
         )
         self.assertEqual(classifier(1, normalizer(old, policy(), revision_map), policy()), "pending")
         self.assert_policy_error(module, lambda: classifier(2, normalizer(old, policy(), revision_map), policy()))
+
+        mixed_lineage = application(
+            ROOT_APP,
+            PREVIOUS_TAG,
+            TARGET_TAG_OBJECT,
+            sync="OutOfSync",
+            health="Healthy",
+            operation_phase=None,
+            commit_revision=TARGET_COMMIT,
+        )
+        self.assert_policy_error(
+            module,
+            lambda: classifier(
+                1,
+                normalizer(mixed_lineage, policy(), revision_map),
+                policy(),
+            ),
+        )
 
         for case, mutate in (
             (
@@ -1367,7 +1485,7 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
             ],
             calls,
         )
-        self.assertEqual(sum("ls-remote" in argv for argv in calls), 2)
+        self.assertEqual(module._attest_tag.call_count, 2)
 
     def test_execute_stage_collects_and_validates_full_published_scope_before_and_after_mutation(self):
         module = self.module()
@@ -1518,6 +1636,11 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
             ("kubeconfig-writable", KUBECONFIG, "effectiveWritable", True),
             ("kubeconfig-acl", KUBECONFIG, "acl", []),
             ("kubeconfig-swap", KUBECONFIG, "postDescriptorIdentity", {"device": 9, "inode": 9}),
+            ("git-credential-owner", GIT_CREDENTIAL, "owner", "estev"),
+            ("git-credential-mode", GIT_CREDENTIAL, "mode", "0644"),
+            ("git-credential-acl", GIT_CREDENTIAL, "acl", []),
+            ("git-credential-hardlink", GIT_CREDENTIAL, "linkCount", 2),
+            ("git-credential-swap", GIT_CREDENTIAL, "postDescriptorIdentity", {"device": 9, "inode": 9}),
             ("libexec-recovery-writable", "/usr/local/libexec/wget-cloud-ingress-recovery", "effectiveWritable", True),
             ("etc-recovery-symlink", "/usr/local/etc/wget-cloud-ingress-recovery", "symlink", True),
         ):
@@ -1528,6 +1651,249 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
                     module,
                     lambda broken=broken: module.validate_installation(contract, broken.__getitem__),
                 )
+
+    def test_git_credential_is_read_once_from_one_nofollow_stable_descriptor(self):
+        module = self.module()
+        reader = getattr(module, "_production_read_git_credential_fd", None)
+        self.assertIsNotNone(reader, "dedicated GitHub credential FD reader is missing")
+        contract = policy()
+        observed = evidence(contract)
+        identity = observed[GIT_CREDENTIAL]["pathIdentity"]
+        opens, reads, closes = [], [], []
+        raw = GITHUB_TOKEN.encode()
+        stats = [
+            SimpleNamespace(
+                st_dev=identity["device"],
+                st_ino=identity["inode"],
+                st_size=len(raw),
+            ),
+            SimpleNamespace(
+                st_dev=identity["device"],
+                st_ino=identity["inode"],
+                st_size=len(raw),
+            ),
+        ]
+
+        value = reader(
+            contract,
+            inspect_path=observed.__getitem__,
+            open_fd=lambda path, flags: opens.append((path, flags)) or 73,
+            read_fd=lambda fd, size: reads.append((fd, size)) or raw,
+            fstat_fd=lambda fd: stats.pop(0),
+            close_fd=closes.append,
+        )
+        self.assertEqual(value, GITHUB_TOKEN)
+        self.assertEqual([path for path, _ in opens], [GIT_CREDENTIAL])
+        self.assertEqual(len(reads), 1, "credential content must be read exactly once")
+        self.assertEqual(reads[0][0], 73)
+        self.assertGreaterEqual(reads[0][1], len(raw) + 1)
+        self.assertEqual(closes, [73])
+        self.assertEqual(stats, [], "credential requires exact pre/post fstat proof")
+        if hasattr(os, "O_NOFOLLOW"):
+            self.assertTrue(opens[0][1] & os.O_NOFOLLOW)
+        self.assertNotIn("sha256", contract["artifacts"]["gitCredential"])
+
+        for case, raw_value, before_size, after_size, after_inode in (
+            ("short-read", raw[:-1], len(raw), len(raw), identity["inode"]),
+            ("growth", raw + b"x", len(raw), len(raw) + 1, identity["inode"]),
+            ("truncation", raw[:-1], len(raw), len(raw) - 1, identity["inode"]),
+            ("identity-swap", raw, len(raw), len(raw), identity["inode"] + 1),
+        ):
+            case_stats = [
+                SimpleNamespace(
+                    st_dev=identity["device"],
+                    st_ino=identity["inode"],
+                    st_size=before_size,
+                ),
+                SimpleNamespace(
+                    st_dev=identity["device"],
+                    st_ino=after_inode,
+                    st_size=after_size,
+                ),
+            ]
+            with self.subTest(case=case):
+                self.assert_policy_error(
+                    module,
+                    lambda case_stats=case_stats, raw_value=raw_value: reader(
+                        contract,
+                        inspect_path=observed.__getitem__,
+                        open_fd=lambda path, flags: 74,
+                        read_fd=lambda fd, size: raw_value,
+                        fstat_fd=lambda fd: case_stats.pop(0),
+                        close_fd=lambda fd: None,
+                    ),
+                )
+
+    def test_private_github_tag_attestation_uses_exact_api_lineage_and_header_only_secret(self):
+        module = self.module()
+        attestor = getattr(module, "_production_attest_tag", None)
+        self.assertIsNotNone(attestor, "in-process GitHub tag attestor is missing")
+        ref_url = GITHUB_REF_REQUEST_URL
+        tag_url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/tags/{TARGET_TAG_OBJECT}"
+        calls = []
+        payloads = {ref_url: github_ref_payload(), tag_url: github_tag_payload()}
+
+        def request_json(url, *, headers, allow_redirects):
+            calls.append((url, deepcopy(headers), allow_redirects))
+            return {"status": 200, "url": url, "body": deepcopy(payloads[url])}
+
+        attestor(policy(), token=GITHUB_TOKEN, request_json=request_json)
+        self.assertEqual([url for url, _, _ in calls], [ref_url, tag_url])
+        expected_headers = {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        self.assertTrue(all(headers == expected_headers for _, headers, _ in calls))
+        self.assertTrue(all(allow_redirects is False for _, _, allow_redirects in calls))
+        self.assertTrue(all(GITHUB_TOKEN not in url for url, _, _ in calls))
+        self.assertTrue(
+            all(
+                [key for key, value in headers.items() if GITHUB_TOKEN in value]
+                == ["Authorization"]
+                for _, headers, _ in calls
+            )
+        )
+
+    def test_private_github_tag_attestation_fails_closed_and_redacts_secret(self):
+        module = self.module()
+        attestor = getattr(module, "_production_attest_tag", None)
+        self.assertIsNotNone(attestor, "in-process GitHub tag attestor is missing")
+        ref_url = GITHUB_REF_REQUEST_URL
+        tag_url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/tags/{TARGET_TAG_OBJECT}"
+        valid_ref = github_ref_payload()
+        valid_tag = github_tag_payload()
+        cases = {
+            "redirect": (ref_url, {"status": 200, "url": "https://evil.example/ref", "body": valid_ref}),
+            "lightweight": (ref_url, {"status": 200, "url": ref_url, "body": {**valid_ref, "object": {"type": "commit", "sha": TARGET_COMMIT}}}),
+            "wrong-tag-object": (ref_url, {"status": 200, "url": ref_url, "body": {**valid_ref, "object": {"type": "tag", "sha": "a" * 40}}}),
+            "wrong-ref-canonical-url": (ref_url, {"status": 200, "url": ref_url, "body": {**valid_ref, "url": ref_url}}),
+            "wrong-object-type": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "object": {"type": "tree", "sha": TARGET_COMMIT}}}),
+            "wrong-peeled-commit": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "object": {"type": "commit", "sha": "b" * 40}}}),
+            "wrong-ref-object-url": (ref_url, {"status": 200, "url": ref_url, "body": {**valid_ref, "object": {**valid_ref["object"], "url": "https://api.github.com/repos/attacker/repo/git/tags/" + TARGET_TAG_OBJECT}}}),
+            "wrong-commit-object-url": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "object": {**valid_tag["object"], "url": "https://api.github.com/repos/attacker/repo/git/commits/" + TARGET_COMMIT}}}),
+            "extra-identity": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "peeled": {"type": "commit", "sha": "c" * 40, "url": GITHUB_COMMIT_URL}}}),
+            "verification-type-confusion": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "verification": {**valid_tag["verification"], "verified": "false"}}}),
+            "verification-reason-conflict": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "verification": {**valid_tag["verification"], "reason": "valid"}}}),
+            "verification-signature-conflict": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "verification": {**valid_tag["verification"], "signature": "unexpected"}}}),
+            "verification-payload-conflict": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "verification": {**valid_tag["verification"], "payload": "unexpected"}}}),
+            "verification-time-conflict": (tag_url, {"status": 200, "url": tag_url, "body": {**valid_tag, "verification": {**valid_tag["verification"], "verified_at": "2026-08-20T12:00:01Z"}}}),
+        }
+        for case, (failed_url, failed_response) in cases.items():
+            def request_json(url, *, headers, allow_redirects):
+                self.assertFalse(allow_redirects)
+                if url == failed_url:
+                    return deepcopy(failed_response)
+                return {"status": 200, "url": url, "body": deepcopy(valid_ref if url == ref_url else valid_tag)}
+
+            out, err = io.StringIO(), io.StringIO()
+            with self.subTest(case=case), mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+                try:
+                    attestor(policy(), token=GITHUB_TOKEN, request_json=request_json)
+                except module.PolicyError as exc:
+                    exposed = f"{exc}\n{out.getvalue()}\n{err.getvalue()}"
+                    self.assertNotIn(GITHUB_TOKEN, exposed)
+                else:
+                    self.fail("unexpected GitHub identity must fail closed")
+
+        def secret_error(url, *, headers, allow_redirects):
+            return {
+                "status": 401,
+                "url": url,
+                "body": {"message": f"credential rejected: {GITHUB_TOKEN}"},
+            }
+
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+            try:
+                attestor(policy(), token=GITHUB_TOKEN, request_json=secret_error)
+            except module.PolicyError as exc:
+                self.assertNotIn(GITHUB_TOKEN, f"{exc}\n{out.getvalue()}\n{err.getvalue()}")
+            else:
+                self.fail("HTTP authentication failure must fail closed")
+
+    def test_github_http_adapter_enforces_media_type_bounds_json_redirects_and_redaction(self):
+        module = self.module()
+        adapter = getattr(module, "_github_api_get_json", None)
+        self.assertIsNotNone(adapter, "bounded GitHub JSON HTTP adapter is missing")
+        url = GITHUB_REF_REQUEST_URL
+        payload = github_ref_payload()
+        encoded = json.dumps(payload, separators=(",", ":")).encode()
+
+        class Response:
+            def __init__(self, body, content_type, *, status=200, final_url=url):
+                self.body = body
+                self.headers = {} if content_type is None else {"Content-Type": content_type}
+                self.status = status
+                self.final_url = final_url
+                self.read_sizes = []
+
+            def geturl(self):
+                return self.final_url
+
+            def read(self, size):
+                self.read_sizes.append(size)
+                return self.body[:size]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        for media_type in (
+            "application/json",
+            "application/json; charset=utf-8",
+            "application/vnd.github+json",
+            "application/vnd.github+json; charset=utf-8",
+        ):
+            response = Response(encoded, media_type)
+            requests = []
+
+            def open_url(request, *args, **kwargs):
+                requests.append(request)
+                return response
+
+            with self.subTest(media_type=media_type):
+                value = adapter(
+                    url,
+                    token=GITHUB_TOKEN,
+                    open_url=open_url,
+                    max_response_bytes=MAX_GITHUB_RESPONSE_BYTES,
+                )
+                self.assertEqual(value, {"status": 200, "url": url, "body": payload})
+                self.assertEqual(response.read_sizes, [MAX_GITHUB_RESPONSE_BYTES + 1])
+                self.assertEqual(len(requests), 1)
+                self.assertEqual(requests[0].full_url, url)
+                self.assertEqual(requests[0].get_header("Authorization"), f"Bearer {GITHUB_TOKEN}")
+                self.assertNotIn(GITHUB_TOKEN, requests[0].full_url)
+
+        invalid = {
+            "missing-content-type": Response(encoded, None),
+            "wrong-content-type": Response(encoded, "text/html"),
+            "redirect": Response(encoded, "application/json", final_url="https://evil.example/ref"),
+            "oversized": Response(b"{" + b"x" * MAX_GITHUB_RESPONSE_BYTES + b"}", "application/json"),
+            "malformed-json": Response(b"{not-json", "application/json"),
+            "http-error-with-secret": Response(
+                json.dumps({"message": GITHUB_TOKEN}).encode(),
+                "application/json",
+                status=401,
+            ),
+        }
+        for case, response in invalid.items():
+            out, err = io.StringIO(), io.StringIO()
+            with self.subTest(case=case), mock.patch("sys.stdout", out), mock.patch("sys.stderr", err):
+                try:
+                    adapter(
+                        url,
+                        token=GITHUB_TOKEN,
+                        open_url=lambda request, *args, response=response, **kwargs: response,
+                        max_response_bytes=MAX_GITHUB_RESPONSE_BYTES,
+                    )
+                except module.PolicyError as exc:
+                    self.assertNotIn(GITHUB_TOKEN, f"{exc}\n{out.getvalue()}\n{err.getvalue()}")
+                else:
+                    self.fail("invalid GitHub HTTP response must fail closed")
 
     def test_kubeconfig_is_read_once_from_the_same_attested_descriptor(self):
         module = self.module()
@@ -1646,6 +2012,10 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
         module = self.module()
         contract = policy()
         observed = evidence(contract)
+        storage_prestate = {
+            name: (PREVIOUS_TAG, PREVIOUS_TAG_OBJECT, PREVIOUS_COMMIT)
+            for name in PREVIOUS_STORAGE_OWNERS
+        }
         reads = {name: 0 for name in APPS}
         calls = []
 
@@ -1658,7 +2028,7 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
                 name = argv[app_index + 2]
                 reads[name] += 1
                 if reads[name] == 1:
-                    source_revision = "twc-wise-finch-ingress-2026-08-15.1"
+                    source_revision = PREVIOUS_TAG
                     reported_revision = PREVIOUS_TAG_OBJECT
                     commit_revision = PREVIOUS_COMMIT
                     sync, health, operation = "OutOfSync", "Healthy", None
@@ -1721,11 +2091,21 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
             convergence_timeout=30.0,
         )
         self.assertEqual(result, 0)
+        module.read_git_credential_fd.assert_called_once()
         argv_calls = [argv for argv, _ in calls]
-        tag_calls = [argv for argv in argv_calls if "git" in Path(argv[0]).name and "ls-remote" in argv]
-        self.assertEqual(len(tag_calls), 2, "every stage must attest the protected tag pair before and after")
-        self.assertLess(argv_calls.index(tag_calls[0]), next(index for index, argv in enumerate(argv_calls) if "app" in argv))
+        self.assertEqual(tuple(item["name"] for item in contract["stages"]), APPS)
+        self.assertTrue(set(storage_prestate).isdisjoint(APPS))
+        self.assertTrue(
+            all(
+                lineage == (PREVIOUS_TAG, PREVIOUS_TAG_OBJECT, PREVIOUS_COMMIT)
+                for lineage in storage_prestate.values()
+            )
+        )
+        self.assertEqual(module._attest_tag.call_count, 2, "every stage must attest the protected tag pair before and after")
         mutations = [argv for argv in argv_calls if "app" in argv and argv[argv.index("app") + 1] in {"set", "sync", "wait"}]
+        mutation_apps = {argv[argv.index("app") + 2] for argv in mutations}
+        self.assertEqual(mutation_apps, {ROOT_APP})
+        self.assertTrue(mutation_apps.isdisjoint(storage_prestate))
         set_calls = [argv for argv in mutations if argv[argv.index("app") + 1] == "set"]
         self.assertEqual(
             set_calls,
@@ -1769,10 +2149,6 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
         )
         wait_index = next(index for index, argv in enumerate(argv_calls) if "app" in argv and argv[argv.index("app") + 1] == "wait")
         self.assertLess(sync_index, wait_index)
-        self.assertLess(
-            wait_index,
-            max(index for index, argv in enumerate(argv_calls) if argv == tag_calls[-1]),
-        )
         for argv in mutations:
             self.assertNotIn("--prune", argv)
             self.assertNotIn("--selector", argv)
@@ -1814,7 +2190,7 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
                 reads += 1
                 value = application(
                     ROOT_APP,
-                    "twc-wise-finch-ingress-2026-08-15.1" if reads == 1 else TARGET_TAG,
+                    "twc-wise-finch-argocd-recovery-2026-08-17.1" if reads == 1 else TARGET_TAG,
                     PREVIOUS_TAG_OBJECT if reads == 1 else None,
                     sync="OutOfSync",
                     health="Healthy" if reads == 1 else "Missing",
@@ -1908,16 +2284,9 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
                     ),
                     0,
                 )
-                tag_calls = [
-                    argv
-                    for argv in calls
-                    if "git" in Path(argv[0]).name and "ls-remote" in argv
-                ]
-                self.assertEqual(len(tag_calls), 2)
-                self.assertLess(
-                    calls.index(tag_calls[0]),
-                    next(index for index, argv in enumerate(calls) if "app" in argv),
-                )
+                self.assertEqual(module._attest_tag.call_count, 2)
+                module._attest_tag.reset_mock()
+                module.read_git_credential_fd.reset_mock()
                 self.assertFalse(
                     any(token in {"set", "sync", "wait"} for argv in calls for token in argv)
                 )
@@ -1952,24 +2321,17 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
                 self.assertFalse(any(token in {"set", "sync"} for argv in failed_calls for token in argv))
                 self.assertNotIn("SECRET", out.getvalue() + err.getvalue())
 
-    def test_stage_fails_before_argocd_when_fresh_tag_object_or_peel_attestation_changes(self):
+    def test_stage_fails_before_argocd_when_private_github_attestation_rejects(self):
         module = self.module()
         contract = policy()
         observed = evidence(contract)
-        for case, output in (
-            ("retagged-object", f"{'a' * 40}\trefs/tags/{TARGET_TAG}\n{TARGET_COMMIT}\trefs/tags/{TARGET_TAG}^{{}}\n"),
-            ("changed-peel", f"{TARGET_TAG_OBJECT}\trefs/tags/{TARGET_TAG}\n{'b' * 40}\trefs/tags/{TARGET_TAG}^{{}}\n"),
-            ("lightweight", f"{TARGET_COMMIT}\trefs/tags/{TARGET_TAG}\n"),
-        ):
+        for case in ("retagged-object", "changed-peel", "lightweight"):
             calls = []
-
             def fake_run(argv, **kwargs):
                 calls.append(list(argv))
-                if "git" in Path(argv[0]).name and "ls-remote" in argv:
-                    return SimpleNamespace(returncode=0, stdout=output, stderr="")
                 return SimpleNamespace(returncode=0, stdout="", stderr="")
-
             with self.subTest(case=case):
+                module._attest_tag.side_effect = module.PolicyError("ingress recovery policy rejected")
                 self.assert_policy_error(
                     module,
                     lambda: module.execute_stage(
@@ -1986,6 +2348,7 @@ class IngressRecoveryRunnerTest(unittest.TestCase):
                     ),
                 )
                 self.assertFalse(any("app" in argv for argv in calls))
+                module._attest_tag.reset_mock(side_effect=True)
 
     def test_public_argocd_stage_fails_before_cli_without_attested_router_gate(self):
         module = self.module()

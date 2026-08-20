@@ -15,6 +15,8 @@ import stat
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional, Sequence, TextIO
 
@@ -23,16 +25,20 @@ RUNNER = "/usr/local/libexec/wget-cloud-ingress-recovery/promotion_runner.py"
 CLI = "/usr/local/libexec/wget-cloud-ingress-recovery/argocd-v3.0.0-darwin-arm64"
 MANIFEST = "/usr/local/libexec/wget-cloud-ingress-recovery/promotion-manifest.json"
 KUBECONFIG = "/usr/local/etc/wget-cloud-ingress-recovery/twc-wise-finch.kubeconfig"
+GIT_CREDENTIAL = "/usr/local/etc/wget-cloud-ingress-recovery/github-k8s-token"
 ROUTER_GATE = "/usr/local/etc/wget-cloud-ingress-recovery/router-gate.json"
 CONTEXT = "twc-wise-finch"
 ROOT_APPLICATION = "twc-wise-finch-cluster"
-PREVIOUS_TAG_OBJECT = "6915208f32428e9ecf498eee7e95618183a14491"
-PREVIOUS_COMMIT = "6c2c3e9dadde2eec3d13fde830bc6db0392b13b8"
-PREVIOUS_TAG = "twc-wise-finch-ingress-2026-08-15.1"
-TARGET_TAG = "twc-wise-finch-argocd-recovery-2026-08-17.1"
-TARGET_TAG_OBJECT = "344a7e5f87e6c9212dd1ac22256336faad0eb002"
-TARGET_COMMIT = "925f7a2949c6ff50b76e55ccec80abdfff59178b"
-REPO_URL = "https://github.com/wget-cloud/k8s.git"
+PREVIOUS_TAG_OBJECT = "344a7e5f87e6c9212dd1ac22256336faad0eb002"
+PREVIOUS_COMMIT = "925f7a2949c6ff50b76e55ccec80abdfff59178b"
+PREVIOUS_TAG = "twc-wise-finch-argocd-recovery-2026-08-17.1"
+TARGET_TAG = "twc-wise-finch-argocd-recovery-2026-08-20.2"
+TARGET_TAG_OBJECT = "37c2ee42cb542d30ca200c06e1430d151428a70c"
+TARGET_COMMIT = "6247abd4aec30e6a75aeba70123676019762f1a6"
+GITHUB_API_BASE = "https://api.github.com"
+GITHUB_REPOSITORY = "wget-cloud/k8s"
+GITHUB_API_TIMEOUT = 10.0
+MAX_GITHUB_RESPONSE_BYTES = 64 * 1024
 DARWIN_USER_UUID = "FFFFEEEE-DDDD-CCCC-BBBB-AAAA000001F5"
 SAFE_READ_ACL = [{
     "inherited": False,
@@ -84,6 +90,7 @@ INSTALLED_PATHS = {
     "manifest": MANIFEST,
     "kubeconfig": KUBECONFIG,
 }
+POLICY_PATHS = {"gitCredential": GIT_CREDENTIAL}
 SAFE_ENV = {
     "HOME": "/var/empty",
     "PATH": "/usr/bin:/bin",
@@ -130,17 +137,21 @@ def _validate_artifact(value: Any, mode: str, *, sha: bool = True, acl: Any = No
 
 
 def validate_manifest(policy: Any) -> None:
-    root = _dict(policy, ("schemaVersion", "installedPaths", "artifacts", "cluster", "stages", "profileBundles", "forbiddenBundles"))
+    root = _dict(policy, ("schemaVersion", "installedPaths", "paths", "artifacts", "cluster", "stages", "profileBundles", "forbiddenBundles"))
     if root["schemaVersion"] != 1 or isinstance(root["schemaVersion"], bool):
         _reject()
     paths = _dict(root["installedPaths"], tuple(INSTALLED_PATHS))
     if dict(paths) != INSTALLED_PATHS:
         _reject()
-    artifacts = _dict(root["artifacts"], tuple(INSTALLED_PATHS))
+    policy_paths = _dict(root["paths"], tuple(POLICY_PATHS))
+    if dict(policy_paths) != POLICY_PATHS:
+        _reject()
+    artifacts = _dict(root["artifacts"], (*INSTALLED_PATHS, *POLICY_PATHS))
     _validate_artifact(artifacts["runner"], "0555")
     _validate_artifact(artifacts["cli"], "0555")
     _validate_artifact(artifacts["manifest"], "0444", sha=False)
     _validate_artifact(artifacts["kubeconfig"], "0400", acl=SAFE_READ_ACL)
+    _validate_artifact(artifacts["gitCredential"], "0600", sha=False, acl=SAFE_READ_ACL)
     cluster = _dict(root["cluster"], ("context", "rootApplication", "previousTagObject", "previousCommit", "targetTag", "targetTagObject", "targetCommit"))
     if cluster["context"] != CONTEXT or cluster["rootApplication"] != ROOT_APPLICATION:
         _reject()
@@ -287,7 +298,8 @@ def validate_installation(policy: Mapping[str, Any], inspect_path: Callable[[str
         _validate_common(item, path, "directory")
         if item.get("mode") != "0755" or item.get("acl") != []:
             _reject()
-    for name, path in policy["installedPaths"].items():
+    artifact_paths = {**policy["installedPaths"], **policy["paths"]}
+    for name, path in artifact_paths.items():
         contract = policy["artifacts"][name]
         item = _evidence(inspect_path, path)
         _validate_common(item, path, "file")
@@ -299,6 +311,47 @@ def validate_installation(policy: Mapping[str, Any], inspect_path: Callable[[str
             expected = contract["sha256"]
             if (item.get("sha256"), item.get("descriptorSha256"), item.get("postDescriptorSha256")) != (expected, expected, expected):
                 _reject()
+
+
+def read_git_credential_fd(
+    policy: Mapping[str, Any], *, inspect_path: Callable[[str], Mapping[str, Any]],
+    open_fd: Callable[[str, int], int] = os.open, read_fd: Callable[[int, int], bytes] = os.read,
+    fstat_fd: Callable[[int], Any] = os.fstat, close_fd: Callable[[int], None] = os.close,
+) -> str:
+    validate_installation(policy, inspect_path)
+    path = policy["paths"]["gitCredential"]
+    item = _evidence(inspect_path, path)
+    identity = item.get("descriptorIdentity")
+    descriptor = -1
+    try:
+        descriptor = open_fd(path, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0))
+        opened = fstat_fd(descriptor)
+        if not isinstance(identity, Mapping) or (opened.st_dev, opened.st_ino) != (identity.get("device"), identity.get("inode")):
+            _reject()
+        size = getattr(opened, "st_size", None)
+        if isinstance(size, bool) or not isinstance(size, int) or size <= 0 or size >= 16384:
+            _reject()
+        raw = read_fd(descriptor, size + 1)
+        after = fstat_fd(descriptor)
+        if (
+            (after.st_dev, after.st_ino) != (identity.get("device"), identity.get("inode"))
+            or getattr(after, "st_size", None) != size
+        ):
+            _reject()
+        if not isinstance(raw, bytes) or len(raw) != size:
+            _reject()
+        token = raw.decode("utf-8")
+        if not token or token != token.strip() or any(character.isspace() for character in token):
+            _reject()
+        return token
+    except (OSError, UnicodeDecodeError, TypeError, ValueError):
+        _reject()
+    finally:
+        if descriptor >= 0:
+            try:
+                close_fd(descriptor)
+            except OSError:
+                pass
 
 
 def read_attested_text_fd(
@@ -799,17 +852,130 @@ def read_router_gate_fd(*, inspect_path: Callable[[str], Mapping[str, Any]], ope
             close_fd(descriptor)
 
 
-def _attest_tag(policy: Mapping[str, Any], run_process: Callable[..., Any]) -> None:
-    cluster = policy["cluster"]
-    result = _run(run_process, ("/usr/bin/git", "ls-remote", REPO_URL, f"refs/tags/{cluster['targetTag']}", f"refs/tags/{cluster['targetTag']}^{{}}"))
-    if getattr(result, "returncode", 1) != 0:
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> None:
+        return None
+
+
+def _open_github_url(request: urllib.request.Request, *, timeout: float) -> Any:
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirectHandler())
+    return opener.open(request, timeout=timeout)
+
+
+def _github_api_get_json(
+    url: str, *, token: str, open_url: Callable[..., Any] = _open_github_url,
+    max_response_bytes: int = MAX_GITHUB_RESPONSE_BYTES,
+) -> Mapping[str, Any]:
+    if (
+        not isinstance(url, str)
+        or not url.startswith(f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/")
+        or not isinstance(token, str)
+        or not token
+        or any(character.isspace() for character in token)
+        or isinstance(max_response_bytes, bool)
+        or not isinstance(max_response_bytes, int)
+        or max_response_bytes <= 0
+        or max_response_bytes > MAX_GITHUB_RESPONSE_BYTES
+    ):
         _reject()
-    expected = {
-        f"{cluster['targetTagObject']}\trefs/tags/{cluster['targetTag']}",
-        f"{cluster['targetCommit']}\trefs/tags/{cluster['targetTag']}^{{}}",
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
     }
-    lines = {line.strip() for line in getattr(result, "stdout", "").splitlines() if line.strip()}
-    if lines != expected:
+    try:
+        request = urllib.request.Request(url, headers=headers, method="GET")
+        with open_url(request, timeout=GITHUB_API_TIMEOUT) as response:
+            if getattr(response, "status", None) != 200 or response.geturl() != url:
+                _reject()
+            content_type = response.headers.get("Content-Type")
+            if not isinstance(content_type, str) or content_type.split(";", 1)[0].strip().lower() not in {
+                "application/json", "application/vnd.github+json",
+            }:
+                _reject()
+            raw = response.read(max_response_bytes + 1)
+            if not isinstance(raw, bytes) or len(raw) > max_response_bytes:
+                _reject()
+            body = json.loads(raw.decode("utf-8"))
+            return {"status": response.status, "url": response.geturl(), "body": body}
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError, urllib.error.URLError):
+        _reject()
+
+
+def _request_github_json(url: str, *, headers: Mapping[str, str], allow_redirects: bool) -> Mapping[str, Any]:
+    expected_keys = {"Accept", "Authorization", "X-GitHub-Api-Version"}
+    if allow_redirects is not False or not isinstance(headers, Mapping) or set(headers) != expected_keys:
+        _reject()
+    authorization = headers.get("Authorization")
+    if (
+        headers.get("Accept") != "application/vnd.github+json"
+        or headers.get("X-GitHub-Api-Version") != "2022-11-28"
+        or not isinstance(authorization, str)
+        or not authorization.startswith("Bearer ")
+    ):
+        _reject()
+    return _github_api_get_json(url, token=authorization[7:])
+
+
+def _attest_tag(
+    policy: Mapping[str, Any], *, token: str,
+    request_json: Callable[..., Mapping[str, Any]] = _request_github_json,
+) -> None:
+    if not isinstance(token, str) or not token or any(character.isspace() for character in token):
+        _reject()
+    cluster = policy["cluster"]
+    ref_url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/ref/tags/{cluster['targetTag']}"
+    tag_url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/tags/{cluster['targetTagObject']}"
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {token}",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    try:
+        ref_response = _dict(request_json(ref_url, headers=headers, allow_redirects=False), ("status", "url", "body"))
+        if ref_response["status"] != 200 or ref_response["url"] != ref_url:
+            _reject()
+        ref_body = _dict(ref_response["body"], ("ref", "node_id", "url", "object"))
+        ref_object = _dict(ref_body["object"], ("type", "sha", "url"))
+        expected_tag_url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/tags/{cluster['targetTagObject']}"
+        canonical_ref_url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/refs/tags/{cluster['targetTag']}"
+        if (
+            ref_body["ref"] != f"refs/tags/{cluster['targetTag']}"
+            or not isinstance(ref_body["node_id"], str)
+            or not ref_body["node_id"]
+            or ref_body["url"] != canonical_ref_url
+            or ref_object != {"type": "tag", "sha": cluster["targetTagObject"], "url": expected_tag_url}
+        ):
+            _reject()
+        tag_response = _dict(request_json(tag_url, headers=headers, allow_redirects=False), ("status", "url", "body"))
+        if tag_response["status"] != 200 or tag_response["url"] != tag_url:
+            _reject()
+        tag_body = _dict(tag_response["body"], ("node_id", "tag", "sha", "url", "message", "tagger", "object", "verification"))
+        tagger = _dict(tag_body["tagger"], ("name", "email", "date"))
+        verification = _dict(tag_body["verification"], ("verified", "reason", "signature", "payload", "verified_at"))
+        tag_object = _dict(tag_body["object"], ("type", "sha", "url"))
+        expected_commit_url = f"{GITHUB_API_BASE}/repos/{GITHUB_REPOSITORY}/git/commits/{cluster['targetCommit']}"
+        if (
+            not isinstance(tag_body["node_id"], str)
+            or not tag_body["node_id"]
+            or tag_body["tag"] != cluster["targetTag"]
+            or tag_body["sha"] != cluster["targetTagObject"]
+            or tag_body["url"] != tag_url
+            or not isinstance(tag_body["message"], str)
+            or not all(isinstance(tagger[key], str) for key in tagger)
+            or verification != {
+                "verified": False,
+                "reason": "unsigned",
+                "signature": None,
+                "payload": None,
+                "verified_at": None,
+            }
+            or tag_object != {"type": "commit", "sha": cluster["targetCommit"], "url": expected_commit_url}
+        ):
+            _reject()
+    except PolicyError:
+        raise
+    except Exception:
         _reject()
 
 
@@ -840,6 +1006,7 @@ def execute_stage(
     if stage == 7 and not validate_router_gate(router_gate, current_time):
         _reject()
     validate_installation(policy, inspect_path)
+    token = read_git_credential_fd(policy, inspect_path=inspect_path)
     try:
         kubeconfig = read_text(KUBECONFIG)
     except (OSError, RuntimeError, TypeError, ValueError):
@@ -847,7 +1014,7 @@ def execute_stage(
     if not isinstance(kubeconfig, str) or not kubeconfig.strip():
         _reject()
     validate_installation(policy, inspect_path)
-    _attest_tag(policy, run_process)
+    _attest_tag(policy, token=token)
     scope_names = [item[1] for item in (STAGES[:1] if stage == 1 else STAGES[:2] if stage == 2 else STAGES)]
     live_scope = []
     for name in scope_names:
@@ -862,7 +1029,7 @@ def execute_stage(
     current = normalized_scope[stage - 1]
     state = classify_stage_state(stage, current, policy)
     if state == "completed":
-        _attest_tag(policy, run_process)
+        _attest_tag(policy, token=token)
         stdout.write(json.dumps({"stage": stage, "app": app, "status": "already-ready"}, separators=(",", ":")) + "\n")
         return 0
     if stage == 1:
@@ -906,7 +1073,7 @@ def execute_stage(
     if classify_stage_state(stage, final_normalized[stage - 1], policy) != "completed":
         _reject()
     validate_installation(policy, inspect_path)
-    _attest_tag(policy, run_process)
+    _attest_tag(policy, token=token)
     stdout.write(json.dumps({"stage": stage, "app": app, "status": "synced"}, separators=(",", ":")) + "\n")
     return 0
 
