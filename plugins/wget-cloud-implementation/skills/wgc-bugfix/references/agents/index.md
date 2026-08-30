@@ -8,6 +8,7 @@
 BUG_CASE: <id и redacted symptom>
 ROLE: <role>
 PHASE: <evidence|rca|plan|diff либо пусто>
+TASK_NAME: <role prefix>_<snake slice>[_ordinal]
 TASK_SLICE: <одна ограниченная подзадача>
 REPOSITORIES: <разрешённые repo>
 ALLOW_PATHS: <разрешённые пути>
@@ -27,6 +28,8 @@ MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 ```
 
+`TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное итоговое значение `TASK_NAME` передай без изменений в `spawn_agent.task_name`. Orchestrator использует `n/a` и не spawn.
+
 Каждому субагенту добавляй: «Работай только в выданном scope. Не сохраняй raw prompt/logs/secrets/PII. Не меняй внешние данные, Git publication или deployment без приложенного разрешения. Не объявляй весь bugfix завершённым. При нехватке evidence остановись с допустимым blocker verdict».
 
 Поля времени задают bounded supervision, а не автоматическую остановку. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split. Hooks не являются таймерами и не подтверждают соблюдение этих границ.
@@ -43,30 +46,30 @@ Default `FORK_TURNS` — `none`. Если без незаменимого conver
 
 ## Core roles
 
-| Роль | Этап | Write scope | Model lane | Контракт |
-|---|---|---|---|---|
-| Orchestrator | весь workflow | координационные действия | main-only | [orchestrator.md](orchestrator.md) |
-| Bug-triage | triage | нет | fast | [bug-triage.md](bug-triage.md) |
-| Bug-investigator | evidence и RCA | нет | balanced | [bug-investigator.md](bug-investigator.md) |
-| Reproducer | reproduction/characterization | только task-owned test data | balanced | [reproducer.md](reproducer.md) |
-| Root-cause reviewer | RCA gate | нет | frontier | [root-cause-reviewer.md](root-cause-reviewer.md) |
-| Architect | FixPlan | нет | frontier | [architect.md](architect.md) |
-| Architecture guardian | plan/diff gates | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | regression contract | только tests allowlist | balanced | [test-maker.md](test-maker.md) |
-| Implementor | minimal fix | production/docs allowlist | balanced | [implementor.md](implementor.md) |
-| Reviewer | code review | нет | balanced | [reviewer.md](reviewer.md) |
-| QA | adversarial regression | нет в repository | balanced | [qa.md](qa.md) |
+| Роль | Task prefix | Этап | Write scope | Model lane | Контракт |
+|---|---|---|---|---|---|
+| Orchestrator | n/a | весь workflow | координационные действия | main-only | [orchestrator.md](orchestrator.md) |
+| Bug-triage | bug_triage | triage | нет | fast | [bug-triage.md](bug-triage.md) |
+| Bug-investigator | bug_investigator | evidence и RCA | нет | balanced | [bug-investigator.md](bug-investigator.md) |
+| Reproducer | reproducer | reproduction/characterization | только task-owned test data | balanced | [reproducer.md](reproducer.md) |
+| Root-cause reviewer | root_cause_reviewer | RCA gate | нет | frontier | [root-cause-reviewer.md](root-cause-reviewer.md) |
+| Architect | architect | FixPlan | нет | frontier | [architect.md](architect.md) |
+| Architecture guardian | architecture_guardian | plan/diff gates | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
+| Test-maker | test_maker | regression contract | только tests allowlist | balanced | [test-maker.md](test-maker.md) |
+| Implementor | implementor | minimal fix | production/docs allowlist | balanced | [implementor.md](implementor.md) |
+| Reviewer | reviewer | code review | нет | balanced | [reviewer.md](reviewer.md) |
+| QA | qa | adversarial regression | нет в repository | balanced | [qa.md](qa.md) |
 
 ## Conditional roles
 
-| Route signal | Роль | Model lane | Контракт |
-|---|---|---|---|
-| UI/PWA/realtime/browser | Browser QA | balanced | [browser-qa.md](browser-qa.md) |
-| auth/RBAC/tenant/PII | Security reviewer | frontier | [security-reviewer.md](security-reviewer.md) |
-| REST/gRPC/proto/schema/events/public exports | Contract QA | frontier | [contract-qa.md](contract-qa.md) |
-| `k8s`/CI desired-state diff | DevOps | frontier | [devops.md](devops.md) |
-| infrastructure diff | Infrastructure reviewer | frontier | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
-| exact deployment approval | Deployment agent | frontier | [deployment-agent.md](deployment-agent.md) |
+| Route signal | Роль | Task prefix | Model lane | Контракт |
+|---|---|---|---|---|
+| UI/PWA/realtime/browser | Browser QA | browser_qa | balanced | [browser-qa.md](browser-qa.md) |
+| auth/RBAC/tenant/PII | Security reviewer | security_reviewer | frontier | [security-reviewer.md](security-reviewer.md) |
+| REST/gRPC/proto/schema/events/public exports | Contract QA | contract_qa | frontier | [contract-qa.md](contract-qa.md) |
+| `k8s`/CI desired-state diff | DevOps | devops | frontier | [devops.md](devops.md) |
+| infrastructure diff | Infrastructure reviewer | infrastructure_reviewer | frontier | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
+| exact deployment approval | Deployment agent | deployment_agent | frontier | [deployment-agent.md](deployment-agent.md) |
 
 ## Машинный результат
 

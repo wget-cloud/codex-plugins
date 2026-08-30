@@ -64,6 +64,7 @@ description: Coordinate architecture-safe planned implementation work across the
 
 Перед созданием каждого агента передай ему:
 
+- `TASK_NAME` из assignment envelope без изменений в `spawn_agent.task_name`;
 - конкретный task slice и разрешённые repositories/paths;
 - прочитанные локальные инструкции и необходимые ссылки на source of truth;
 - входные артефакты предыдущего gate;

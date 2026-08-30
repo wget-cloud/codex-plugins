@@ -23,6 +23,7 @@ SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 REQUIRED_ROLE_SECTIONS = ("## Назначение", "## Полномочия", "## Запреты", "## Результат")
 REQUIRED_ASSIGNMENT_FIELDS = (
+    "TASK_NAME",
     "MODEL_ROUTE",
     "MODEL",
     "REASONING_EFFORT",
@@ -176,15 +177,22 @@ def markdown_table_blocks(index_text: str) -> Iterable[Tuple[Sequence[str], Sequ
         yield header, rows
 
 
-def model_routing_entries(index_text: str) -> Tuple[List[Tuple[str, str]], List[str]]:
+def model_routing_entries(index_text: str) -> Tuple[List[Tuple[str, str, str]], List[str]]:
     """Extract route links and structural errors from model-lane registry tables."""
-    routes: List[Tuple[str, str]] = []
+    routes: List[Tuple[str, str, str]] = []
     errors: List[str] = []
     for header, rows in markdown_table_blocks(index_text):
         normalized_header = [cell.casefold() for cell in header]
         if "model lane" not in normalized_header:
             continue
         lane_column = normalized_header.index("model lane")
+        task_prefix_columns = [
+            position for position, cell in enumerate(header) if cell == "Task prefix"
+        ]
+        if len(task_prefix_columns) != 1:
+            errors.append("malformed model routing table row: missing Task prefix column")
+            continue
+        task_prefix_column = task_prefix_columns[0]
         contract_columns = [
             position
             for position, cell in enumerate(normalized_header)
@@ -209,14 +217,14 @@ def model_routing_entries(index_text: str) -> Tuple[List[Tuple[str, str]], List[
                 errors.append("exactly one role contract link is required")
                 continue
             role_target = role_links[0].split("#", 1)[0].strip().strip("<>")
-            routes.append((role_target, row[lane_column].casefold()))
+            routes.append((role_target, row[lane_column].casefold(), row[task_prefix_column]))
     return routes, errors
 
 
 def model_routes(index_text: str) -> List[Tuple[str, str]]:
     """Return valid-looking ``(role-link, lane)`` pairs for pure parser consumers."""
     routes, _ = model_routing_entries(index_text)
-    return routes
+    return [(role_target, lane) for role_target, lane, _ in routes]
 
 
 def validate_agent_registry(skill: Path, errors: List[str]) -> int:
@@ -242,8 +250,15 @@ def validate_agent_registry(skill: Path, errors: List[str]) -> int:
         errors.append(f"{index.relative_to(ROOT)}: {error}")
     role_paths = {path.resolve(): path.name for path in role_files}
     routes_by_role: Dict[str, List[str]] = {}
-    for role_target, lane in parsed_routes:
+    for role_target, lane, task_prefix in parsed_routes:
         target_path = (role_dir / role_target).resolve(strict=False)
+        try:
+            target_path.relative_to(role_dir.resolve())
+        except ValueError:
+            errors.append(
+                f"{index.relative_to(ROOT)}: role contract link escapes role directory: {role_target}"
+            )
+            continue
         role_file = role_paths.get(target_path)
         if role_file is None:
             errors.append(
@@ -251,6 +266,18 @@ def validate_agent_registry(skill: Path, errors: List[str]) -> int:
             )
             continue
         routes_by_role.setdefault(role_file, []).append(lane)
+        expected_task_prefix = "n/a" if role_file == "orchestrator.md" else role_file.removesuffix(
+            ".md"
+        ).replace("-", "_")
+        if task_prefix != expected_task_prefix:
+            if role_file == "orchestrator.md":
+                errors.append(
+                    f"{index.relative_to(ROOT)}: orchestrator task prefix must be n/a"
+                )
+            else:
+                errors.append(
+                    f"{index.relative_to(ROOT)}: task prefix must equal {expected_task_prefix}"
+                )
     for role_file, lanes in sorted(routes_by_role.items()):
         if len(lanes) > 1:
             errors.append(f"{index.relative_to(ROOT)}: duplicate model route: {role_file}")

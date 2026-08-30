@@ -80,6 +80,7 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 
 Перед запуском каждого агента передай ему:
 
+- `TASK_NAME` из assignment envelope без изменений в `spawn_agent.task_name`;
 - роль, task slice и разрешённые repositories/paths;
 - входные артефакты и подтверждённые факты;
 - source-of-truth документы и environment ограничения;

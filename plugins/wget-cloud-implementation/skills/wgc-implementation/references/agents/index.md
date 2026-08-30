@@ -7,6 +7,7 @@
 ```text
 WORK_ITEM: <id и цель>
 ROLE: <role>
+TASK_NAME: <role prefix>_<snake slice>[_ordinal]
 TASK_SLICE: <одна ограниченная подзадача>
 REPOSITORIES: <разрешённые repo>
 ALLOW_PATHS: <разрешённые пути>
@@ -26,6 +27,8 @@ MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 ```
 
+`TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное итоговое значение `TASK_NAME` передай без изменений в `spawn_agent.task_name`. Orchestrator использует `n/a` и не spawn.
+
 Каждому субагенту добавляй: «Работай только в выданном scope. Сохраняй существующие изменения. Не выполняй commit, push, PR, merge, release или deployment без приложенного разрешения. Не объявляй всю задачу завершённой. Если scope недостаточен, верни `needs_input`».
 
 Поля времени задают bounded supervision, а не автоматическую остановку. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split. Hooks не являются таймерами и не подтверждают соблюдение этих границ.
@@ -42,19 +45,19 @@ Default `FORK_TURNS` — `none`. Если без незаменимого conver
 
 ## Роли
 
-| Роль | Когда применять | Write scope | Model lane | Контракт |
-|---|---|---|---|---|
-| Orchestrator | всегда | координационные действия | main-only | [orchestrator.md](orchestrator.md) |
-| Explorer | reconnaissance | нет | fast | [explorer.md](explorer.md) |
-| Architect | design и DAG | нет | frontier | [architect.md](architect.md) |
-| Architecture guardian | plan/diff architecture gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | executable acceptance baseline | только tests allowlist | balanced | [test-maker.md](test-maker.md) |
-| Implementor | один DAG slice | production/docs allowlist | balanced | [implementor.md](implementor.md) |
-| Reviewer | code review | нет | balanced | [reviewer.md](reviewer.md) |
-| QA | adversarial behavior verification | нет в repository | balanced | [qa.md](qa.md) |
-| DevOps | GitOps desired state | `k8s` allowlist | frontier | [devops.md](devops.md) |
-| Infrastructure reviewer | GitOps review | нет | frontier | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
-| Deployment agent | approved publication/rollout observation | только exact publish action | frontier | [deployment-agent.md](deployment-agent.md) |
+| Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
+|---|---|---|---|---|---|
+| Orchestrator | n/a | всегда | координационные действия | main-only | [orchestrator.md](orchestrator.md) |
+| Explorer | explorer | reconnaissance | нет | fast | [explorer.md](explorer.md) |
+| Architect | architect | design и DAG | нет | frontier | [architect.md](architect.md) |
+| Architecture guardian | architecture_guardian | plan/diff architecture gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
+| Test-maker | test_maker | executable acceptance baseline | только tests allowlist | balanced | [test-maker.md](test-maker.md) |
+| Implementor | implementor | один DAG slice | production/docs allowlist | balanced | [implementor.md](implementor.md) |
+| Reviewer | reviewer | code review | нет | balanced | [reviewer.md](reviewer.md) |
+| QA | qa | adversarial behavior verification | нет в repository | balanced | [qa.md](qa.md) |
+| DevOps | devops | GitOps desired state | `k8s` allowlist | frontier | [devops.md](devops.md) |
+| Infrastructure reviewer | infrastructure_reviewer | GitOps review | нет | frontier | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
+| Deployment agent | deployment_agent | approved publication/rollout observation | только exact publish action | frontier | [deployment-agent.md](deployment-agent.md) |
 
 ## Машинный результат
 

@@ -18,6 +18,7 @@ from pathlib import Path
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 VALIDATOR_PATH = REPOSITORY_ROOT / "scripts" / "validate_marketplace.py"
 ASSIGNMENT_FIELDS = (
+    "TASK_NAME",
     "MODEL_ROUTE",
     "MODEL",
     "REASONING_EFFORT",
@@ -53,7 +54,10 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def build_fixture(
         self,
         *,
-        rows: tuple[tuple[str, str], ...] = (("Orchestrator", "main-only"), ("Implementor", "fast")),
+        rows: tuple[tuple[str, str, str], ...] = (
+            ("Orchestrator", "main-only", "n/a"),
+            ("Implementor", "fast", "implementor"),
+        ),
         role_files: tuple[str, ...] = ("orchestrator", "implementor"),
         assignment_fields: tuple[str, ...] = ASSIGNMENT_FIELDS,
         raw_rows: tuple[str, ...] | None = None,
@@ -107,8 +111,8 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
             raw_rows
             if raw_rows is not None
             else tuple(
-                f"| {role} | {lane} | [{role.lower()}]({role.lower()}.md) |"
-                for role, lane in rows
+                f"| {role} | {task_prefix} | {lane} | [{role.lower()}]({role.lower()}.md) |"
+                for role, lane, task_prefix in rows
             )
         )
         (role_dir / "index.md").write_text(
@@ -116,8 +120,8 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
             "## Общий assignment envelope\n\n"
             f"```text\n{envelope}\n```\n\n"
             "## Roles\n\n"
-            "| Role | Model lane | Contract |\n"
-            "|---|---|---|\n"
+            "| Role | Task prefix | Model lane | Contract |\n"
+            "|---|---|---|---|\n"
             f"{table}\n\n{prose}",
             encoding="utf-8",
         )
@@ -151,30 +155,113 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture()
         self.assertEqual([], self.errors())
 
+    def test_task_name_is_required_in_the_canonical_assignment_envelope(self) -> None:
+        self.build_fixture(
+            assignment_fields=tuple(field for field in ASSIGNMENT_FIELDS if field != "TASK_NAME")
+        )
+        self.assert_error("missing assignment routing field TASK_NAME")
+
+    def test_routing_table_requires_an_exact_task_prefix_column(self) -> None:
+        self.build_fixture(
+            raw_rows=(
+                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | fast | [implementor](implementor.md) |",
+            )
+        )
+        role_dir = (
+            self.root
+            / "plugins"
+            / "routing-fixture"
+            / "skills"
+            / "routing-skill"
+            / "references"
+            / "agents"
+        )
+        index = role_dir / "index.md"
+        index.write_text(
+            index.read_text(encoding="utf-8")
+            .replace("| Role | Task prefix | Model lane | Contract |", "| Role | Model lane | Contract |")
+            .replace("|---|---|---|---|", "|---|---|---|"),
+            encoding="utf-8",
+        )
+        self.assert_error("missing Task prefix column")
+
+    def test_spawned_role_task_prefix_must_equal_its_role_file_prefix(self) -> None:
+        self.build_fixture(
+            rows=(
+                ("Orchestrator", "main-only", "n/a"),
+                ("Implementor", "fast", "reviewer"),
+            )
+        )
+        self.assert_error("task prefix must equal implementor")
+
+    def test_spawned_role_task_prefix_rejects_a_full_runtime_task_name(self) -> None:
+        self.build_fixture(
+            rows=(
+                ("Orchestrator", "main-only", "n/a"),
+                ("Implementor", "fast", "implementor_fixture"),
+            )
+        )
+        self.assert_error("task prefix must equal implementor")
+
+    def test_spawned_role_task_prefix_rejects_orchestrator_na(self) -> None:
+        self.build_fixture(
+            rows=(
+                ("Orchestrator", "main-only", "n/a"),
+                ("Implementor", "fast", "n/a"),
+            )
+        )
+        self.assert_error("task prefix must equal implementor")
+
+    def test_role_filename_hyphens_normalize_to_underscores_in_task_prefix(self) -> None:
+        self.build_fixture(
+            rows=(
+                ("Orchestrator", "main-only", "n/a"),
+                ("Test-maker", "fast", "test_maker"),
+            ),
+            role_files=("orchestrator", "test-maker"),
+        )
+        self.assertEqual([], self.errors())
+
+    def test_orchestrator_task_prefix_must_be_literal_na(self) -> None:
+        self.build_fixture(
+            rows=(
+                ("Orchestrator", "main-only", "orchestrator"),
+                ("Implementor", "fast", "implementor"),
+            )
+        )
+        self.assert_error("orchestrator task prefix must be n/a")
+
     def test_omitted_role_route_fails(self) -> None:
-        self.build_fixture(rows=(("Orchestrator", "main-only"),))
+        self.build_fixture(rows=(("Orchestrator", "main-only", "n/a"),))
         self.assert_error("missing model route")
 
     def test_duplicate_role_route_fails(self) -> None:
         self.build_fixture(
             rows=(
-                ("Orchestrator", "main-only"),
-                ("Implementor", "fast"),
-                ("Implementor", "balanced"),
+                ("Orchestrator", "main-only", "n/a"),
+                ("Implementor", "fast", "implementor"),
+                ("Implementor", "balanced", "implementor"),
             )
         )
         self.assert_error("duplicate model route")
 
     def test_unknown_model_lane_fails(self) -> None:
-        self.build_fixture(rows=(("Orchestrator", "main-only"), ("Implementor", "economy")))
+        self.build_fixture(
+            rows=(("Orchestrator", "main-only", "n/a"), ("Implementor", "economy", "implementor"))
+        )
         self.assert_error("unknown model lane")
 
     def test_orchestrator_must_use_main_only_lane(self) -> None:
-        self.build_fixture(rows=(("Orchestrator", "frontier"), ("Implementor", "fast")))
+        self.build_fixture(
+            rows=(("Orchestrator", "frontier", "n/a"), ("Implementor", "fast", "implementor"))
+        )
         self.assert_error("orchestrator must use main-only")
 
     def test_subagent_cannot_use_main_only_lane(self) -> None:
-        self.build_fixture(rows=(("Orchestrator", "main-only"), ("Implementor", "main-only")))
+        self.build_fixture(
+            rows=(("Orchestrator", "main-only", "n/a"), ("Implementor", "main-only", "implementor"))
+        )
         self.assert_error("only orchestrator may use main-only")
 
     def test_each_assignment_routing_field_is_required(self) -> None:
@@ -195,8 +282,8 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_malformed_routing_table_row_fails(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | fast | [implementor](implementor.md) | unexpected |",
+                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | implementor | fast | [implementor](implementor.md) | unexpected |",
             )
         )
         self.assert_error("malformed model routing table row")
@@ -204,8 +291,8 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_routing_row_without_contract_link_fails(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | fast | |",
+                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | implementor | fast | |",
             )
         )
         self.assert_error("missing role contract link")
@@ -213,8 +300,8 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_routing_row_with_multiple_contract_links_fails(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | fast | [implementor](implementor.md) [duplicate](orchestrator.md) |",
+                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | implementor | fast | [implementor](implementor.md) [duplicate](orchestrator.md) |",
             )
         )
         self.assert_error("exactly one role contract link")
@@ -222,8 +309,8 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_orphan_linked_role_contract_fails(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | fast | [missing](missing.md) |",
+                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | implementor | fast | [missing](missing.md) |",
             )
         )
         self.assert_error("linked role contract does not exist")
@@ -244,8 +331,8 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_active_contract_link_must_stay_in_role_directory(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | fast | [outside](../../../../outside.md) |",
+                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | implementor | fast | [outside](../../../../outside.md) |",
             )
         )
         outside = self.root / "plugins" / "routing-fixture" / "outside.md"
