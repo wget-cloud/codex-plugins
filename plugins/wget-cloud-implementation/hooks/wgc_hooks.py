@@ -14,7 +14,6 @@ import json
 import os
 import re
 import shlex
-import stat
 import subprocess
 import sys
 import tempfile
@@ -594,512 +593,206 @@ def suspicious_secret(command: str) -> bool:
     return False
 
 
+def consume_known_options(
+    args: Sequence[str],
+    value_options: Set[str],
+    boolean_options: Set[str],
+    attached_value: Optional[re.Pattern[str]] = None,
+) -> Optional[int]:
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == "--":
+            return index + 1
+        if attached_value is not None and attached_value.fullmatch(token):
+            index += 1
+            continue
+        option = token.split("=", 1)[0]
+        if option in value_options:
+            if "=" in token:
+                index += 1
+            elif index + 1 < len(args):
+                index += 2
+            else:
+                return None
+            continue
+        if token in boolean_options:
+            index += 1
+            continue
+        if token.startswith("-"):
+            return None
+        return index
+    return index
+
+
+def short_option_cluster(
+    token: str,
+    following: Sequence[str],
+    boolean_options: Set[str],
+    value_options: Set[str],
+) -> Optional[Tuple[int, Optional[str], Optional[str]]]:
+    if not token.startswith("-") or token.startswith("--") or len(token) < 2 or len(token) > 32:
+        return None
+    for offset, option in enumerate(token[1:], start=1):
+        if option in boolean_options:
+            continue
+        if option not in value_options:
+            return None
+        attached_value = token[offset + 1 :]
+        if attached_value:
+            return 1, option, attached_value
+        if following:
+            return 2, option, following[0]
+        return None
+    return 1, None, None
+
+
+def normalized_env_arguments(args: Sequence[str]) -> Optional[List[str]]:
+    current = list(args)
+    for _ in range(4):
+        index = 0
+        expanded = False
+        while index < len(current):
+            token = current[index]
+            if token == "--":
+                return current[index + 1 :]
+            option = token.split("=", 1)[0]
+            if option == "--split-string":
+                if "=" in token:
+                    value = token.split("=", 1)[1]
+                    consumed = 1
+                elif index + 1 < len(current):
+                    value = current[index + 1]
+                    consumed = 2
+                else:
+                    return None
+                try:
+                    split_args = shlex.split(value, posix=True)
+                except ValueError:
+                    return None
+                current = current[:index] + split_args + current[index + consumed :]
+                expanded = True
+                break
+            if option in {"--chdir", "--unset"}:
+                if "=" in token:
+                    index += 1
+                elif index + 1 < len(current):
+                    index += 2
+                else:
+                    return None
+                continue
+            if token in {"-0", "--null", "-i", "--ignore-environment"}:
+                index += 1
+                continue
+            if token.startswith("-") and not token.startswith("--"):
+                cluster = short_option_cluster(token, current[index + 1 :], {"0", "i"}, {"C", "S", "u"})
+                if cluster is None:
+                    return None
+                consumed, value_option, value = cluster
+                if value_option == "S":
+                    try:
+                        split_args = shlex.split(value or "", posix=True)
+                    except ValueError:
+                        return None
+                    current = current[:index] + split_args + current[index + consumed :]
+                    expanded = True
+                    break
+                index += consumed
+                continue
+            if token.startswith("-"):
+                return None
+            return current[index:]
+        if not expanded:
+            return []
+    return None
+
+
+def normalized_shell_command(tokens: Sequence[str]) -> Tuple[Optional[str], List[str], bool]:
+    current = list(tokens)
+    generic_assignment = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.DOTALL)
+    approval_assignment = re.compile(r"WGC_[A-Z0-9_]+_APPROVED=1")
+    approval_found = False
+    for _ in range(6):
+        index = 0
+        while index < len(current) and generic_assignment.fullmatch(current[index]):
+            approval_found = approval_found or bool(approval_assignment.fullmatch(current[index]))
+            index += 1
+        if index >= len(current):
+            return None, [], approval_found
+        raw_executable = current[index]
+        executable = Path(raw_executable).name.lower()
+        args = current[index + 1 :]
+        if executable == "env":
+            nested = normalized_env_arguments(args)
+            if nested is None or not nested:
+                return raw_executable, args, approval_found
+            current = nested
+            continue
+        elif executable == "sudo":
+            next_index = consume_known_options(
+                args,
+                {"-C", "-g", "-h", "-p", "-R", "-T", "-u", "--chdir", "--group", "--host", "--prompt", "--role", "--type", "--user"},
+                {"-b", "-E", "-e", "-H", "-K", "-k", "-n", "-S", "-v", "--background", "--edit", "--help", "--login", "--non-interactive", "--preserve-env", "--reset-timestamp", "--remove-timestamp", "--stdin", "--validate"},
+            )
+        elif executable == "command":
+            if args[:1] and args[0] in {"-v", "-V"}:
+                return raw_executable, args, approval_found
+            next_index = consume_known_options(args, set(), {"-p"})
+        elif executable == "nohup":
+            next_index = consume_known_options(args, set(), set())
+        elif executable == "time":
+            next_index = consume_known_options(
+                args,
+                {"-f", "--format", "-o", "--output"},
+                {"-a", "--append", "-p", "--portability", "-q", "--quiet", "-v", "--verbose"},
+            )
+        else:
+            return raw_executable, args, approval_found
+        if next_index is None or next_index >= len(args):
+            return raw_executable, args, approval_found
+        current = args[next_index:]
+    return None, [], approval_found
+
+
+def has_wgc_approval_assignment(command: str, depth: int = 0) -> bool:
+    if depth > 2:
+        return False
+    try:
+        lexer = shlex.shlex(command.replace("$'1'", "1"), posix=True, punctuation_chars=";&|")
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        tokens = list(lexer)
+    except ValueError:
+        return False
+
+    current: List[str] = []
+    segments: List[List[str]] = []
+    for token in tokens:
+        if re.fullmatch(r"[;&|]+", token):
+            if current:
+                segments.append(current)
+                current = []
+        else:
+            current.append(token)
+    if current:
+        segments.append(current)
+
+    for segment in segments:
+        executable, args, approval_found = normalized_shell_command(segment)
+        if approval_found:
+            return True
+        if executable is not None and Path(executable).name.lower() in {"bash", "sh", "zsh", "dash", "ksh"}:
+            for arg_index, arg in enumerate(args[:-1]):
+                if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", arg):
+                    if has_wgc_approval_assignment(args[arg_index + 1], depth + 1):
+                        return True
+                    break
+    return False
+
+
 BOOTSTRAP_APPROVAL = "WGC_GITOPS_BOOTSTRAP_APPROVED=1"
 BOOTSTRAP_SECRET_NAME = "wget-cloud-k8s-repository"
 BOOTSTRAP_REPOSITORY_URL = "ssh://git@github.com/wget-cloud/k8s"
-
-STAGED_SYNC_APPROVAL = "WGC_GITOPS_STAGED_SYNC_APPROVED=1"
-STAGED_SYNC_REVISION = "6c2c3e9dadde2eec3d13fde830bc6db0392b13b8"
-STAGED_SYNC_RUNNER = "/usr/local/libexec/wget-cloud-staged-sync/runner.py"
-STAGED_SYNC_MANIFEST = "/usr/local/libexec/wget-cloud-staged-sync/manifest.json"
-STAGED_SYNC_KUBECONFIG = "/usr/local/etc/wget-cloud-staged-sync/twc-wise-finch.kubeconfig"
-STAGED_SYNC_RUNNER_SHA256 = "11718b7a20042c80d9ef6dee0af193c0e6eb6158cb31519d980eefdb17302d54"
-STAGED_SYNC_MANIFEST_SHA256 = "f85e6b0fc220718b2bb12dee184aabd3845271c87b0bddec47f790c540f860b8"
-STAGED_SYNC_LS_SHA256 = "0056d8fd617b4af3e6f8ec08a08530747962b7392ccd767b275677e8387dac51"
-STAGED_SYNC_ENV_SHA256 = "540f3b55630775d9b2a3aa08cbbe87928ea62c615cd4d13c11f68e2b4571aebc"
-STAGED_SYNC_PYTHON_SHA256 = "506cb2ddd061e2992c8ee7c53853340688b53d9fcec94c3aa936524cea5b40cb"
-STAGED_SYNC_APPS = (
-    "twc-wise-finch-cluster",
-    "twc-wise-finch-core",
-    "twc-wise-finch-local-path-storage",
-    "twc-wise-finch-local-path-smoke",
-    "local-path-storage-smoke",
-)
-
-INGRESS_RECOVERY_APPROVAL = "WGC_GITOPS_INGRESS_RECOVERY_APPROVED=1"
-INGRESS_RECOVERY_REVISION = "6247abd4aec30e6a75aeba70123676019762f1a6"
-INGRESS_RECOVERY_RUNNER = "/usr/local/libexec/wget-cloud-ingress-recovery/promotion_runner.py"
-INGRESS_RECOVERY_MANIFEST = "/usr/local/libexec/wget-cloud-ingress-recovery/promotion-manifest.json"
-INGRESS_RECOVERY_KUBECONFIG = "/usr/local/etc/wget-cloud-ingress-recovery/twc-wise-finch.kubeconfig"
-INGRESS_RECOVERY_RUNNER_SHA256 = "5018daf23512e4896b86d1f45195317ad6e2c5ed0e4a4028b3dd2cb0a2e501dc"
-INGRESS_RECOVERY_MANIFEST_SHA256 = "2295bf7fbfffff75bc7bbdff120d4646675dbb856794a5864e0227468e126bca"
-INGRESS_RECOVERY_APPS = (
-    "twc-wise-finch-cluster",
-    "twc-wise-finch-ingress",
-    "cert-manager",
-    "traefik",
-    "ingress-canary",
-    "twc-wise-finch-ingress-issuer",
-    "argocd-public",
-)
-
-TIMEWEB_ROUTER_APPROVAL = "WGC_TIMEWEB_ROUTER_RECOVERY_APPROVED=1"
-TIMEWEB_ROUTER_RUNNER = "/usr/local/libexec/wget-cloud-ingress-recovery/router_runner.py"
-TIMEWEB_ROUTER_MANIFEST = "/usr/local/libexec/wget-cloud-ingress-recovery/router-manifest.json"
-TIMEWEB_ROUTER_RUNNER_SHA256 = "bcce90d0a6448d0610d2d00e27cc03c9022b14ffc9cee57ec7fb90e372d009e5"
-TIMEWEB_ROUTER_TEMPLATE_SHA256 = "60854056f8978c2a3a737688f31b474e738d202d2e75c4386b99352ebe8ae5ea"
-
-
-def staged_sync_runner_command(stage: int, app: str) -> str:
-    return (
-        "/usr/bin/env -i WGC_GITOPS_STAGED_SYNC_APPROVED=1 HOME=/var/empty "
-        "PATH=/usr/bin:/bin LANG=C LC_ALL=C "
-        f"KUBECONFIG={STAGED_SYNC_KUBECONFIG} /usr/bin/python3 {STAGED_SYNC_RUNNER} "
-        f"--stage {stage} --app {app} --revision {STAGED_SYNC_REVISION}"
-    )
-
-
-def parse_staged_sync_runner_command(command: str) -> Optional[Tuple[int, str, str]]:
-    for stage, app in enumerate(STAGED_SYNC_APPS, start=1):
-        if command == staged_sync_runner_command(stage, app):
-            return stage, app, STAGED_SYNC_REVISION
-    return None
-
-
-def ingress_recovery_runner_command(stage: int, app: str, revision: str) -> str:
-    return (
-        "/usr/bin/env -i WGC_GITOPS_INGRESS_RECOVERY_APPROVED=1 HOME=/var/empty "
-        "PATH=/usr/bin:/bin LANG=C LC_ALL=C "
-        f"KUBECONFIG={INGRESS_RECOVERY_KUBECONFIG} /usr/bin/python3 {INGRESS_RECOVERY_RUNNER} "
-        f"--stage {stage} --app {app} --revision {revision}"
-    )
-
-
-def parse_ingress_recovery_runner_command(command: str) -> Optional[Tuple[int, str, str]]:
-    for stage, app in enumerate(INGRESS_RECOVERY_APPS, start=1):
-        if command == ingress_recovery_runner_command(stage, app, INGRESS_RECOVERY_REVISION):
-            return stage, app, INGRESS_RECOVERY_REVISION
-    return None
-
-
-def timeweb_router_runner_command() -> str:
-    return (
-        "/usr/bin/env -i WGC_TIMEWEB_ROUTER_RECOVERY_APPROVED=1 HOME=/var/empty "
-        f"PATH=/usr/bin:/bin LANG=C LC_ALL=C /usr/bin/python3 {TIMEWEB_ROUTER_RUNNER}"
-    )
-
-
-def parse_timeweb_router_runner_command(command: str) -> bool:
-    return command == timeweb_router_runner_command()
-
-
-def effectively_writable(path: Path) -> bool:
-    try:
-        return os.access(path, os.W_OK, effective_ids=True)
-    except (NotImplementedError, TypeError):
-        return os.access(path, os.W_OK)
-
-
-def inspect_system_binary(path_value: str) -> Dict[str, Any]:
-    path = Path(path_value)
-    descriptor = -1
-    digest = hashlib.sha256()
-    post_digest = hashlib.sha256()
-    try:
-        path_stat = path.lstat()
-        canonical = path.resolve(strict=True)
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(str(path), flags)
-        descriptor_stat = os.fstat(descriptor)
-        for chunk in iter(lambda: os.read(descriptor, 1024 * 1024), b""):
-            digest.update(chunk)
-        os.lseek(descriptor, 0, os.SEEK_SET)
-        for chunk in iter(lambda: os.read(descriptor, 1024 * 1024), b""):
-            post_digest.update(chunk)
-        post_descriptor_stat = os.fstat(descriptor)
-        post_path_stat = path.lstat()
-    except (OSError, RuntimeError, ValueError):
-        return {}
-    finally:
-        if descriptor >= 0:
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass
-
-    def identity(value: os.stat_result) -> Dict[str, Any]:
-        return {
-            "device": value.st_dev,
-            "inode": value.st_ino,
-            "uid": value.st_uid,
-            "gid": value.st_gid,
-            "mode": format(stat.S_IMODE(value.st_mode), "04o"),
-            "linkCount": value.st_nlink,
-        }
-
-    descriptor_hash = digest.hexdigest()
-    post_descriptor_hash = post_digest.hexdigest()
-    path_identity = identity(path_stat)
-    descriptor_identity = identity(descriptor_stat)
-    post_descriptor_identity = identity(post_descriptor_stat)
-    descriptor_verified = (
-        path_identity == descriptor_identity == post_descriptor_identity == identity(post_path_stat)
-    )
-    return {
-        "path": path_value,
-        "canonicalPath": str(canonical),
-        "kind": "file" if stat.S_ISREG(descriptor_stat.st_mode) else "other",
-        "symlink": stat.S_ISLNK(path_stat.st_mode),
-        "owner": "root" if descriptor_stat.st_uid == 0 else str(descriptor_stat.st_uid),
-        "group": "wheel" if descriptor_stat.st_gid == 0 else str(descriptor_stat.st_gid),
-        "mode": format(stat.S_IMODE(descriptor_stat.st_mode), "04o"),
-        "linkCount": descriptor_stat.st_nlink,
-        "sha256": descriptor_hash,
-        "pathIdentity": path_identity,
-        "descriptorIdentity": descriptor_identity,
-        "postDescriptorIdentity": post_descriptor_identity,
-        "descriptorSha256": descriptor_hash,
-        "postDescriptorSha256": post_descriptor_hash,
-        "descriptorVerified": descriptor_verified,
-        "effectiveWritable": effectively_writable(path),
-    }
-
-
-def pinned_system_binary(
-    path_value: str,
-    expected_sha256: str,
-    expected_mode: int,
-    expected_link_count: int,
-    inspect_binary: Callable[[str], Dict[str, Any]] = inspect_system_binary,
-) -> bool:
-    try:
-        evidence = inspect_binary(path_value)
-    except (OSError, RuntimeError, TypeError, ValueError):
-        return False
-    if not isinstance(evidence, dict):
-        return False
-    expected_mode_text = format(expected_mode, "04o")
-    if evidence.get("path") != path_value or evidence.get("canonicalPath") != path_value:
-        return False
-    if evidence.get("kind") != "file" or evidence.get("symlink") is not False:
-        return False
-    if evidence.get("owner") != "root" or evidence.get("group") != "wheel":
-        return False
-    if evidence.get("mode") != expected_mode_text:
-        return False
-    if evidence.get("linkCount") != expected_link_count:
-        return False
-    if evidence.get("descriptorVerified") is not True or evidence.get("effectiveWritable") is not False:
-        return False
-    identities = (
-        evidence.get("pathIdentity"),
-        evidence.get("descriptorIdentity"),
-        evidence.get("postDescriptorIdentity"),
-    )
-    expected_identity_fields = {"device", "inode", "uid", "gid", "mode", "linkCount"}
-    if not all(isinstance(identity, dict) and set(identity) == expected_identity_fields for identity in identities):
-        return False
-    if not (identities[0] == identities[1] == identities[2]):
-        return False
-    identity = identities[0]
-    if (
-        identity.get("uid") != 0
-        or identity.get("gid") != 0
-        or identity.get("mode") != expected_mode_text
-        or identity.get("linkCount") != expected_link_count
-    ):
-        return False
-    hashes = (
-        evidence.get("sha256"),
-        evidence.get("descriptorSha256"),
-        evidence.get("postDescriptorSha256"),
-    )
-    return hashes == (expected_sha256, expected_sha256, expected_sha256)
-
-
-def pinned_ls_before_acl() -> bool:
-    path = Path("/bin/ls")
-    descriptor = -1
-    digest = hashlib.sha256()
-    fields = ("st_dev", "st_ino", "st_uid", "st_gid", "st_mode", "st_nlink")
-    try:
-        path_stat = path.lstat()
-        if not stat.S_ISREG(path_stat.st_mode) or stat.S_ISLNK(path_stat.st_mode):
-            return False
-        if path.resolve(strict=True) != path:
-            return False
-        if path_stat.st_uid != 0 or path_stat.st_gid != 0:
-            return False
-        if stat.S_IMODE(path_stat.st_mode) != 0o755 or path_stat.st_nlink != 1:
-            return False
-        if effectively_writable(path):
-            return False
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(str(path), flags)
-        before = os.fstat(descriptor)
-        for chunk in iter(lambda: os.read(descriptor, 1024 * 1024), b""):
-            digest.update(chunk)
-        after = os.fstat(descriptor)
-        path_after = path.lstat()
-        if any(getattr(path_stat, field) != getattr(before, field) for field in fields):
-            return False
-        if any(getattr(before, field) != getattr(after, field) for field in fields):
-            return False
-        if any(getattr(after, field) != getattr(path_after, field) for field in fields):
-            return False
-        if digest.hexdigest() != STAGED_SYNC_LS_SHA256:
-            return False
-        for ancestor in path.parents:
-            ancestor_stat = ancestor.lstat()
-            if not stat.S_ISDIR(ancestor_stat.st_mode) or stat.S_ISLNK(ancestor_stat.st_mode):
-                return False
-            if ancestor.resolve(strict=True) != ancestor:
-                return False
-            if ancestor_stat.st_uid != 0 or ancestor_stat.st_gid != 0:
-                return False
-            if stat.S_IMODE(ancestor_stat.st_mode) & 0o022:
-                return False
-            if effectively_writable(ancestor):
-                return False
-    except (OSError, RuntimeError, TypeError, ValueError):
-        return False
-    finally:
-        if descriptor >= 0:
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass
-    return True
-
-
-def path_acl_empty(path: Path) -> bool:
-    if not pinned_ls_before_acl():
-        return False
-    try:
-        result = subprocess.run(
-            ["/bin/ls", "-lde", str(path)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=5.0,
-            check=False,
-            shell=False,
-            env={"HOME": "/var/empty", "PATH": "/usr/bin:/bin", "LANG": "C", "LC_ALL": "C"},
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return result.returncode == 0 and len(result.stdout.splitlines()) == 1
-
-
-def inspect_system_ancestor(path_value: str) -> Dict[str, Any]:
-    path = Path(path_value)
-    try:
-        before = path.lstat()
-        canonical = path.resolve(strict=True)
-        acl_empty = path_acl_empty(path)
-        after = path.lstat()
-    except (OSError, RuntimeError, ValueError):
-        return {}
-
-    def identity(value: os.stat_result) -> Dict[str, Any]:
-        return {
-            "device": value.st_dev,
-            "inode": value.st_ino,
-            "uid": value.st_uid,
-            "gid": value.st_gid,
-            "mode": format(stat.S_IMODE(value.st_mode), "04o"),
-        }
-
-    path_identity = identity(before)
-    post_path_identity = identity(after)
-    parent = path if path.parent == path else path.parent
-    return {
-        "path": path_value,
-        "canonicalPath": str(canonical),
-        "kind": "directory" if stat.S_ISDIR(before.st_mode) else "other",
-        "symlink": stat.S_ISLNK(before.st_mode),
-        "owner": "root" if before.st_uid == 0 else str(before.st_uid),
-        "group": "wheel" if before.st_gid == 0 else str(before.st_gid),
-        "mode": format(stat.S_IMODE(before.st_mode), "04o"),
-        "acl": [] if acl_empty else [{"unsafe": True}],
-        "pathIdentity": path_identity,
-        "postPathIdentity": post_path_identity,
-        "identityVerified": path_identity == post_path_identity,
-        "effectiveWritable": effectively_writable(path),
-        "effectiveDeletable": effectively_writable(parent),
-    }
-
-
-def pinned_system_ancestor_chain(
-    binary_path: str,
-    inspect_ancestor: Callable[[str], Dict[str, Any]] = inspect_system_ancestor,
-    attest_ls: Callable[[], bool] = pinned_ls_before_acl,
-) -> bool:
-    if binary_path not in {"/usr/bin/env", "/usr/bin/python3"}:
-        return False
-    if not attest_ls():
-        return False
-    expected_paths = ("/", "/usr", "/usr/bin")
-    expected_keys = {
-        "path",
-        "canonicalPath",
-        "kind",
-        "symlink",
-        "owner",
-        "group",
-        "mode",
-        "acl",
-        "pathIdentity",
-        "postPathIdentity",
-        "identityVerified",
-        "effectiveWritable",
-        "effectiveDeletable",
-    }
-    identity_keys = {"device", "inode", "uid", "gid", "mode"}
-    for path in expected_paths:
-        try:
-            evidence = inspect_ancestor(path)
-        except (OSError, RuntimeError, TypeError, ValueError):
-            return False
-        if not isinstance(evidence, dict) or set(evidence) != expected_keys:
-            return False
-        if evidence.get("path") != path or evidence.get("canonicalPath") != path:
-            return False
-        if evidence.get("kind") != "directory" or evidence.get("symlink") is not False:
-            return False
-        if evidence.get("owner") != "root" or evidence.get("group") != "wheel":
-            return False
-        if evidence.get("mode") != "0755" or evidence.get("acl") != []:
-            return False
-        if evidence.get("identityVerified") is not True:
-            return False
-        if evidence.get("effectiveWritable") is not False or evidence.get("effectiveDeletable") is not False:
-            return False
-        identities = (evidence.get("pathIdentity"), evidence.get("postPathIdentity"))
-        if not all(isinstance(identity, dict) and set(identity) == identity_keys for identity in identities):
-            return False
-        if identities[0] != identities[1]:
-            return False
-        identity = identities[0]
-        if identity.get("uid") != 0 or identity.get("gid") != 0 or identity.get("mode") != "0755":
-            return False
-        if not all(
-            isinstance(identity.get(key), int) and not isinstance(identity.get(key), bool)
-            for key in ("device", "inode", "uid", "gid")
-        ):
-            return False
-    return True
-
-
-def root_owned_ancestor_chain(path: Path) -> bool:
-    for ancestor in path.parents:
-        try:
-            ancestor_stat = ancestor.lstat()
-            if not stat.S_ISDIR(ancestor_stat.st_mode) or stat.S_ISLNK(ancestor_stat.st_mode):
-                return False
-            if ancestor.resolve(strict=True) != ancestor:
-                return False
-            if ancestor_stat.st_uid != 0 or ancestor_stat.st_gid != 0:
-                return False
-            if stat.S_IMODE(ancestor_stat.st_mode) & 0o022:
-                return False
-        except (OSError, RuntimeError, ValueError):
-            return False
-        if not path_acl_empty(ancestor):
-            return False
-    return True
-
-
-def pinned_root_file(path_value: str, expected_sha256: str, expected_mode: int) -> bool:
-    path = Path(path_value)
-    digest = hashlib.sha256()
-    try:
-        path_stat = path.lstat()
-        if not stat.S_ISREG(path_stat.st_mode) or stat.S_ISLNK(path_stat.st_mode):
-            return False
-        if path.resolve(strict=True) != path:
-            return False
-        if path_stat.st_uid != 0 or path_stat.st_gid != 0:
-            return False
-        if stat.S_IMODE(path_stat.st_mode) != expected_mode or path_stat.st_nlink != 1:
-            return False
-        if not path_acl_empty(path) or not root_owned_ancestor_chain(path):
-            return False
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-                digest.update(chunk)
-    except (OSError, RuntimeError, ValueError):
-        return False
-    return digest.hexdigest() == expected_sha256
-
-
-def current_root_file_digest(path_value: str, *, fallback: str) -> str:
-    """Read a candidate digest; pinned_root_file performs the authoritative attestation."""
-    path = Path(path_value)
-    descriptor = -1
-    digest = hashlib.sha256()
-    try:
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
-        descriptor = os.open(str(path), flags)
-        opened = os.fstat(descriptor)
-        if not stat.S_ISREG(opened.st_mode):
-            return fallback
-        for chunk in iter(lambda: os.read(descriptor, 1024 * 1024), b""):
-            digest.update(chunk)
-        return digest.hexdigest()
-    except OSError:
-        return fallback
-    finally:
-        if descriptor >= 0:
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass
-
-
-def approved_gitops_staged_sync(command: str) -> bool:
-    if parse_staged_sync_runner_command(command) is None:
-        return False
-    return (
-        pinned_ls_before_acl()
-        and pinned_system_ancestor_chain("/usr/bin/env")
-        and pinned_system_ancestor_chain("/usr/bin/python3")
-        and pinned_system_binary("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 0o755, 1)
-        and pinned_system_binary("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 0o755, 78)
-        and pinned_root_file(STAGED_SYNC_RUNNER, STAGED_SYNC_RUNNER_SHA256, 0o555)
-        and pinned_root_file(
-            STAGED_SYNC_MANIFEST,
-            STAGED_SYNC_MANIFEST_SHA256,
-            0o444,
-        )
-    )
-
-
-def approved_gitops_ingress_recovery(command: str) -> bool:
-    if parse_ingress_recovery_runner_command(command) is None:
-        return False
-    return (
-        pinned_ls_before_acl()
-        and pinned_system_ancestor_chain("/usr/bin/env")
-        and pinned_system_ancestor_chain("/usr/bin/python3")
-        and pinned_system_binary("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 0o755, 1)
-        and pinned_system_binary("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 0o755, 78)
-        and pinned_root_file(INGRESS_RECOVERY_RUNNER, INGRESS_RECOVERY_RUNNER_SHA256, 0o555)
-        and pinned_root_file(INGRESS_RECOVERY_MANIFEST, INGRESS_RECOVERY_MANIFEST_SHA256, 0o444)
-    )
-
-
-def approved_timeweb_router_recovery(command: str) -> bool:
-    if not parse_timeweb_router_runner_command(command):
-        return False
-    materialized_digest = current_root_file_digest(
-        TIMEWEB_ROUTER_MANIFEST,
-        fallback=TIMEWEB_ROUTER_TEMPLATE_SHA256,
-    )
-    if re.fullmatch(r"[0-9a-f]{64}", materialized_digest) is None:
-        return False
-    if materialized_digest == TIMEWEB_ROUTER_TEMPLATE_SHA256:
-        return False
-    return (
-        pinned_ls_before_acl()
-        and pinned_system_ancestor_chain("/usr/bin/env")
-        and pinned_system_ancestor_chain("/usr/bin/python3")
-        and pinned_system_binary("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 0o755, 1)
-        and pinned_system_binary("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 0o755, 78)
-        and pinned_root_file(TIMEWEB_ROUTER_RUNNER, TIMEWEB_ROUTER_RUNNER_SHA256, 0o555)
-        and pinned_root_file(TIMEWEB_ROUTER_MANIFEST, materialized_digest, 0o444)
-    )
-
 
 def option_values(args: Sequence[str], names: Set[str]) -> List[str]:
     values: List[str] = []
@@ -1475,49 +1168,117 @@ def shell_commands(command: str, depth: int = 0) -> List[Tuple[str, List[str]]]:
         segments.append(current)
 
     commands: List[Tuple[str, List[str]]] = []
-    assignment = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.DOTALL)
-    sudo_value_options = {"-u", "-g", "-h", "-p", "-C", "-R", "-T", "--user", "--group", "--host"}
     for segment in segments:
-        index = 0
-        while index < len(segment):
-            while index < len(segment) and assignment.fullmatch(segment[index]):
-                index += 1
-            if index >= len(segment):
-                break
-            executable = Path(segment[index]).name.lower()
-            if executable in {"env"}:
-                index += 1
-                while index < len(segment) and (segment[index].startswith("-") or assignment.fullmatch(segment[index])):
-                    index += 1
-                continue
-            if executable == "sudo":
-                index += 1
-                while index < len(segment) and segment[index].startswith("-"):
-                    option = segment[index].split("=", 1)[0]
-                    index += 1
-                    if option in sudo_value_options and index < len(segment):
-                        index += 1
-                continue
-            if executable in {"nohup", "time"}:
-                index += 1
-                while index < len(segment) and segment[index].startswith("-"):
-                    index += 1
-                continue
-            if executable == "command":
-                if index + 1 < len(segment) and segment[index + 1] in {"-v", "-V"}:
-                    commands.append(("command", segment[index + 1 :]))
+        executable, args, _ = normalized_shell_command(segment)
+        if executable is None:
+            continue
+        executable_name = Path(executable).name.lower()
+        commands.append((executable, args))
+        if executable_name == "xargs":
+            nested = xargs_literal_command(args)
+            if nested:
+                commands.append(nested)
+        if executable_name in {"bash", "sh", "zsh", "dash", "ksh"}:
+            for arg_index, arg in enumerate(args[:-1]):
+                if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", arg):
+                    commands.extend(shell_commands(args[arg_index + 1], depth + 1))
                     break
-                index += 1
-                continue
-            args = segment[index + 1 :]
-            commands.append((executable, args))
-            if executable in {"bash", "sh", "zsh", "dash", "ksh"}:
-                for arg_index, arg in enumerate(args[:-1]):
-                    if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", arg):
-                        commands.extend(shell_commands(args[arg_index + 1], depth + 1))
-                        break
-            break
     return commands
+
+
+def xargs_literal_command(args: Sequence[str]) -> Optional[Tuple[str, List[str]]]:
+    value_options = {
+        "-a", "--arg-file", "-d", "--delimiter", "-E", "--eof", "-I", "--replace",
+        "-J", "-L", "--max-lines", "-n", "--max-args", "-P", "--max-procs", "-R", "-s", "--max-chars", "-S",
+    }
+    boolean_options = {
+        "-0", "--null", "-o", "--open-tty", "-p", "--interactive", "-r", "--no-run-if-empty",
+        "-t", "--verbose", "-x", "--exit",
+    }
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == "--":
+            index += 1
+            break
+        option = token.split("=", 1)[0]
+        if token.startswith("-") and not token.startswith("--"):
+            cluster = short_option_cluster(
+                token,
+                args[index + 1 :],
+                {"0", "o", "p", "r", "t", "x"},
+                {"a", "d", "E", "I", "J", "L", "n", "P", "R", "s", "S"},
+            )
+            if cluster is None:
+                return None
+            index += cluster[0]
+            continue
+        if option in value_options:
+            if "=" in token:
+                index += 1
+            else:
+                index += 2
+            continue
+        if token in boolean_options:
+            index += 1
+            continue
+        if token.startswith("-"):
+            return None
+        break
+    if index >= len(args) or Path(args[index]).name.lower() != "kubectl":
+        return None
+    return "kubectl", list(args[index + 1 :])
+
+
+def retired_wgc_runner_path(value: str) -> bool:
+    candidate = Path(os.path.normpath(value))
+    return (
+        candidate.is_absolute()
+        and candidate.name == "runner.py"
+        and candidate.parent.parent == Path("/usr/local/libexec")
+        and candidate.parent.name.startswith("wget-cloud-")
+        and candidate.parent.name != "wget-cloud-"
+    )
+
+
+def python_script_operand(args: Sequence[str]) -> Optional[str]:
+    value_options = {"-W", "-X", "--check-hash-based-pycs"}
+    attached_value = re.compile(r"^-(?:W|X).+")
+    index = 0
+    while index < len(args):
+        token = args[index]
+        if token == "--":
+            index += 1
+            break
+        if token in {"-c", "-m"}:
+            return None
+        option = token.split("=", 1)[0]
+        if attached_value.fullmatch(token):
+            index += 1
+            continue
+        if option in value_options:
+            if "=" in token:
+                index += 1
+            elif index + 1 < len(args):
+                index += 2
+            else:
+                return None
+            continue
+        if token.startswith("-"):
+            index += 1
+            continue
+        break
+    return args[index] if index < len(args) else None
+
+
+def retired_wgc_runner_invocation(executable: str, args: Sequence[str]) -> bool:
+    if retired_wgc_runner_path(executable):
+        return True
+    executable_name = Path(executable).name.lower()
+    if re.fullmatch(r"python(?:3(?:\.\d+)?)?", executable_name) is None:
+        return False
+    script = python_script_operand(args)
+    return script is not None and retired_wgc_runner_path(script)
 
 
 def first_positional(args: Sequence[str], options_with_value: Set[str]) -> Tuple[Optional[str], int]:
@@ -1626,45 +1387,38 @@ def command_violation(
         return None
     if suspicious_secret(command):
         return "Possible credential material in a command is blocked. Use an approved environment or secret manager without exposing the value."
-    if approved_gitops_ingress_recovery(command):
-        return None
-    if INGRESS_RECOVERY_APPROVAL in command or INGRESS_RECOVERY_RUNNER in command:
-        return "Ingress recovery is blocked unless the exact pinned root-owned promotion runner contract passes."
-    if approved_timeweb_router_recovery(command):
-        return None
-    if TIMEWEB_ROUTER_APPROVAL in command or TIMEWEB_ROUTER_RUNNER in command:
-        return "Timeweb router recovery is blocked unless the exact pinned root-owned router runner contract passes."
-    if approved_gitops_staged_sync(command):
-        return None
-    if STAGED_SYNC_APPROVAL in command or STAGED_SYNC_RUNNER in command:
-        return "Staged Argo CD sync is blocked unless the exact pinned root-owned runner contract passes."
     if approved_gitops_bootstrap(command, bootstrap_cwd or cwd, bootstrap_repo):
         return None
+    if has_wgc_approval_assignment(command):
+        return "Unrecognized WGC approval marker is blocked; only the exact clean-cluster bootstrap contract is supported."
 
     for executable, args in shell_commands(command):
-        if executable == "kubectl":
+        if retired_wgc_runner_invocation(executable, args):
+            return "Execution of a retired Wget Cloud runner is blocked. Remove the installed runner instead of invoking it."
+        executable_name = Path(executable).name.lower()
+        if executable_name == "kubectl":
             violation = kubectl_violation(args)
             if violation:
                 return violation
-        elif executable == "helm" and any(token.lower() in {"install", "upgrade", "uninstall", "rollback"} for token in args):
+        elif executable_name == "helm" and any(token.lower() in {"install", "upgrade", "uninstall", "rollback"} for token in args):
             return "Direct Helm mutation is blocked; use the k8s GitOps repository."
-        elif executable == "argocd" or executable.startswith("argocd-"):
+        elif executable_name == "argocd" or executable_name.startswith("argocd-"):
             words = [token.lower() for token in args if not token.startswith("-")]
             if any(words[index : index + 2] in (["app", "sync"], ["app", "set"], ["app", "delete"], ["app", "rollback"], ["app", "terminate-op"]) for index in range(max(0, len(words) - 1))):
                 return "Direct Argo CD mutation is blocked; publish reviewed Git desired state instead."
-        elif executable == "flux" and any(token.lower() in {"reconcile", "suspend", "resume", "delete"} for token in args):
+        elif executable_name == "flux" and any(token.lower() in {"reconcile", "suspend", "resume", "delete"} for token in args):
             return "Direct Flux mutation is blocked by the GitOps policy."
-        elif executable == "docker":
+        elif executable_name == "docker":
             words = [token.lower() for token in args if not token.startswith("-")]
             if words[:2] in (["system", "prune"], ["volume", "prune"]):
                 return "Broad Docker prune is blocked because it can delete unrelated local data."
-        elif executable == "terraform":
+        elif executable_name == "terraform":
             action, _ = first_positional(args, {"-chdir"})
             if action in {"apply", "destroy"}:
                 return "Direct infrastructure mutation is blocked in this GitOps workflow."
-        elif executable == "rm" and broad_delete_violation(args, cwd):
+        elif executable_name == "rm" and broad_delete_violation(args, cwd):
             return "Broad recursive deletion of a workspace, repository, home directory, or filesystem root is blocked."
-        elif executable == "git":
+        elif executable_name == "git":
             action, index = git_subcommand(args)
             remaining = args[index + 1 :] if action else []
             lowered = [token.lower() for token in remaining]

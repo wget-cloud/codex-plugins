@@ -73,6 +73,16 @@ Incident route не отменяет основной поток. Сначала
 - Browser, security и contract QA могут работать параллельно после code review, если используют отдельные test data и не мешают друг другу.
 - Write-агенты не работают параллельно в одном repository или общем contract boundary.
 
+## Bounded supervision
+
+Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. На каждом checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
+
+Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Временной budget — граница supervision, а не причина объявить результат готовым или blocked. Lifecycle hooks не являются таймерами и не обеспечивают checkpoints.
+
+## Kubectl authorization boundary
+
+Для будущей mutating `kubectl` поддержки необходим `KUBECTL_AUTHORIZATION` с exact `task`, `environment`, `context`, `expires_at`, `action_mode` и отдельным явным human approval. Текущие runtime role/authorization данные не авторитетны, поэтому mutating `kubectl` сегодня недоступен. DevOps role, actor metadata, `WGC_AGENT_RESULT`, marker или token не дают разрешения; поддержка требует отдельного reviewed изменения. Exact clean-cluster bootstrap остаётся отдельным фиксированным исключением.
+
 ## Разрешения
 
 Bugfix authorization покрывает локальные правки и релевантные проверки в поставленном пользователем scope. Отдельно требуются: commit, push, PR, merge, изменение внешних данных, destructive cleanup, production mutation, release и deployment. Approval на deployment должен содержать environment и immutable release identity.

@@ -12,6 +12,8 @@
 
 Не менять application code, не выполнять cluster mutations, не хранить plaintext secrets, не исправлять drift вручную и не push/deploy.
 
+Для будущей mutating `kubectl` поддержки семантическая предпосылка — `KUBECTL_AUTHORIZATION` с exact `task`, `environment`, `context`, `expires_at`, `action_mode` и отдельным явным human approval. Текущие runtime role/authorization данные не авторитетны, поэтому mutating `kubectl` сегодня недоступен. DevOps role, actor metadata, `WGC_AGENT_RESULT`, marker или token полномочий не дают; поддержка требует отдельного reviewed изменения.
+
 ## Результат
 
 - Артефакт: `InfrastructureChangeReport` с source/generated diff, image identity, validation, observability и rollback.

@@ -7,7 +7,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from copy import deepcopy
 from pathlib import Path
 from unittest import mock
 
@@ -16,82 +15,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "wgc_hooks.py"
 HOOKS_JSON = SCRIPT.parent / "hooks.json"
 PLUGIN_JSON = SCRIPT.parent.parent / ".codex-plugin" / "plugin.json"
 WORKDIR_ABSENT = object()
-STAGED_SYNC_REVISION = "6c2c3e9dadde2eec3d13fde830bc6db0392b13b8"
-STAGED_SYNC_APPS = (
-    "twc-wise-finch-cluster",
-    "twc-wise-finch-core",
-    "twc-wise-finch-local-path-storage",
-    "twc-wise-finch-local-path-smoke",
-    "local-path-storage-smoke",
-)
-STAGED_SYNC_RUNNER = "/usr/local/libexec/wget-cloud-staged-sync/runner.py"
-STAGED_SYNC_KUBECONFIG = "/usr/local/etc/wget-cloud-staged-sync/twc-wise-finch.kubeconfig"
-STAGED_SYNC_ENV_SHA256 = "540f3b55630775d9b2a3aa08cbbe87928ea62c615cd4d13c11f68e2b4571aebc"
-STAGED_SYNC_PYTHON_SHA256 = "506cb2ddd061e2992c8ee7c53853340688b53d9fcec94c3aa936524cea5b40cb"
-STAGED_SYNC_SYSTEM_ANCESTORS = ("/", "/usr", "/usr/bin")
 
-
-def staged_sync_runner_command(stage, app):
-    return (
-        "/usr/bin/env -i WGC_GITOPS_STAGED_SYNC_APPROVED=1 HOME=/var/empty "
-        "PATH=/usr/bin:/bin LANG=C LC_ALL=C "
-        f"KUBECONFIG={STAGED_SYNC_KUBECONFIG} /usr/bin/python3 {STAGED_SYNC_RUNNER} "
-        f"--stage {stage} --app {app} --revision {STAGED_SYNC_REVISION}"
-    )
-
-
-def system_binary_evidence(path, digest, link_count):
-    identity = {
-        "device": 1,
-        "inode": 100 if path == "/usr/bin/env" else 101,
-        "uid": 0,
-        "gid": 0,
-        "mode": "0755",
-        "linkCount": link_count,
-    }
-    return {
-        "path": path,
-        "canonicalPath": path,
-        "kind": "file",
-        "symlink": False,
-        "owner": "root",
-        "group": "wheel",
-        "mode": "0755",
-        "linkCount": link_count,
-        "sha256": digest,
-        "pathIdentity": deepcopy(identity),
-        "descriptorIdentity": deepcopy(identity),
-        "postDescriptorIdentity": deepcopy(identity),
-        "descriptorSha256": digest,
-        "postDescriptorSha256": digest,
-        "descriptorVerified": True,
-        "effectiveWritable": False,
-    }
-
-
-def system_ancestor_evidence(path):
-    identity = {
-        "device": 1,
-        "inode": {"/": 1, "/usr": 2, "/usr/bin": 3}[path],
-        "uid": 0,
-        "gid": 0,
-        "mode": "0755",
-    }
-    return {
-        "path": path,
-        "canonicalPath": path,
-        "kind": "directory",
-        "symlink": False,
-        "owner": "root",
-        "group": "wheel",
-        "mode": "0755",
-        "acl": [],
-        "pathIdentity": deepcopy(identity),
-        "postPathIdentity": deepcopy(identity),
-        "identityVerified": True,
-        "effectiveWritable": False,
-        "effectiveDeletable": False,
-    }
 class HooksConfigTest(unittest.TestCase):
     def test_all_configured_handlers_resolve_to_runner_actions(self):
         config = json.loads(HOOKS_JSON.read_text(encoding="utf-8"))
@@ -237,21 +161,21 @@ TIMEOUT ?= 10m
             encoding="utf-8",
         )
         (argocd / "values.yaml").write_text("crds:\n  install: true\n", encoding="utf-8")
-        root = roots / "twc-wise-finch.yaml"
+        root = roots / "clean-bootstrap.yaml"
         root.write_text(
             """apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: twc-wise-finch-cluster
+  name: clean-bootstrap-cluster
   namespace: argocd
   labels:
-    wget-cloud.io/profile: twc-wise-finch
+    wget-cloud.io/profile: clean-bootstrap
 spec:
   project: default
   source:
     repoURL: ssh://git@github.com/wget-cloud/k8s
-    targetRevision: twc-wise-finch-ingress-2026-08-15.1
-    path: infrastructure/k8s/gitops/clusters/twc-wise-finch/root
+    targetRevision: clean-bootstrap-2026-08-15.1
+    path: infrastructure/k8s/gitops/clusters/clean-bootstrap/root
   destination:
     namespace: argocd
     server: https://kubernetes.default.svc
@@ -265,20 +189,20 @@ spec:
             [
                 "infrastructure/k8s/bootstrap/argocd/makefile",
                 "infrastructure/k8s/bootstrap/argocd/values.yaml",
-                "infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+                "infrastructure/k8s/bootstrap/roots/clean-bootstrap.yaml",
             ],
         )
-        self._run(["git", "tag", "twc-wise-finch-ingress-2026-08-15.1"], k8s)
+        self._run(["git", "tag", "clean-bootstrap-2026-08-15.1"], k8s)
 
-        kubeconfig = Path(self.temp.name) / "twc-wise-finch.kubeconfig"
+        kubeconfig = Path(self.temp.name) / "clean-bootstrap.kubeconfig"
         kubeconfig.write_text(
             """apiVersion: v1
 kind: Config
-current-context: twc-wise-finch
+current-context: clean-bootstrap
 contexts:
-- name: twc-wise-finch
+- name: clean-bootstrap
   context:
-    cluster: twc-wise-finch
+    cluster: clean-bootstrap
     user: bootstrap
 """,
             encoding="utf-8",
@@ -293,7 +217,7 @@ contexts:
             "makefile": argocd / "makefile",
             "values_file": argocd / "values.yaml",
             "values": "infrastructure/k8s/bootstrap/argocd/values.yaml",
-            "root_path": "infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+            "root_path": "infrastructure/k8s/bootstrap/roots/clean-bootstrap.yaml",
         }
 
     def _bootstrap_command(self, command, cwd=None):
@@ -329,7 +253,7 @@ contexts:
     def _approved_helm_bootstrap(self, fixture):
         return (
             f"WGC_GITOPS_BOOTSTRAP_APPROVED=1 helm --kubeconfig {fixture['kubeconfig']} "
-            "--kube-context twc-wise-finch upgrade --install argo-cd argo/argo-cd "
+            "--kube-context clean-bootstrap upgrade --install argo-cd argo/argo-cd "
             f"--namespace argocd --create-namespace --values {fixture['values_file']} "
             "--wait --timeout 10m --version 8.0.0"
         )
@@ -342,7 +266,7 @@ contexts:
         )
 
     def _approved_repository_bootstrap(self, fixture):
-        common = f"--kubeconfig {fixture['kubeconfig']} --context twc-wise-finch"
+        common = f"--kubeconfig {fixture['kubeconfig']} --context clean-bootstrap"
         return (
             f"WGC_GITOPS_BOOTSTRAP_APPROVED=1 kubectl {common} --namespace argocd create secret generic "
             "wget-cloud-k8s-repository --from-literal=type=git "
@@ -356,7 +280,7 @@ contexts:
     def _approved_root_bootstrap(self, fixture):
         return (
             f"WGC_GITOPS_BOOTSTRAP_APPROVED=1 kubectl --kubeconfig {fixture['kubeconfig']} "
-            f"--context twc-wise-finch --namespace argocd apply --filename={fixture['root']}"
+            f"--context clean-bootstrap --namespace argocd apply --filename={fixture['root']}"
         )
 
     def _relative_root_bootstrap(self, fixture):
@@ -695,9 +619,210 @@ contexts:
         )
         self.assertIsNone(safe_template)
 
-    def test_allows_only_exact_human_approved_argocd_helm_bootstrap(self):
+    def test_allows_only_exact_human_approved_clean_bootstrap(self):
         fixture = self._bootstrap_fixture()
         self.assertIsNone(self._bootstrap_command(self._approved_helm_bootstrap(fixture)))
+
+    def test_unknown_provider_recovery_marker_never_bypasses_mutation_policy(self):
+        marker = "WGC_PROVIDER_RECOVERY_APPROVED=1"
+        commands = {
+            "env-python": f"{marker} /usr/bin/env -i /usr/bin/python3 /tmp/provider-runner.py",
+            "kubectl": f"{marker} kubectl -n backend apply -f deployment.yaml",
+            "helm": f"{marker} helm upgrade gateway ./chart",
+            "argocd": f"{marker} argocd app sync clean-bootstrap-cluster",
+            "argocd-prefixed": f"{marker} argocd-custom app sync clean-bootstrap-cluster",
+        }
+        for case, command in commands.items():
+            with self.subTest(case=case):
+                output = self._bootstrap_command(command)
+                self.assertIsNotNone(output, f"provider marker bypassed policy: {command}")
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_blocks_provider_marker_before_direct_python_runner(self):
+        output = self._bootstrap_command(
+            "WGC_PROVIDER_RECOVERY_APPROVED=1 /usr/bin/python3 /tmp/provider-runner.py"
+        )
+        self.assertIsNotNone(output, "provider marker must not authorize a direct runner")
+        self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_blocks_quoted_provider_marker_before_direct_python_runner(self):
+        output = self._bootstrap_command(
+            'WGC_PROVIDER_RECOVERY_APPROVED="1" /usr/bin/python3 /tmp/provider-runner.py'
+        )
+        self.assertIsNotNone(output, "quoted provider marker must not authorize a direct runner")
+        self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_blocks_provider_marker_through_command_wrappers(self):
+        marker = "WGC_PROVIDER_RECOVERY_APPROVED=1"
+        commands = {
+            "env-unset": f"env -u FOO {marker} /usr/bin/python3 /tmp/provider-runner.py",
+            "command-env": f"command env {marker} /usr/bin/python3 /tmp/provider-runner.py",
+            "nohup-env": f"nohup env {marker} /usr/bin/python3 /tmp/provider-runner.py",
+            "sudo-env": f"sudo env {marker} /usr/bin/python3 /tmp/provider-runner.py",
+            "env-split-string": "/usr/bin/env -S 'WGC_PROVIDER_RECOVERY_APPROVED=1 /usr/bin/true'",
+            "env-long-split-string": (
+                "env --split-string='WGC_PROVIDER_RECOVERY_APPROVED=1 /usr/bin/true'"
+            ),
+            "env-combined-clean-split-string": (
+                "env -iS 'WGC_PROVIDER_RECOVERY_APPROVED=1 /usr/bin/true'"
+            ),
+        }
+        for case, command in commands.items():
+            with self.subTest(case=case):
+                output = self._bootstrap_command(command)
+                self.assertIsNotNone(output, f"provider marker bypassed through wrapper: {command}")
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_blocks_shell_escaped_provider_marker_value_one(self):
+        # In POSIX shell assignment context, the backslash is removed: the value is `1`.
+        output = self._bootstrap_command(
+            "WGC_PROVIDER_RECOVERY_APPROVED=\\1 /usr/bin/python3 /tmp/provider-runner.py"
+        )
+        self.assertIsNotNone(output, "escaped provider marker must not authorize a runner")
+        self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_blocks_ansi_quoted_provider_marker_value_one(self):
+        output = self._bootstrap_command(
+            "WGC_PROVIDER_RECOVERY_APPROVED=$'1' /usr/bin/true"
+        )
+        self.assertIsNotNone(output, "ANSI-quoted provider marker must not authorize a runner")
+        self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_blocks_kubectl_mutations_hidden_behind_xargs(self):
+        commands = {
+            "direct-xargs": "xargs kubectl delete pod gateway-0",
+            "piped-xargs": "printf pod/gateway-0 | xargs kubectl delete -n backend",
+        }
+        for case, command in commands.items():
+            with self.subTest(case=case):
+                output = self._bootstrap_command(command)
+                self.assertIsNotNone(output, f"xargs bypassed Kubernetes policy: {command}")
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_blocks_kubectl_mutations_hidden_behind_xargs_options(self):
+        commands = {
+            "max-args": "xargs -n 1 kubectl delete pod",
+            "replacement": "xargs -I{} kubectl delete pod {}",
+            "end-of-options": "xargs -- kubectl delete pod",
+        }
+        for case, command in commands.items():
+            with self.subTest(case=case):
+                output = self._bootstrap_command(command)
+                self.assertIsNotNone(output, f"xargs option bypassed Kubernetes policy: {command}")
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_blocks_kubectl_mutations_hidden_behind_bsd_xargs_options(self):
+        commands = {
+            "bsd-replacement": "xargs -J{} kubectl delete pod {}",
+            "bsd-replacements": "xargs -R 1 kubectl delete pod",
+            "bsd-replacement-size": "xargs -S 1024 kubectl delete pod",
+            "combined-short-options": "xargs -0t kubectl delete pod",
+            "null-delimited-max-args": "xargs -0n1 kubectl delete pod",
+            "trace-max-args": "xargs -tn1 kubectl delete pod",
+            "null-trace-max-args": "xargs -0tn1 kubectl delete pod",
+        }
+        for case, command in commands.items():
+            with self.subTest(case=case):
+                output = self._bootstrap_command(command)
+                self.assertIsNotNone(output, f"BSD xargs option bypassed Kubernetes policy: {command}")
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_allows_read_only_kubectl_hidden_behind_xargs_options(self):
+        commands = (
+            "xargs -n 1 kubectl get pod",
+            "xargs -J{} kubectl get pod {}",
+            "xargs -R 1 kubectl get pod",
+            "xargs -S 1024 kubectl get pod",
+            "xargs -0t kubectl get pod",
+            "xargs -0n1 kubectl get pod",
+            "xargs -tn1 kubectl get pod",
+            "xargs -0tn1 kubectl get pod",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                output = self._bootstrap_command(command)
+                self.assertIsNone(output, "read-only xargs kubectl command must remain allowed")
+
+    def test_allows_prose_marker_that_is_not_shell_assignment(self):
+        output = self._bootstrap_command("echo WGC_PROVIDER_RECOVERY_APPROVED=1")
+        self.assertIsNone(output, "marker text passed to echo is not an authorization assignment")
+
+    def test_blocks_markerless_retired_recovery_runner_paths(self):
+        commands = {
+            "via-clean-env": (
+                "/usr/bin/env -i HOME=/var/empty PATH=/usr/bin:/bin /usr/bin/python3 "
+                "/usr/local/libexec/wget-cloud-retired-recovery/runner.py --stage 1"
+            ),
+            "direct": (
+                "/usr/bin/python3 /usr/local/libexec/wget-cloud-retired-recovery/runner.py"
+            ),
+            "direct-executable": (
+                "/usr/local/libexec/wget-cloud-retired-recovery/runner.py --stage 1"
+            ),
+            "direct-executable-via-clean-env": (
+                "/usr/bin/env -i HOME=/var/empty "
+                "/usr/local/libexec/wget-cloud-retired-recovery/runner.py --stage 1"
+            ),
+            "python-bytecode-option": (
+                "/usr/bin/python3 -B /usr/local/libexec/wget-cloud-retired-recovery/runner.py"
+            ),
+            "python-unbuffered-option": (
+                "/usr/bin/python3 -u /usr/local/libexec/wget-cloud-retired-recovery/runner.py"
+            ),
+            "python-isolated-option": (
+                "/usr/bin/python3 -I /usr/local/libexec/wget-cloud-retired-recovery/runner.py"
+            ),
+            "python-end-of-options": (
+                "/usr/bin/python3 -- /usr/local/libexec/wget-cloud-retired-recovery/runner.py"
+            ),
+            "python-hash-pyc-option": (
+                "/usr/bin/python3 --check-hash-based-pycs=always "
+                "/usr/local/libexec/wget-cloud-retired-recovery/runner.py"
+            ),
+            "lexical-path": (
+                "/usr/bin/python3 /usr/local/libexec/wget-cloud-retired-recovery/sub/../runner.py"
+            ),
+            "env-split-string": (
+                "/usr/bin/env -S 'python3 "
+                "/usr/local/libexec/wget-cloud-retired-recovery/runner.py'"
+            ),
+        }
+        for case, command in commands.items():
+            with self.subTest(case=case):
+                output = self._bootstrap_command(command)
+                self.assertIsNotNone(output, f"retired recovery runner bypassed policy: {command}")
+                self.assertEqual(output["hookSpecificOutput"]["permissionDecision"], "deny")
+
+    def test_allows_unrelated_python_runner(self):
+        for command in (
+            "/usr/bin/python3 /tmp/safe-tool.py",
+            "/tmp/safe-tool.py",
+            "/usr/bin/env -S '/tmp/safe-tool.py'",
+            "/usr/bin/env -iS '/tmp/safe-tool.py'",
+        ):
+            with self.subTest(command=command):
+                output = self._bootstrap_command(command)
+                self.assertIsNone(output, "unrelated runner must not be blocked by retired-runner policy")
+
+    def test_claimed_devops_actor_cannot_bypass_kubernetes_policy(self):
+        common = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "agent_id": "claimed-devops",
+            "agent_type": "devops",
+        }
+        blocked = self.call(
+            "pre-tool",
+            {**common, "tool_input": {"command": "kubectl -n backend apply -f deployment.yaml"}},
+            self.projects["k8s"],
+        )
+        self.assertEqual(blocked["hookSpecificOutput"]["permissionDecision"], "deny")
+        allowed = self.call(
+            "pre-tool",
+            {**common, "tool_input": {"command": "kubectl -n backend get pods -o wide"}},
+            self.projects["k8s"],
+        )
+        self.assertIsNone(allowed)
 
     def test_allows_exact_repository_credential_and_immutable_root_bootstrap(self):
         fixture = self._bootstrap_fixture()
@@ -798,7 +923,7 @@ contexts:
                 self.root,
             ),
             "extra-mutation": self._bootstrap_command_with_workdir(
-                absolute_root + " ; kubectl --context twc-wise-finch delete namespace backend",
+                absolute_root + " ; kubectl --context clean-bootstrap delete namespace backend",
                 self.root,
             ),
         }
@@ -866,7 +991,7 @@ contexts:
             repository.replace("wget-cloud-k8s-repository", "other-repository", 1),
             repository.replace(" | ", " ; "),
             root.replace(str(fixture["root"]), "infrastructure/k8s/bootstrap/roots/dev.yaml", 1),
-            root + " ; kubectl --context twc-wise-finch delete namespace backend",
+            root + " ; kubectl --context clean-bootstrap delete namespace backend",
         )
         for command in denied:
             with self.subTest(command=command):
@@ -908,21 +1033,21 @@ TIMEOUT ?= 10m
             encoding="utf-8",
         )
         (argocd / "values.yaml").write_text("crds:\n  install: true\n", encoding="utf-8")
-        shadow_tag = "twc-wise-finch-shadow-2026-08-20.1"
-        (roots / "twc-wise-finch.yaml").write_text(
+        shadow_tag = "clean-bootstrap-shadow-2026-08-20.1"
+        (roots / "clean-bootstrap.yaml").write_text(
             f"""apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: twc-wise-finch-cluster
+  name: clean-bootstrap-cluster
   namespace: argocd
   labels:
-    wget-cloud.io/profile: twc-wise-finch
+    wget-cloud.io/profile: clean-bootstrap
 spec:
   project: default
   source:
     repoURL: ssh://git@github.com/wget-cloud/k8s
     targetRevision: {shadow_tag}
-    path: infrastructure/k8s/gitops/clusters/twc-wise-finch/root
+    path: infrastructure/k8s/gitops/clusters/clean-bootstrap/root
   destination:
     namespace: argocd
     server: https://kubernetes.default.svc
@@ -936,7 +1061,7 @@ spec:
             [
                 "infrastructure/k8s/bootstrap/argocd/makefile",
                 "infrastructure/k8s/bootstrap/argocd/values.yaml",
-                "infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+                "infrastructure/k8s/bootstrap/roots/clean-bootstrap.yaml",
             ],
         )
         self._run(["git", "tag", shadow_tag], shadow)
@@ -976,7 +1101,7 @@ spec:
         duplicate_roots.mkdir(parents=True)
         duplicate_makefile = duplicate_argocd / "makefile"
         duplicate_values = duplicate_argocd / "values.yaml"
-        duplicate_root = duplicate_roots / "twc-wise-finch.yaml"
+        duplicate_root = duplicate_roots / "clean-bootstrap.yaml"
         shutil.copyfile(fixture["makefile"], duplicate_makefile)
         shutil.copyfile(fixture["values_file"], duplicate_values)
         shutil.copyfile(fixture["root"], duplicate_root)
@@ -984,13 +1109,13 @@ spec:
         coordinator_owned = (
             "k8s/infrastructure/k8s/bootstrap/argocd/makefile",
             "k8s/infrastructure/k8s/bootstrap/argocd/values.yaml",
-            "k8s/infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+            "k8s/infrastructure/k8s/bootstrap/roots/clean-bootstrap.yaml",
             "infrastructure/k8s/bootstrap/argocd/makefile",
             "infrastructure/k8s/bootstrap/argocd/values.yaml",
-            "infrastructure/k8s/bootstrap/roots/twc-wise-finch.yaml",
+            "infrastructure/k8s/bootstrap/roots/clean-bootstrap.yaml",
         )
         self._git_commit(self.root, coordinator_owned)
-        self._run(["git", "tag", "twc-wise-finch-ingress-2026-08-15.1"], self.root)
+        self._run(["git", "tag", "clean-bootstrap-2026-08-15.1"], self.root)
 
         for command in (
             self._approved_helm_bootstrap(fixture),
@@ -1036,9 +1161,9 @@ spec:
         root = self._approved_root_bootstrap(fixture)
         tagged_root = fixture["root"].read_text(encoding="utf-8")
 
-        document_tag = "twc-wise-finch-ingress-2026-08-17.1"
+        document_tag = "clean-bootstrap-2026-08-17.1"
         second_document = tagged_root.replace(
-            "targetRevision: twc-wise-finch-ingress-2026-08-15.1",
+            "targetRevision: clean-bootstrap-2026-08-15.1",
             f"targetRevision: {document_tag}",
         ) + """--- # second document
 {apiVersion: v1, kind: ConfigMap, metadata: {name: smuggled, namespace: argocd}}
@@ -1047,22 +1172,22 @@ spec:
         with self.subTest(input="commented separator and flow ConfigMap"):
             self._assert_bootstrap_denied(root)
 
-        annotations_tag = "twc-wise-finch-ingress-2026-08-18.1"
+        annotations_tag = "clean-bootstrap-2026-08-18.1"
         annotation_smuggling = f"""apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: twc-wise-finch-cluster
+  name: clean-bootstrap-cluster
   namespace: argocd
   annotations:
     repoURL: ssh://git@github.com/wget-cloud/k8s
     targetRevision: {annotations_tag}
-    path: infrastructure/k8s/gitops/clusters/twc-wise-finch/root
+    path: infrastructure/k8s/gitops/clusters/clean-bootstrap/root
 spec:
   project: default
   source:
     repoURL: ssh://git@github.com/attacker/k8s
     targetRevision: main
-    path: infrastructure/k8s/gitops/clusters/twc-wise-finch/attacker
+    path: infrastructure/k8s/gitops/clusters/clean-bootstrap/attacker
   destination:
     namespace: argocd
     server: https://kubernetes.default.svc
@@ -1074,9 +1199,9 @@ spec:
     def test_denies_tagged_root_with_automated_sync_policy(self):
         fixture = self._bootstrap_fixture()
         root = self._approved_root_bootstrap(fixture)
-        automated_tag = "twc-wise-finch-ingress-2026-08-19.1"
+        automated_tag = "clean-bootstrap-2026-08-19.1"
         automated_root = fixture["root"].read_text(encoding="utf-8").replace(
-            "targetRevision: twc-wise-finch-ingress-2026-08-15.1",
+            "targetRevision: clean-bootstrap-2026-08-15.1",
             f"targetRevision: {automated_tag}",
         ).replace(
             "  syncPolicy:\n    syncOptions: [CreateNamespace=true]\n",
@@ -1122,7 +1247,7 @@ metadata:
             helm.replace("argo/argo-cd", "bitnami/argo-cd", 1),
             helm.replace("--version 8.0.0", "--version 8.1.0", 1),
             helm.replace("--namespace argocd", "--namespace kube-system", 1),
-            helm.replace("--kube-context twc-wise-finch", "--kube-context dev", 1),
+            helm.replace("--kube-context clean-bootstrap", "--kube-context dev", 1),
             helm.replace(f"--kubeconfig {fixture['kubeconfig']} ", "", 1),
             helm.replace(
                 str(fixture["kubeconfig"]),
@@ -1143,7 +1268,7 @@ metadata:
                 1,
             ),
             repository.replace("--namespace argocd", "--namespace default", 1),
-            repository.replace("--context twc-wise-finch", "--context dev", 1),
+            repository.replace("--context clean-bootstrap", "--context dev", 1),
             repository.replace(
                 f"--from-file=sshPrivateKey={fixture['key']}",
                 "--from-literal=sshPrivateKey=inline-key-material",
@@ -1159,10 +1284,10 @@ metadata:
             repository.replace(" kubectl ", " ./kubectl "),
             root.replace(str(fixture["root"]), "infrastructure/k8s/bootstrap/roots/dev.yaml", 1),
             root + " > /tmp/wgc-bootstrap-output.yaml",
-            root + "\nkubectl --context twc-wise-finch delete namespace backend",
-            root + " ; kubectl --context twc-wise-finch delete namespace backend",
-            "WGC_GITOPS_BOOTSTRAP_APPROVED=1 argocd app sync twc-wise-finch-cluster",
-            "WGC_GITOPS_BOOTSTRAP_APPROVED=1 kubectl --context twc-wise-finch delete pod gateway-0",
+            root + "\nkubectl --context clean-bootstrap delete namespace backend",
+            root + " ; kubectl --context clean-bootstrap delete namespace backend",
+            "WGC_GITOPS_BOOTSTRAP_APPROVED=1 argocd app sync clean-bootstrap-cluster",
+            "WGC_GITOPS_BOOTSTRAP_APPROVED=1 kubectl --context clean-bootstrap delete pod gateway-0",
         )
         for command in denied:
             with self.subTest(command=command):
@@ -1171,15 +1296,15 @@ metadata:
         self._assert_bootstrap_denied(helm, self.projects["backend"])
         fixture["root"].write_text(
             fixture["root"].read_text(encoding="utf-8").replace(
-                "targetRevision: twc-wise-finch-ingress-2026-08-15.1",
-                "targetRevision: twc-wise-finch-ingress-2026-08-16.1",
+                "targetRevision: clean-bootstrap-2026-08-15.1",
+                "targetRevision: clean-bootstrap-2026-08-16.1",
             ),
             encoding="utf-8",
         )
         self._assert_bootstrap_denied(root)
         fixture["root"].write_text(
             tagged_root.replace(
-                "targetRevision: twc-wise-finch-ingress-2026-08-15.1",
+                "targetRevision: clean-bootstrap-2026-08-15.1",
                 "targetRevision: main",
             ),
             encoding="utf-8",
@@ -1806,407 +1931,6 @@ metadata:
         self.assertFalse(state["active"])
         self.assertIn("ended_at", state)
 
-
-class StagedSyncRunnerHookContractTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        spec = importlib.util.spec_from_file_location("wgc_hooks_runner_contract", SCRIPT)
-        cls.module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(cls.module)
-
-    def test_parser_accepts_only_exact_root_owned_stage_commands(self):
-        parser = getattr(self.module, "parse_staged_sync_runner_command", None)
-        self.assertIsNotNone(parser, "root-owned staged-sync parser contract is missing")
-        for stage, app in enumerate(STAGED_SYNC_APPS, start=1):
-            with self.subTest(stage=stage, app=app):
-                self.assertEqual(
-                    parser(staged_sync_runner_command(stage, app)),
-                    (stage, app, STAGED_SYNC_REVISION),
-                )
-
-    def test_parser_rejects_raw_argocd_ingress_and_command_near_misses(self):
-        parser = getattr(self.module, "parse_staged_sync_runner_command", None)
-        self.assertIsNotNone(parser, "root-owned staged-sync parser contract is missing")
-        exact = staged_sync_runner_command(1, STAGED_SYNC_APPS[0])
-        denied = {
-            "raw-argocd": (
-                "WGC_GITOPS_STAGED_SYNC_APPROVED=1 KUBECONFIG=/tmp/kubeconfig "
-                "/tmp/argocd --core app sync twc-wise-finch-cluster"
-            ),
-            "ingress": staged_sync_runner_command(6, "twc-wise-finch-ingress"),
-            "stage-app-mismatch": staged_sync_runner_command(2, STAGED_SYNC_APPS[0]),
-            "stage-zero": staged_sync_runner_command(0, STAGED_SYNC_APPS[0]),
-            "missing-env-i": exact.replace("/usr/bin/env -i ", "", 1),
-            "extra-environment": exact.replace("HOME=/var/empty", "HOME=/var/empty FOO=bar", 1),
-            "reordered-environment": exact.replace(
-                "PATH=/usr/bin:/bin LANG=C", "LANG=C PATH=/usr/bin:/bin", 1
-            ),
-            "wrong-home": exact.replace("HOME=/var/empty", "HOME=/tmp"),
-            "wrong-path": exact.replace("PATH=/usr/bin:/bin", "PATH=/usr/local/bin:/usr/bin:/bin"),
-            "wrong-kubeconfig": exact.replace(STAGED_SYNC_KUBECONFIG, "/tmp/kubeconfig"),
-            "wrong-python": exact.replace("/usr/bin/python3", "/usr/local/bin/python3"),
-            "wrong-runner": exact.replace(STAGED_SYNC_RUNNER, "/tmp/runner.py"),
-            "wrong-revision": exact.replace(STAGED_SYNC_REVISION, "1" * 40),
-            "extra-flag": exact + " --timeout 601",
-            "semicolon": exact + "; id",
-            "and": exact + " && id",
-            "or": exact + " || id",
-            "pipe": exact + " | id",
-            "newline": exact + "\nid",
-            "subshell": exact + " $(id)",
-        }
-        for case, command in denied.items():
-            with self.subTest(case=case):
-                self.assertIsNone(parser(command))
-
-    def test_system_binary_verifier_requires_fd_identity_hash_and_effective_nonwrite(self):
-        verifier = getattr(self.module, "pinned_system_binary", None)
-        self.assertIsNotNone(
-            verifier,
-            "PreToolUse must expose a fail-closed descriptor verifier for env and python3",
-        )
-        contracts = (
-            ("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 1),
-            ("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 78),
-        )
-        for path, digest, link_count in contracts:
-            evidence = system_binary_evidence(path, digest, link_count)
-            with self.subTest(binary=path, case="valid"):
-                self.assertTrue(
-                    verifier(
-                        path,
-                        digest,
-                        0o755,
-                        link_count,
-                        inspect_binary=lambda requested, evidence=evidence: deepcopy(evidence),
-                    )
-                )
-
-            mutations = {
-                "canonical-alias": ("canonicalPath", "/tmp/replaced"),
-                "symlink": ("symlink", True),
-                "owner": ("owner", "estev"),
-                "group": ("group", "staff"),
-                "mode": ("mode", "0775"),
-                "link-count": ("linkCount", link_count + 1),
-                "effective-write": ("effectiveWritable", True),
-                "descriptor-unverified": ("descriptorVerified", False),
-                "path-fd-identity": (
-                    "descriptorIdentity",
-                    {**evidence["descriptorIdentity"], "inode": 999999},
-                ),
-                "descriptor-owner": (
-                    "descriptorIdentity",
-                    {**evidence["descriptorIdentity"], "uid": 501},
-                ),
-                "descriptor-group": (
-                    "descriptorIdentity",
-                    {**evidence["descriptorIdentity"], "gid": 20},
-                ),
-                "descriptor-mode": (
-                    "descriptorIdentity",
-                    {**evidence["descriptorIdentity"], "mode": "0775"},
-                ),
-                "descriptor-link-count": (
-                    "descriptorIdentity",
-                    {**evidence["descriptorIdentity"], "linkCount": link_count + 1},
-                ),
-                "post-fstat-identity": (
-                    "postDescriptorIdentity",
-                    {**evidence["descriptorIdentity"], "inode": 999998},
-                ),
-                "descriptor-hash": ("descriptorSha256", "0" * 64),
-                "post-descriptor-hash": ("postDescriptorSha256", "0" * 64),
-                "path-hash": ("sha256", "0" * 64),
-            }
-            for case, (field, value) in mutations.items():
-                broken = deepcopy(evidence)
-                broken[field] = value
-                with self.subTest(binary=path, case=case):
-                    self.assertFalse(
-                        verifier(
-                            path,
-                            digest,
-                            0o755,
-                            link_count,
-                            inspect_binary=lambda requested, broken=broken: deepcopy(broken),
-                        )
-                    )
-
-    def test_system_ancestor_chain_pins_ls_first_and_accepts_only_the_exact_chain(self):
-        verifier = getattr(self.module, "pinned_system_ancestor_chain", None)
-        self.assertIsNotNone(
-            verifier,
-            "system ancestor attestation is required before staged-sync can be allowed",
-        )
-        for binary in ("/usr/bin/env", "/usr/bin/python3"):
-            events = []
-            evidence = {
-                path: system_ancestor_evidence(path) for path in STAGED_SYNC_SYSTEM_ANCESTORS
-            }
-
-            def inspect(path):
-                events.append(f"inspect:{path}")
-                return deepcopy(evidence[path])
-
-            with self.subTest(binary=binary):
-                self.assertTrue(
-                    verifier(
-                        binary,
-                        inspect_ancestor=inspect,
-                        attest_ls=lambda: events.append("ls") or True,
-                    )
-                )
-                self.assertEqual(
-                    events,
-                    ["ls", "inspect:/", "inspect:/usr", "inspect:/usr/bin"],
-                )
-
-        self.assertFalse(
-            verifier(
-                "/usr/bin/ruby",
-                inspect_ancestor=lambda path: system_ancestor_evidence(path),
-                attest_ls=lambda: True,
-            )
-        )
-
-    def test_system_ancestor_chain_rejects_unsafe_acl_identity_and_toctou_evidence(self):
-        verifier = getattr(self.module, "pinned_system_ancestor_chain", None)
-        self.assertIsNotNone(verifier, "system ancestor attestation contract is missing")
-        base = {path: system_ancestor_evidence(path) for path in STAGED_SYNC_SYSTEM_ANCESTORS}
-        mutations = {}
-        for case, field, value in (
-            ("symlink", "symlink", True),
-            ("canonical-alias", "canonicalPath", "/tmp/usr"),
-            ("wrong-owner", "owner", "estev"),
-            ("wrong-group", "group", "staff"),
-            ("group-write-mode", "mode", "0775"),
-            ("world-write-mode", "mode", "0777"),
-            ("effective-write", "effectiveWritable", True),
-            ("effective-delete", "effectiveDeletable", True),
-            ("identity-unverified", "identityVerified", False),
-            (
-                "post-lstat-toctou",
-                "postPathIdentity",
-                {**base["/usr"]["pathIdentity"], "inode": 999999},
-            ),
-            (
-                "unexpected-read-acl",
-                "acl",
-                [
-                    {
-                        "principal": "user:estev",
-                        "type": "allow",
-                        "permissions": ["read"],
-                    }
-                ],
-            ),
-            (
-                "write-acl",
-                "acl",
-                [
-                    {
-                        "principal": "user:estev",
-                        "type": "allow",
-                        "permissions": ["write", "writeattr", "writeextattr"],
-                    }
-                ],
-            ),
-            (
-                "delete-acl",
-                "acl",
-                [
-                    {
-                        "principal": "user:estev",
-                        "type": "allow",
-                        "permissions": ["delete", "delete_child"],
-                    }
-                ],
-            ),
-        ):
-            broken = deepcopy(base)
-            broken["/usr"][field] = value
-            mutations[case] = broken
-
-        wrong_uid = deepcopy(base)
-        wrong_uid["/usr"]["pathIdentity"]["uid"] = 501
-        wrong_uid["/usr"]["postPathIdentity"]["uid"] = 501
-        mutations["wrong-uid"] = wrong_uid
-        wrong_gid = deepcopy(base)
-        wrong_gid["/usr"]["pathIdentity"]["gid"] = 20
-        wrong_gid["/usr"]["postPathIdentity"]["gid"] = 20
-        mutations["wrong-gid"] = wrong_gid
-        identity_mode = deepcopy(base)
-        identity_mode["/usr"]["pathIdentity"]["mode"] = "0775"
-        identity_mode["/usr"]["postPathIdentity"]["mode"] = "0775"
-        mutations["identity-mode"] = identity_mode
-        missing = deepcopy(base)
-        missing.pop("/usr")
-        mutations["missing-evidence"] = missing
-
-        for case, evidence in mutations.items():
-            with self.subTest(case=case):
-                self.assertFalse(
-                    verifier(
-                        "/usr/bin/env",
-                        inspect_ancestor=lambda path, evidence=evidence: deepcopy(
-                            evidence.get(path, {})
-                        ),
-                        attest_ls=lambda: True,
-                    )
-                )
-
-        inspected = []
-        self.assertFalse(
-            verifier(
-                "/usr/bin/env",
-                inspect_ancestor=lambda path: inspected.append(path) or system_ancestor_evidence(path),
-                attest_ls=lambda: False,
-            )
-        )
-        self.assertEqual(inspected, [], "ancestor evidence was read before /bin/ls attestation")
-
-    def test_system_ancestor_chain_accepts_the_current_safe_host(self):
-        verifier = getattr(self.module, "pinned_system_ancestor_chain", None)
-        self.assertIsNotNone(verifier, "system ancestor attestation contract is missing")
-        self.assertTrue(verifier("/usr/bin/env"))
-        self.assertTrue(verifier("/usr/bin/python3"))
-
-    def test_pretooluse_pins_ls_then_both_system_ancestor_chains_before_allow(self):
-        command = staged_sync_runner_command(1, STAGED_SYNC_APPS[0])
-        events = []
-        with mock.patch.object(
-            self.module,
-            "pinned_ls_before_acl",
-            side_effect=lambda: events.append("ls") or True,
-        ), mock.patch.object(
-            self.module,
-            "pinned_system_ancestor_chain",
-            side_effect=lambda path: events.append(f"ancestor:{path}") or True,
-            create=True,
-        ), mock.patch.object(
-            self.module,
-            "pinned_system_binary",
-            side_effect=lambda path, *args: events.append(f"binary:{path}") or True,
-        ), mock.patch.object(self.module, "pinned_root_file", return_value=True):
-            self.assertTrue(self.module.approved_gitops_staged_sync(command))
-        self.assertEqual(
-            events[:5],
-            [
-                "ls",
-                "ancestor:/usr/bin/env",
-                "ancestor:/usr/bin/python3",
-                "binary:/usr/bin/env",
-                "binary:/usr/bin/python3",
-            ],
-        )
-
-        for failed_gate in ("ls", "ancestor:/usr/bin/env", "ancestor:/usr/bin/python3"):
-            events = []
-
-            def gate(name):
-                events.append(name)
-                return name != failed_gate
-
-            with self.subTest(failed_gate=failed_gate), mock.patch.object(
-                self.module,
-                "pinned_ls_before_acl",
-                side_effect=lambda: gate("ls"),
-            ), mock.patch.object(
-                self.module,
-                "pinned_system_ancestor_chain",
-                side_effect=lambda path: gate(f"ancestor:{path}"),
-                create=True,
-            ), mock.patch.object(
-                self.module,
-                "pinned_system_binary",
-                return_value=True,
-            ), mock.patch.object(self.module, "pinned_root_file", return_value=True):
-                self.assertIsNotNone(
-                    self.module.command_violation(
-                        command,
-                        Path("/tmp"),
-                        Path("/tmp"),
-                        Path("/tmp"),
-                    )
-                )
-
-    def test_pretooluse_allows_runner_only_after_both_system_binaries_are_attested(self):
-        command = staged_sync_runner_command(1, STAGED_SYNC_APPS[0])
-        expected_calls = [
-            mock.call("/usr/bin/env", STAGED_SYNC_ENV_SHA256, 0o755, 1),
-            mock.call("/usr/bin/python3", STAGED_SYNC_PYTHON_SHA256, 0o755, 78),
-        ]
-        with mock.patch.object(self.module, "pinned_root_file", return_value=True), mock.patch.object(
-            self.module,
-            "pinned_ls_before_acl",
-            return_value=True,
-        ), mock.patch.object(
-            self.module,
-            "pinned_system_ancestor_chain",
-            return_value=True,
-            create=True,
-        ), mock.patch.object(
-            self.module,
-            "pinned_system_binary",
-            return_value=True,
-            create=True,
-        ) as verifier:
-            self.assertTrue(self.module.approved_gitops_staged_sync(command))
-            self.assertEqual(verifier.call_count, 2)
-            verifier.assert_has_calls(expected_calls, any_order=True)
-
-        for failed_binary in ("/usr/bin/env", "/usr/bin/python3"):
-            with self.subTest(failed_binary=failed_binary), mock.patch.object(
-                self.module,
-                "pinned_root_file",
-                return_value=True,
-            ), mock.patch.object(
-                self.module,
-                "pinned_ls_before_acl",
-                return_value=True,
-            ), mock.patch.object(
-                self.module,
-                "pinned_system_ancestor_chain",
-                return_value=True,
-                create=True,
-            ), mock.patch.object(
-                self.module,
-                "pinned_system_binary",
-                side_effect=lambda path, *args: path != failed_binary,
-                create=True,
-            ):
-                violation = self.module.command_violation(
-                    command,
-                    Path("/tmp"),
-                    Path("/tmp"),
-                    Path("/tmp"),
-                )
-                self.assertIsNotNone(
-                    violation,
-                    f"PreToolUse allowed the runner with unattested {failed_binary}",
-                )
-
-    def test_command_policy_delegates_exact_runner_before_argocd_blanket_deny(self):
-        command = staged_sync_runner_command(1, STAGED_SYNC_APPS[0])
-        with mock.patch.object(
-            self.module,
-            "approved_gitops_staged_sync",
-            return_value=True,
-        ) as policy:
-            self.assertIsNone(
-                self.module.command_violation(command, Path("/tmp"), Path("/tmp"), Path("/tmp"))
-            )
-            policy.assert_called_once()
-
-    def test_raw_argocd_mutation_remains_denied(self):
-        violation = self.module.command_violation(
-            "argocd app sync twc-wise-finch-cluster",
-            Path("/tmp"),
-            Path("/tmp"),
-            Path("/tmp"),
-        )
-        self.assertIsNotNone(violation)
 
 
 if __name__ == "__main__":

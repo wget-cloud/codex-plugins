@@ -22,12 +22,16 @@ SEMVER = re.compile(
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 REQUIRED_ROLE_SECTIONS = ("## Назначение", "## Полномочия", "## Запреты", "## Результат")
-ASSIGNMENT_ROUTING_FIELDS = (
+REQUIRED_ASSIGNMENT_FIELDS = (
     "MODEL_ROUTE",
     "MODEL",
     "REASONING_EFFORT",
     "ROUTING_BASIS",
     "FORK_TURNS",
+    "TIME_BUDGET_MIN",
+    "CHECKPOINT_INTERVAL_MIN",
+    "MAX_EXTENSIONS",
+    "PROGRESS_CRITERIA",
 )
 MODEL_LANES = {"fast", "balanced", "frontier", "main-only"}
 
@@ -124,11 +128,12 @@ def assignment_envelope_text(index_text: str) -> str:
 
 
 def assignment_routing_fields(index_text: str) -> set[str]:
-    """Return routing fields declared only in the production assignment envelope."""
+    """Return required fields declared only in the production assignment envelope."""
+    alternatives = "|".join(map(re.escape, REQUIRED_ASSIGNMENT_FIELDS))
     return {
         match.group(1)
         for match in re.finditer(
-            r"^\s*(MODEL_ROUTE|MODEL|REASONING_EFFORT|ROUTING_BASIS|FORK_TURNS)\s*:",
+            rf"^\s*({alternatives})\s*:",
             assignment_envelope_text(index_text),
             re.MULTILINE,
         )
@@ -229,7 +234,7 @@ def validate_agent_registry(skill: Path, errors: List[str]) -> int:
     if not (role_dir / "orchestrator.md").is_file():
         errors.append(f"{role_dir.relative_to(ROOT)}: orchestrator.md is required")
     declared_fields = assignment_routing_fields(index_text)
-    for field in ASSIGNMENT_ROUTING_FIELDS:
+    for field in REQUIRED_ASSIGNMENT_FIELDS:
         if field not in declared_fields:
             errors.append(f"{index.relative_to(ROOT)}: missing assignment routing field {field}")
     parsed_routes, routing_errors = model_routing_entries(index_text)

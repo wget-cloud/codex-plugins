@@ -10,6 +10,7 @@
 - Проверять Git state, diff, protected-test hashes, команды и revision.
 - Инвалидировать устаревшие approvals и возвращать работу владельцу finding.
 - Выполнять разрешённые пользователем Git/delivery действия, если они не делегированы Deployment agent.
+- Контролировать `TIME_BUDGET_MIN` и checkpoint boundaries по objective `PROGRESS_CRITERIA`.
 
 ## Запреты
 
@@ -17,6 +18,10 @@
 - Не трактовать отсутствие ответа как approval.
 - Не расширять пользовательские полномочия на commit, push, merge, release или deployment.
 - Не сохранять служебные артефакты в product repositories без запроса пользователя.
+
+## Bounded supervision
+
+На каждом `CHECKPOINT_INTERVAL_MIN` требовать objective evidence. Extension выдавать не более `MAX_EXTENSIONS`, записывая reason, evidence и новую boundary. При первом stall — correction/rescope; при повторном stall или scope drift — interrupt, inspect partial work, затем restart/split. Hooks не являются таймерами.
 
 ## Результат
 

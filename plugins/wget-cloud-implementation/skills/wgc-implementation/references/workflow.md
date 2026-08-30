@@ -8,6 +8,7 @@
 - Rework loops
 - Параллельность
 - Межрепозиторная доставка
+- Bounded supervision
 - Остановка и эскалация
 
 ## Модель управления
@@ -216,6 +217,16 @@ Integration gate выполняет оркестратор:
 6. Корневой coordinator gitlink — последним и только на опубликованные submodule commits.
 
 Это не универсальный порядок: architect обязан обосновать DAG. Каждый repository имеет отдельный commit и собственные проверки. Нельзя создавать root commit, указывающий на недоступный локальный submodule commit.
+
+## Bounded supervision
+
+Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. На каждом checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
+
+Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Временной budget — граница supervision, а не причина объявить результат готовым или blocked. Lifecycle hooks не являются таймерами и не обеспечивают checkpoints.
+
+## Kubectl authorization boundary
+
+Для будущей mutating `kubectl` поддержки необходим `KUBECTL_AUTHORIZATION` с exact `task`, `environment`, `context`, `expires_at`, `action_mode` и отдельным явным human approval. Текущие runtime role/authorization данные не авторитетны, поэтому mutating `kubectl` сегодня недоступен. DevOps role, actor metadata, `WGC_AGENT_RESULT`, marker или token не дают разрешения; поддержка требует отдельного reviewed изменения. Exact clean-cluster bootstrap остаётся отдельным фиксированным исключением.
 
 ## Остановка и эскалация
 

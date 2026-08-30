@@ -76,7 +76,7 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 
 ## Управлять агентами
 
-Перед запуском субагента оркестратор обязан выбрать его model route в локальном [agent registry](references/agents/index.md), сверить его с возможностями активного spawn tool и включить все пять routing-полей в assignment envelope.
+Перед запуском субагента оркестратор обязан выбрать его model route в локальном [agent registry](references/agents/index.md), сверить его с возможностями активного spawn tool и включить в assignment envelope все routing- и supervision-поля.
 
 Перед запуском каждого агента передай ему:
 
@@ -87,6 +87,8 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 - требуемый verdict и формат результата из [artifacts-and-gates.md](references/artifacts-and-gates.md).
 
 Не объединяй роли, которым нужна независимость: investigator не утверждает собственную RCA, implementor не является test-maker/reviewer/guardian, DevOps не является infrastructure reviewer, deployment agent не является автором rollout manifests. Параллельные write-агенты допустимы только в непересекающихся репозиториях и после утверждённого DAG.
+
+Supervision всегда bounded: на каждом checkpoint требуй objective evidence относительно `PROGRESS_CRITERIA`. Extension допускается только до `MAX_EXTENSIONS`; запиши reason, evidence и новую boundary. При первом stall выполни correction/rescope. При повторном stall либо scope drift выполни interrupt, inspect partial work, затем restart/split. Hooks не являются таймерами.
 
 Оркестратор обязан сам:
 

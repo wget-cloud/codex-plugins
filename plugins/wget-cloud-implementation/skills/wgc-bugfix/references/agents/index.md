@@ -21,9 +21,15 @@ MODEL: <selected advertised model или inherit>
 REASONING_EFFORT: <selected effort или inherit>
 ROUTING_BASIS: <role lane, risk signals и fallback>
 FORK_TURNS: <none|smallest justified positive N|all>
+TIME_BUDGET_MIN: <positive supervision budget in minutes>
+CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
+MAX_EXTENSIONS: <non-negative extension limit>
+PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 ```
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Не сохраняй raw prompt/logs/secrets/PII. Не меняй внешние данные, Git publication или deployment без приложенного разрешения. Не объявляй весь bugfix завершённым. При нехватке evidence остановись с допустимым blocker verdict».
+
+Поля времени задают bounded supervision, а не автоматическую остановку. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split. Hooks не являются таймерами и не подтверждают соблюдение этих границ.
 
 ## Model routing policy
 

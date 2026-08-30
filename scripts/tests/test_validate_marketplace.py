@@ -23,6 +23,10 @@ ASSIGNMENT_FIELDS = (
     "REASONING_EFFORT",
     "ROUTING_BASIS",
     "FORK_TURNS",
+    "TIME_BUDGET_MIN",
+    "CHECKPOINT_INTERVAL_MIN",
+    "MAX_EXTENSIONS",
+    "PROGRESS_CRITERIA",
 )
 
 
@@ -180,12 +184,13 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
                 self.build_fixture(assignment_fields=fields)
                 self.assert_error(f"missing assignment routing field {missing}")
 
-    def test_routing_fields_outside_production_envelope_do_not_satisfy_contract(self) -> None:
-        prose = "## Example assignment\n\n" + "\n".join(
-            f"{field}: example value" for field in ASSIGNMENT_FIELDS
-        )
-        self.build_fixture(assignment_fields=(), prose=prose)
-        self.assert_error("missing assignment routing field MODEL_ROUTE")
+    def test_envelope_fields_outside_production_envelope_do_not_satisfy_contract(self) -> None:
+        for missing in ASSIGNMENT_FIELDS:
+            with self.subTest(missing=missing):
+                prose = f"## Example assignment\n\n{missing}: example value"
+                fields = tuple(field for field in ASSIGNMENT_FIELDS if field != missing)
+                self.build_fixture(assignment_fields=fields, prose=prose)
+                self.assert_error(f"missing assignment routing field {missing}")
 
     def test_malformed_routing_table_row_fails(self) -> None:
         self.build_fixture(
