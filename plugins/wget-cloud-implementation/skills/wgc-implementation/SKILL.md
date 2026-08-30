@@ -60,6 +60,8 @@ description: Coordinate architecture-safe planned implementation work across the
 
 ## Управлять агентами
 
+Перед запуском субагента оркестратор обязан выбрать его model route в локальном [agent registry](references/agents/index.md), сверить его с возможностями активного spawn tool и включить все пять routing-полей в assignment envelope.
+
 Перед созданием каждого агента передай ему:
 
 - конкретный task slice и разрешённые repositories/paths;
@@ -68,7 +70,7 @@ description: Coordinate architecture-safe planned implementation work across the
 - список разрешённых действий и явных запретов;
 - обязательный формат результата из [artifacts-and-gates.md](references/artifacts-and-gates.md).
 
-Используй отдельные role contracts из [agent registry](references/agents/index.md) без ослабления запретов. Параллельные write-агенты допустимы только на непересекающихся repository/path scopes. Никогда не разрешай двум агентам одновременно писать в один репозиторий или общий contract boundary.
+Используй отдельные role contracts из локального [agent registry](references/agents/index.md) без ослабления запретов. Параллельные write-агенты допустимы только на непересекающихся repository/path scopes. Никогда не разрешай двум агентам одновременно писать в один репозиторий или общий contract boundary.
 
 Оркестратор обязан сам:
 

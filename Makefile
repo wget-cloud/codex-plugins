@@ -7,6 +7,7 @@ validate: structure hooks-test
 
 structure:
 	$(PYTHON) scripts/validate_marketplace.py
+	$(PYTHON) -m unittest discover -s scripts/tests -v
 	$(PYTHON) -m py_compile scripts/validate_marketplace.py $(PLUGIN)/hooks/wgc_hooks.py
 
 hooks-test:

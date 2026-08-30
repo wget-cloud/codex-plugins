@@ -76,6 +76,8 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 
 ## Управлять агентами
 
+Перед запуском субагента оркестратор обязан выбрать его model route в локальном [agent registry](references/agents/index.md), сверить его с возможностями активного spawn tool и включить все пять routing-полей в assignment envelope.
+
 Перед запуском каждого агента передай ему:
 
 - роль, task slice и разрешённые repositories/paths;

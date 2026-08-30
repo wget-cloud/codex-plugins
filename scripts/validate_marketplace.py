@@ -7,7 +7,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Tuple
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +22,14 @@ SEMVER = re.compile(
 SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 MARKDOWN_LINK = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 REQUIRED_ROLE_SECTIONS = ("## Назначение", "## Полномочия", "## Запреты", "## Результат")
+ASSIGNMENT_ROUTING_FIELDS = (
+    "MODEL_ROUTE",
+    "MODEL",
+    "REASONING_EFFORT",
+    "ROUTING_BASIS",
+    "FORK_TURNS",
+)
+MODEL_LANES = {"fast", "balanced", "frontier", "main-only"}
 
 
 class ValidationError(Exception):
@@ -60,11 +68,12 @@ def frontmatter(path: Path) -> Dict[str, str]:
 
 def local_links(path: Path) -> Iterable[Tuple[str, Path]]:
     text = path.read_text(encoding="utf-8")
-    for raw in MARKDOWN_LINK.findall(text):
-        target = raw.split("#", 1)[0].strip().strip("<>")
-        if not target or re.match(r"^[a-z][a-z0-9+.-]*://", target, re.IGNORECASE):
-            continue
-        yield raw, (path.parent / target).resolve(strict=False)
+    for line in markdown_lines_outside_fences(text):
+        for raw in MARKDOWN_LINK.findall(line):
+            target = raw.split("#", 1)[0].strip().strip("<>")
+            if not target or re.match(r"^[a-z][a-z0-9+.-]*://", target, re.IGNORECASE):
+                continue
+            yield raw, (path.parent / target).resolve(strict=False)
 
 
 def validate_links(paths: Iterable[Path], errors: List[str]) -> None:
@@ -85,6 +94,126 @@ def openai_default_prompt(path: Path) -> str:
     return match.group(1) if match else ""
 
 
+def assignment_envelope_text(index_text: str) -> str:
+    """Return the sole fenced text envelope under the exact registry heading."""
+    lines = index_text.splitlines()
+    headings = [
+        position
+        for position, line in enumerate(lines)
+        if line.strip() == "## Общий assignment envelope"
+    ]
+    if len(headings) != 1:
+        return ""
+    start = headings[0] + 1
+    end = next(
+        (position for position in range(start, len(lines)) if re.fullmatch(r"##\s+.*", lines[position])),
+        len(lines),
+    )
+    opener = [
+        position for position in range(start, end) if lines[position].strip() == "```text"
+    ]
+    if len(opener) != 1:
+        return ""
+    closing = next(
+        (position for position in range(opener[0] + 1, end) if lines[position].strip() == "```"),
+        None,
+    )
+    if closing is None:
+        return ""
+    return "\n".join(lines[opener[0] + 1 : closing])
+
+
+def assignment_routing_fields(index_text: str) -> set[str]:
+    """Return routing fields declared only in the production assignment envelope."""
+    return {
+        match.group(1)
+        for match in re.finditer(
+            r"^\s*(MODEL_ROUTE|MODEL|REASONING_EFFORT|ROUTING_BASIS|FORK_TURNS)\s*:",
+            assignment_envelope_text(index_text),
+            re.MULTILINE,
+        )
+    }
+
+
+def markdown_lines_outside_fences(text: str) -> Iterable[str]:
+    """Yield Markdown lines outside triple-backtick fenced code blocks."""
+    fenced = False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            fenced = not fenced
+            continue
+        if not fenced:
+            yield line
+
+
+def markdown_table_blocks(index_text: str) -> Iterable[Tuple[Sequence[str], Sequence[Sequence[str]]]]:
+    """Yield Markdown tables outside fenced code blocks without filesystem state."""
+    lines = list(markdown_lines_outside_fences(index_text))
+    position = 0
+    while position + 1 < len(lines):
+        header_line, divider_line = lines[position : position + 2]
+        if "|" not in header_line or "|" not in divider_line:
+            position += 1
+            continue
+        header = [cell.strip() for cell in header_line.strip().strip("|").split("|")]
+        divider = [cell.strip() for cell in divider_line.strip().strip("|").split("|")]
+        if len(header) != len(divider) or not divider or not all(
+            re.fullmatch(r":?-{3,}:?", cell) for cell in divider
+        ):
+            position += 1
+            continue
+        position += 2
+        rows: List[Sequence[str]] = []
+        while position < len(lines) and "|" in lines[position]:
+            row = [cell.strip() for cell in lines[position].strip().strip("|").split("|")]
+            rows.append(row)
+            position += 1
+        yield header, rows
+
+
+def model_routing_entries(index_text: str) -> Tuple[List[Tuple[str, str]], List[str]]:
+    """Extract route links and structural errors from model-lane registry tables."""
+    routes: List[Tuple[str, str]] = []
+    errors: List[str] = []
+    for header, rows in markdown_table_blocks(index_text):
+        normalized_header = [cell.casefold() for cell in header]
+        if "model lane" not in normalized_header:
+            continue
+        lane_column = normalized_header.index("model lane")
+        contract_columns = [
+            position
+            for position, cell in enumerate(normalized_header)
+            if cell in {"contract", "контракт"}
+        ]
+        if len(contract_columns) != 1:
+            errors.append("malformed model routing table row: missing Contract/Контракт column")
+            continue
+        contract_column = contract_columns[0]
+        for row in rows:
+            if len(row) != len(header):
+                errors.append("malformed model routing table row")
+                continue
+            links = MARKDOWN_LINK.findall(row[contract_column])
+            role_links = [
+                raw for raw in links if raw.split("#", 1)[0].strip().strip("<>").endswith(".md")
+            ]
+            if not role_links:
+                errors.append("missing role contract link")
+                continue
+            if len(role_links) != 1:
+                errors.append("exactly one role contract link is required")
+                continue
+            role_target = role_links[0].split("#", 1)[0].strip().strip("<>")
+            routes.append((role_target, row[lane_column].casefold()))
+    return routes, errors
+
+
+def model_routes(index_text: str) -> List[Tuple[str, str]]:
+    """Return valid-looking ``(role-link, lane)`` pairs for pure parser consumers."""
+    routes, _ = model_routing_entries(index_text)
+    return routes
+
+
 def validate_agent_registry(skill: Path, errors: List[str]) -> int:
     role_dir = skill / "references" / "agents"
     if not role_dir.exists():
@@ -99,23 +228,44 @@ def validate_agent_registry(skill: Path, errors: List[str]) -> int:
         errors.append(f"{role_dir.relative_to(ROOT)}: no role files")
     if not (role_dir / "orchestrator.md").is_file():
         errors.append(f"{role_dir.relative_to(ROOT)}: orchestrator.md is required")
+    declared_fields = assignment_routing_fields(index_text)
+    for field in ASSIGNMENT_ROUTING_FIELDS:
+        if field not in declared_fields:
+            errors.append(f"{index.relative_to(ROOT)}: missing assignment routing field {field}")
+    parsed_routes, routing_errors = model_routing_entries(index_text)
+    for error in routing_errors:
+        errors.append(f"{index.relative_to(ROOT)}: {error}")
+    role_paths = {path.resolve(): path.name for path in role_files}
+    routes_by_role: Dict[str, List[str]] = {}
+    for role_target, lane in parsed_routes:
+        target_path = (role_dir / role_target).resolve(strict=False)
+        role_file = role_paths.get(target_path)
+        if role_file is None:
+            errors.append(
+                f"{index.relative_to(ROOT)}: linked role contract does not exist: {role_target}"
+            )
+            continue
+        routes_by_role.setdefault(role_file, []).append(lane)
+    for role_file, lanes in sorted(routes_by_role.items()):
+        if len(lanes) > 1:
+            errors.append(f"{index.relative_to(ROOT)}: duplicate model route: {role_file}")
+        for lane in lanes:
+            if lane not in MODEL_LANES:
+                errors.append(f"{index.relative_to(ROOT)}: unknown model lane: {lane}")
+            if role_file == "orchestrator.md" and lane != "main-only":
+                errors.append(f"{index.relative_to(ROOT)}: orchestrator must use main-only")
+            if role_file != "orchestrator.md" and lane == "main-only":
+                errors.append(f"{index.relative_to(ROOT)}: only orchestrator may use main-only")
+    actual = {path.name for path in role_files}
+    for role_file in sorted(actual - set(routes_by_role)):
+        errors.append(f"{index.relative_to(ROOT)}: missing model route: {role_file}")
     for role in role_files:
-        if f"({role.name})" not in index_text:
-            errors.append(f"{index.relative_to(ROOT)}: role is not registered: {role.name}")
         text = role.read_text(encoding="utf-8")
         for section in REQUIRED_ROLE_SECTIONS:
             if section not in text:
                 errors.append(f"{role.relative_to(ROOT)}: missing section {section}")
         if role.name != "orchestrator.md" and "Verdict:" not in text:
             errors.append(f"{role.relative_to(ROOT)}: missing explicit Verdict contract")
-    registered = {
-        Path(raw.split("#", 1)[0]).name
-        for raw, _ in local_links(index)
-        if raw.split("#", 1)[0].endswith(".md")
-    }
-    actual = {path.name for path in role_files}
-    for orphan in sorted(registered - actual):
-        errors.append(f"{index.relative_to(ROOT)}: registered role file does not exist: {orphan}")
     return len(role_files)
 
 

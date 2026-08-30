@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""Acceptance tests for agent model-routing validation.
+
+These fixtures intentionally describe the planned registry contract.  They
+remain isolated from the marketplace so that they can be introduced before
+the production validator and role registries are updated.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+VALIDATOR_PATH = REPOSITORY_ROOT / "scripts" / "validate_marketplace.py"
+ASSIGNMENT_FIELDS = (
+    "MODEL_ROUTE",
+    "MODEL",
+    "REASONING_EFFORT",
+    "ROUTING_BASIS",
+    "FORK_TURNS",
+)
+
+
+def load_validator():
+    spec = importlib.util.spec_from_file_location("validate_marketplace", VALIDATOR_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("could not load marketplace validator")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class AgentModelRoutingValidationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name).resolve()
+        self.validator = load_validator()
+        self.validator.ROOT = self.root
+        self.validator.MARKETPLACE = self.root / ".agents" / "plugins" / "marketplace.json"
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def build_fixture(
+        self,
+        *,
+        rows: tuple[tuple[str, str], ...] = (("Orchestrator", "main-only"), ("Implementor", "fast")),
+        role_files: tuple[str, ...] = ("orchestrator", "implementor"),
+        assignment_fields: tuple[str, ...] = ASSIGNMENT_FIELDS,
+        raw_rows: tuple[str, ...] | None = None,
+        prose: str = "",
+    ) -> None:
+        (self.root / ".agents" / "plugins").mkdir(parents=True, exist_ok=True)
+        (self.root / "plugins" / "routing-fixture" / ".codex-plugin").mkdir(
+            parents=True, exist_ok=True
+        )
+        role_dir = self.root / "plugins" / "routing-fixture" / "skills" / "routing-skill" / "references" / "agents"
+        role_dir.mkdir(parents=True, exist_ok=True)
+        (self.root / "README.md").write_text("# fixture\n", encoding="utf-8")
+        (self.root / "AGENTS.md").write_text("# fixture\n", encoding="utf-8")
+        (self.root / ".agents" / "plugins" / "marketplace.json").write_text(
+            json.dumps(
+                {
+                    "plugins": [
+                        {
+                            "name": "routing-fixture",
+                            "source": {"source": "local", "path": "./plugins/routing-fixture"},
+                            "policy": {"installation": "AVAILABLE", "authentication": "ON_USE"},
+                            "category": "Developer Tools",
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        (self.root / "plugins" / "routing-fixture" / ".codex-plugin" / "plugin.json").write_text(
+            json.dumps(
+                {
+                    "name": "routing-fixture",
+                    "version": "1.0.0",
+                    "skills": "./skills/",
+                    "interface": {"defaultPrompt": ["Use $routing-skill."]},
+                }
+            ),
+            encoding="utf-8",
+        )
+        skill = role_dir.parents[1]
+        (skill / "agents").mkdir(exist_ok=True)
+        (skill / "SKILL.md").write_text(
+            "---\nname: routing-skill\ndescription: Fixture skill.\n---\n",
+            encoding="utf-8",
+        )
+        (skill / "agents" / "openai.yaml").write_text(
+            'default_prompt: "Use $routing-skill."\n', encoding="utf-8"
+        )
+        envelope = "\n".join(f"{field}: <value>" for field in assignment_fields)
+        table = "\n".join(
+            raw_rows
+            if raw_rows is not None
+            else tuple(
+                f"| {role} | {lane} | [{role.lower()}]({role.lower()}.md) |"
+                for role, lane in rows
+            )
+        )
+        (role_dir / "index.md").write_text(
+            "# Agent registry\n\n"
+            "## Общий assignment envelope\n\n"
+            f"```text\n{envelope}\n```\n\n"
+            "## Roles\n\n"
+            "| Role | Model lane | Contract |\n"
+            "|---|---|---|\n"
+            f"{table}\n\n{prose}",
+            encoding="utf-8",
+        )
+        for role in role_files:
+            body = (
+                "## Назначение\n\n"
+                "## Полномочия\n\n"
+                "## Запреты\n\n"
+                "## Результат\n\n"
+            )
+            if role != "orchestrator":
+                body += "Verdict: pass\n"
+            (role_dir / f"{role}.md").write_text(body, encoding="utf-8")
+
+    def errors(self) -> list[str]:
+        errors, _ = self.validator.validate_repository()
+        return errors
+
+    def assert_error(self, meaning: str) -> None:
+        rendered = "\n".join(self.errors()).lower()
+        self.assertIn(meaning.lower(), rendered)
+
+    def assert_any_error(self, *meanings: str) -> None:
+        rendered = "\n".join(self.errors()).lower()
+        self.assertTrue(
+            any(meaning.lower() in rendered for meaning in meanings),
+            f"expected one of {meanings!r}, got: {rendered!r}",
+        )
+
+    def test_valid_routing_fixture_passes(self) -> None:
+        self.build_fixture()
+        self.assertEqual([], self.errors())
+
+    def test_omitted_role_route_fails(self) -> None:
+        self.build_fixture(rows=(("Orchestrator", "main-only"),))
+        self.assert_error("missing model route")
+
+    def test_duplicate_role_route_fails(self) -> None:
+        self.build_fixture(
+            rows=(
+                ("Orchestrator", "main-only"),
+                ("Implementor", "fast"),
+                ("Implementor", "balanced"),
+            )
+        )
+        self.assert_error("duplicate model route")
+
+    def test_unknown_model_lane_fails(self) -> None:
+        self.build_fixture(rows=(("Orchestrator", "main-only"), ("Implementor", "economy")))
+        self.assert_error("unknown model lane")
+
+    def test_orchestrator_must_use_main_only_lane(self) -> None:
+        self.build_fixture(rows=(("Orchestrator", "frontier"), ("Implementor", "fast")))
+        self.assert_error("orchestrator must use main-only")
+
+    def test_subagent_cannot_use_main_only_lane(self) -> None:
+        self.build_fixture(rows=(("Orchestrator", "main-only"), ("Implementor", "main-only")))
+        self.assert_error("only orchestrator may use main-only")
+
+    def test_each_assignment_routing_field_is_required(self) -> None:
+        for missing in ASSIGNMENT_FIELDS:
+            with self.subTest(missing=missing):
+                fields = tuple(field for field in ASSIGNMENT_FIELDS if field != missing)
+                self.build_fixture(assignment_fields=fields)
+                self.assert_error(f"missing assignment routing field {missing}")
+
+    def test_routing_fields_outside_production_envelope_do_not_satisfy_contract(self) -> None:
+        prose = "## Example assignment\n\n" + "\n".join(
+            f"{field}: example value" for field in ASSIGNMENT_FIELDS
+        )
+        self.build_fixture(assignment_fields=(), prose=prose)
+        self.assert_error("missing assignment routing field MODEL_ROUTE")
+
+    def test_malformed_routing_table_row_fails(self) -> None:
+        self.build_fixture(
+            raw_rows=(
+                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | fast | [implementor](implementor.md) | unexpected |",
+            )
+        )
+        self.assert_error("malformed model routing table row")
+
+    def test_routing_row_without_contract_link_fails(self) -> None:
+        self.build_fixture(
+            raw_rows=(
+                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | fast | |",
+            )
+        )
+        self.assert_error("missing role contract link")
+
+    def test_routing_row_with_multiple_contract_links_fails(self) -> None:
+        self.build_fixture(
+            raw_rows=(
+                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | fast | [implementor](implementor.md) [duplicate](orchestrator.md) |",
+            )
+        )
+        self.assert_error("exactly one role contract link")
+
+    def test_orphan_linked_role_contract_fails(self) -> None:
+        self.build_fixture(
+            raw_rows=(
+                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | fast | [missing](missing.md) |",
+            )
+        )
+        self.assert_error("linked role contract does not exist")
+
+    def test_fenced_markdown_example_is_not_an_active_registry_or_navigation_link(self) -> None:
+        self.build_fixture(
+            prose=(
+                "## Documentation example\n\n"
+                "```markdown\n"
+                "| Role | Model lane | Contract |\n"
+                "|---|---|---|\n"
+                "| Fake | main-only | [fake](missing.md) |\n"
+                "```\n"
+            )
+        )
+        self.assertEqual([], self.errors())
+
+    def test_active_contract_link_must_stay_in_role_directory(self) -> None:
+        self.build_fixture(
+            raw_rows=(
+                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
+                "| Implementor | fast | [outside](../../../../outside.md) |",
+            )
+        )
+        outside = self.root / "plugins" / "routing-fixture" / "outside.md"
+        outside.write_text("# not a role contract\n", encoding="utf-8")
+        self.assert_any_error(
+            "role contract link escapes role directory",
+            "linked role contract does not exist",
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
