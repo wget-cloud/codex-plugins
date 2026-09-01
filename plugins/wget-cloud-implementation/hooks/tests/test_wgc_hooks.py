@@ -66,6 +66,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
+        self.assertEqual(version, "5.1.0")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -311,6 +312,15 @@ contexts:
             cwd,
         )
 
+    def activate_profile(self, profile, project="backend", prompt=None):
+        cwd = self.projects[project]
+        prompt = prompt or f"Use $wgc-{profile} for this request"
+        return self.call(
+            "prompt-submit",
+            {"hook_event_name": "UserPromptSubmit", "turn_id": f"turn-{profile}", "prompt": prompt},
+            cwd,
+        )
+
     def record_agent(self, cwd, role, verdict, phase=""):
         self.agent_counter += 1
         agent_id = f"agent-{self.agent_counter}"
@@ -460,6 +470,155 @@ contexts:
         self.assertTrue(state["bugfix_routes"]["gitops"])
         self.assertTrue(state["bugfix_routes"]["deployment"])
         self.assertNotIn("another tenant", raw)
+
+    def test_prompt_submit_routes_task_creation_and_epic_profiles(self):
+        task = self.activate_profile(
+            "task-creation",
+            prompt="Use $wgc-task-creation to create an ordered backlog in GitHub Project #42",
+        )
+        self.assertIn("task-creation workflow activated", task["hookSpecificOutput"]["additionalContext"])
+        task_state_path = next((self.data / "hook-state").glob("*.json"))
+        task_state = json.loads(task_state_path.read_text(encoding="utf-8"))
+        self.assertEqual(task_state["profile"], "task-creation")
+        self.assertTrue(task_state["project_routes"]["project_targeted"])
+        self.assertTrue(task_state["project_routes"]["mutation_requested"])
+
+        epic = self.call(
+            "prompt-submit",
+            {
+                "session_id": "session-epic-profile",
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "Use $wgc-epic-implementation to implement epic CRM-EP01 from GitHub Project #1",
+            },
+            self.projects["backend"],
+        )
+        self.assertIn("epic-implementation workflow activated", epic["hookSpecificOutput"]["additionalContext"])
+        states = [json.loads(path.read_text(encoding="utf-8")) for path in (self.data / "hook-state").glob("*.json")]
+        epic_state = next(state for state in states if state["profile"] == "epic-implementation")
+        self.assertTrue(epic_state["project_routes"]["mutation_requested"])
+
+    def test_routing_precedence_and_generic_create_do_not_select_task_creation(self):
+        explicit_bug = self.call(
+            "prompt-submit",
+            {
+                "session_id": "session-explicit-bug",
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "Use $wgc-bugfix while reviewing this epic backlog bug",
+            },
+            self.projects["backend"],
+        )
+        self.assertIn("bugfix workflow", explicit_bug["hookSpecificOutput"]["additionalContext"])
+        generic = self.call(
+            "prompt-submit",
+            {
+                "session_id": "session-generic-create",
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "Create a helper function in the backend",
+            },
+            self.projects["backend"],
+        )
+        self.assertIn("implementation workflow", generic["hookSpecificOutput"]["additionalContext"])
+
+    def test_project_profiles_do_not_persist_raw_prompt_or_project_url(self):
+        secret_title = "Confidential Customer Migration"
+        project_url = "https://github.com/orgs/wget-cloud/projects/987"
+        self.activate_profile(
+            "task-creation",
+            prompt=f"Use $wgc-task-creation to create {secret_title} in {project_url}",
+        )
+        state_path = next((self.data / "hook-state").glob("*.json"))
+        raw = state_path.read_text(encoding="utf-8")
+        self.assertNotIn(secret_title, raw)
+        self.assertNotIn(project_url, raw)
+        state = json.loads(raw)
+        self.assertIn("last_prompt_sha256", state)
+        self.assertEqual(set(state["project_routes"]), {"project_targeted", "mutation_requested"})
+
+    def test_project_mutation_opt_out_overrides_epic_default(self):
+        cwd = self.projects["backend"]
+        self.activate_profile(
+            "epic-implementation",
+            prompt="Use $wgc-epic-implementation for CRM-EP01 without updating GitHub Project",
+        )
+        state_path = next((self.data / "hook-state").glob("*.json"))
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertFalse(state["project_routes"]["mutation_requested"])
+        for role, verdict, phase in (
+            ("product-manager", "accepted", "scope"),
+            ("product-manager", "accepted", "outcome"),
+            ("project-manager", "planned", "scope"),
+            ("project-manager", "progress_updated", "reconcile"),
+            ("architect", "proposed", ""),
+            ("architecture-guardian", "approved", "plan"),
+            ("architecture-guardian", "approved", "diff"),
+            ("test-maker", "baseline_ready", ""),
+            ("implementor", "implemented", ""),
+            ("reviewer", "approved", ""),
+            ("qa", "pass", ""),
+        ):
+            self.record_agent(cwd, role, verdict, phase)
+        completed = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-epic-no-project-write",
+                "stop_hook_active": False,
+                "last_assistant_message": "Implemented without Project mutation",
+            },
+            cwd,
+        )
+        self.assertIsNone(completed)
+
+    def test_late_project_mutation_opt_out_revokes_prior_epic_sync(self):
+        cwd = self.projects["backend"]
+        self.activate_profile(
+            "epic-implementation",
+            prompt="Use $wgc-epic-implementation and sync GitHub Project statuses",
+        )
+        state_path = next((self.data / "hook-state").glob("*.json"))
+        before = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertTrue(before["project_routes"]["mutation_requested"])
+        self.call(
+            "prompt-submit",
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "turn_id": "turn-epic-opt-out-followup",
+                "prompt": "Do not update GitHub Project; continue implementation read-only for statuses",
+            },
+            cwd,
+        )
+        after = json.loads(state_path.read_text(encoding="utf-8"))
+        self.assertFalse(after["project_routes"]["mutation_requested"])
+
+    def test_epic_rework_invalidates_product_outcome_but_preserves_scope(self):
+        cwd = self.projects["backend"]
+        self.activate_profile(
+            "epic-implementation",
+            prompt="Use $wgc-epic-implementation for CRM-EP01 from GitHub Project #1",
+        )
+        self.record_agent(cwd, "product-manager", "accepted", "scope")
+        self.record_agent(cwd, "product-manager", "accepted", "outcome")
+        source = cwd / "src" / "epic.ts"
+        source.parent.mkdir()
+        source.write_text("export const epic = true;\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {"command": "*** Begin Patch\n*** Add File: src/epic.ts\n+x\n*** End Patch"},
+                "tool_response": {"ok": True},
+            },
+            cwd,
+        )
+        state_path = next((self.data / "hook-state").glob("*.json"))
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        product_phases = {
+            result["phase"]
+            for result in state["subagent_results"]
+            if result["role"] == "product-manager"
+        }
+        self.assertEqual(product_phases, {"scope"})
 
     def test_bugfix_inference_does_not_capture_generic_implementation(self):
         bugfix = self.activate_bugfix(prompt="Почини ошибку: расчёт иногда падает")
@@ -1627,6 +1786,111 @@ metadata:
             cwd,
         )
         self.assertIsNone(output)
+
+    def test_task_creation_requires_structured_gates_without_local_diff(self):
+        cwd = self.projects["backend"]
+        self.activate_profile(
+            "task-creation",
+            prompt="Use $wgc-task-creation to analyze and create tasks in GitHub Project #1",
+        )
+        blocked = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-task-creation-gaps",
+                "stop_hook_active": False,
+                "last_assistant_message": "Backlog ready",
+            },
+            cwd,
+        )
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("product", blocked["reason"])
+        self.assertIn("project-publish", blocked["reason"])
+        for role, verdict in (
+            ("product-manager", "specified"),
+            ("project-manager", "project_ready"),
+            ("implementation-auditor", "audited"),
+            ("architect", "proposed"),
+            ("backlog-reviewer", "approved"),
+            ("github-project-operator", "published"),
+        ):
+            self.record_agent(cwd, role, verdict)
+        completed = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-task-creation-complete",
+                "stop_hook_active": False,
+                "last_assistant_message": "Published and verified",
+            },
+            cwd,
+        )
+        self.assertIsNone(completed)
+
+    def test_task_creation_planning_only_does_not_require_publish_gate(self):
+        cwd = self.projects["backend"]
+        self.activate_profile(
+            "task-creation",
+            prompt="Use $wgc-task-creation to analyze the backlog without publishing anything",
+        )
+        for role, verdict in (
+            ("product-manager", "specified"),
+            ("project-manager", "project_ready"),
+            ("implementation-auditor", "audited"),
+            ("architect", "proposed"),
+            ("backlog-reviewer", "approved"),
+        ):
+            self.record_agent(cwd, role, verdict)
+        completed = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-task-plan-only",
+                "stop_hook_active": False,
+                "last_assistant_message": "Planning complete",
+            },
+            cwd,
+        )
+        self.assertIsNone(completed)
+
+    def test_epic_implementation_requires_scope_reconcile_and_project_sync(self):
+        cwd = self.projects["backend"]
+        self.activate_profile(
+            "epic-implementation",
+            prompt="Use $wgc-epic-implementation to implement CRM-EP01 from GitHub Project #1",
+        )
+        invalid_phase = self.record_agent(cwd, "project-manager", "planned")
+        self.assertEqual(invalid_phase["decision"], "block")
+        self.assertIn("phase", invalid_phase["reason"])
+        invalid_product_phase = self.record_agent(cwd, "product-manager", "accepted")
+        self.assertEqual(invalid_product_phase["decision"], "block")
+        self.assertIn("phase", invalid_product_phase["reason"])
+        for role, verdict, phase in (
+            ("product-manager", "accepted", "scope"),
+            ("project-manager", "planned", "scope"),
+            ("architect", "proposed", ""),
+            ("architecture-guardian", "approved", "plan"),
+            ("test-maker", "baseline_ready", ""),
+            ("implementor", "implemented", ""),
+            ("reviewer", "approved", ""),
+            ("architecture-guardian", "approved", "diff"),
+            ("qa", "pass", ""),
+            ("product-manager", "accepted", "outcome"),
+            ("project-manager", "progress_updated", "reconcile"),
+            ("github-project-operator", "synced", ""),
+        ):
+            self.record_agent(cwd, role, verdict, phase)
+        completed = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-epic-complete",
+                "stop_hook_active": False,
+                "last_assistant_message": "Epic wave reconciled",
+            },
+            cwd,
+        )
+        self.assertIsNone(completed)
 
     def test_successful_bugfix_requires_structured_rca_and_regression_gates(self):
         cwd = self.projects["backend"]

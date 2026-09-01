@@ -57,6 +57,10 @@ IMPLEMENTATION_INTENT = re.compile(
 )
 IMPLEMENTATION_EXPLICIT = re.compile(r"(?:\$wgc-implementation|\bwgc-implementation\b)", re.IGNORECASE)
 BUGFIX_EXPLICIT = re.compile(r"(?:\$wgc-bugfix|\bwgc-bugfix\b)", re.IGNORECASE)
+TASK_CREATION_EXPLICIT = re.compile(r"(?:\$wgc-task-creation|\bwgc-task-creation\b)", re.IGNORECASE)
+EPIC_IMPLEMENTATION_EXPLICIT = re.compile(
+    r"(?:\$wgc-epic-implementation|\bwgc-epic-implementation\b)", re.IGNORECASE
+)
 BUGFIX_ACTION = re.compile(
     r"\b(?:fix|repair|resolve|debug|исправ\w*|почин\w*|устран\w*|разобрат\w*|найт\w*\s+причин\w*)\b",
     re.IGNORECASE,
@@ -72,6 +76,33 @@ BUG_SIGNAL = re.compile(
 )
 DEPLOYMENT_FOLLOWUP = re.compile(
     r"\b(?:deploy(?:ment)?|rollout|release|ship|депло\w*|задепло\w*|раскат\w*|релиз\w*|разверн\w*)\b",
+    re.IGNORECASE,
+)
+TASK_CREATION_SIGNAL = re.compile(
+    r"(?=.*\b(?:github\s+project|project\s*#?\d+|backlog|issue|issues|задач\w*|бэклог\w*|проект\w*)\b)"
+    r"(?=.*\b(?:create|add|publish|populate|decompose|prioritize|созда\w*|добав\w*|сформир\w*|"
+    r"декомпоз\w*|приоритиз\w*|завест\w*)\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+EPIC_IMPLEMENTATION_SIGNAL = re.compile(
+    r"(?=.*\b(?:implement|deliver|execute|реализ\w*|имплемент\w*|выполн\w*)\b)"
+    r"(?=.*\b(?:epic|task\s+pool|pool\s+of\s+tasks|github\s+project|эпик\w*|пул\w*\s+задач|"
+    r"задач\w*\s+из\s+проект\w*)\b)",
+    re.IGNORECASE | re.DOTALL,
+)
+PROJECT_TARGET_SIGNAL = re.compile(
+    r"(?:https://github\.com/orgs/[A-Za-z0-9_.-]+/projects/\d+|\bgithub\s+project\b|\bproject\s*#\d+\b|"
+    r"\bпроект\w*\s+(?:в\s+)?github\b)",
+    re.IGNORECASE,
+)
+PROJECT_MUTATION_SIGNAL = re.compile(
+    r"\b(?:create|add|publish|populate|update|sync|созда\w*|добав\w*|опубликов\w*|завест\w*|"
+    r"обнов\w*|синхрониз\w*)\b",
+    re.IGNORECASE,
+)
+PROJECT_MUTATION_OPT_OUT = re.compile(
+    r"(?:\b(?:do\s+not|don't|without)\s+(?:creat|add|publish|updat|sync|mutat|chang)\w*\b|"
+    r"\b(?:не|без)\s+(?:созда\w*|добав\w*|публикац\w*|обнов\w*|синхрониз\w*|измен\w*)\b)",
     re.IGNORECASE,
 )
 TEST_PATH = re.compile(r"(?:^|/)(?:tests?|__tests__|e2e)(?:/|$)|(?:\.(?:test|spec)\.[^.]+$)", re.IGNORECASE)
@@ -125,6 +156,47 @@ PROFILE_ROLE_VERDICTS: Dict[str, Dict[str, Set[str]]] = {
         "infrastructure-reviewer": {"approved", "changes_requested", "blocked"},
         "deployment-agent": {"deployed_healthy", "failed", "rolled_back", "blocked"},
     },
+    "task-creation": {
+        "product-manager": {"specified", "needs_input"},
+        "project-manager": {"project_ready", "needs_input", "blocked"},
+        "implementation-auditor": {"audited", "needs_input"},
+        "architect": {"proposed", "needs_input"},
+        "backlog-reviewer": {"approved", "changes_requested", "needs_input"},
+        "github-project-operator": {
+            "published", "partially_published", "no_changes", "authorization_required", "blocked"
+        },
+    },
+    "epic-implementation": {
+        "product-manager": {"accepted", "changes_requested", "needs_input"},
+        "project-manager": {"planned", "progress_updated", "blocked", "needs_input"},
+        "explorer": {"mapped", "needs_input"},
+        "architect": {"proposed", "needs_input"},
+        "architecture-guardian": {"approved", "changes_requested", "needs_input"},
+        "test-maker": {"baseline_ready", "changes_requested", "blocked"},
+        "implementor": {"implemented", "needs_input", "blocked"},
+        "reviewer": {"approved", "changes_requested", "needs_input"},
+        "qa": {"pass", "defects_found", "blocked"},
+        "github-project-operator": {
+            "synced", "partially_synced", "no_changes", "authorization_required", "blocked"
+        },
+        "devops": {"prepared", "needs_input", "blocked"},
+        "infrastructure-reviewer": {"approved", "changes_requested", "needs_input"},
+        "deployment-agent": {"deployed_healthy", "failed", "blocked", "approval_invalid"},
+    },
+}
+
+PROFILE_ROLE_PHASES: Dict[str, Dict[str, Set[str]]] = {
+    "implementation": {"architecture-guardian": {"plan", "diff"}},
+    "bugfix": {
+        "architecture-guardian": {"plan", "diff"},
+        "bug-investigator": {"evidence", "rca"},
+    },
+    "task-creation": {},
+    "epic-implementation": {
+        "architecture-guardian": {"plan", "diff"},
+        "project-manager": {"scope", "reconcile"},
+        "product-manager": {"scope", "outcome"},
+    },
 }
 
 
@@ -146,15 +218,46 @@ def bugfix_routes(prompt: str) -> Dict[str, bool]:
     return {name: bool(re.search(pattern, prompt, re.IGNORECASE)) for name, pattern in patterns.items()}
 
 
+def project_routes(prompt: str, profile: str) -> Dict[str, bool]:
+    targeted = bool(PROJECT_TARGET_SIGNAL.search(prompt) or profile in {"task-creation", "epic-implementation"})
+    mutation_opt_out = bool(PROJECT_MUTATION_OPT_OUT.search(prompt))
+    mutation_requested = bool(
+        targeted
+        and not mutation_opt_out
+        and (
+            PROJECT_MUTATION_SIGNAL.search(prompt)
+            or profile == "epic-implementation"
+        )
+    )
+    return {
+        "project_targeted": targeted,
+        "mutation_requested": mutation_requested,
+    }
+
+
 def workflow_profile(prompt: str, active_profile: Optional[str] = None) -> Optional[Tuple[str, str]]:
     if BUGFIX_EXPLICIT.search(prompt):
         return "bugfix", "explicit"
+    if EPIC_IMPLEMENTATION_EXPLICIT.search(prompt):
+        return "epic-implementation", "explicit"
+    if TASK_CREATION_EXPLICIT.search(prompt):
+        return "task-creation", "explicit"
     if IMPLEMENTATION_EXPLICIT.search(prompt):
         return "implementation", "explicit"
     if active_profile == "bugfix" and (IMPLEMENTATION_INTENT.search(prompt) or DEPLOYMENT_FOLLOWUP.search(prompt)):
         return "bugfix", "followup"
+    if active_profile == "epic-implementation" and (
+        IMPLEMENTATION_INTENT.search(prompt) or PROJECT_MUTATION_SIGNAL.search(prompt)
+    ):
+        return "epic-implementation", "followup"
+    if active_profile == "task-creation" and PROJECT_MUTATION_SIGNAL.search(prompt):
+        return "task-creation", "followup"
     if BUGFIX_ACTION.search(prompt) and BUG_SIGNAL.search(prompt):
         return "bugfix", "inferred"
+    if EPIC_IMPLEMENTATION_SIGNAL.search(prompt):
+        return "epic-implementation", "inferred"
+    if TASK_CREATION_SIGNAL.search(prompt):
+        return "task-creation", "inferred"
     if IMPLEMENTATION_INTENT.search(prompt):
         return "implementation", "inferred"
     return None
@@ -363,6 +466,7 @@ def update_state(
         state.setdefault("activation", "none")
         state.setdefault("profile", "implementation")
         state.setdefault("bugfix_routes", {})
+        state.setdefault("project_routes", {})
         state.setdefault("commands", [])
         state.setdefault("verification", {})
         state.setdefault("touched_paths", [])
@@ -1674,11 +1778,10 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, s
         return None, f"unknown WGC role for profile {profile}: {role or '<empty>'}"
     if verdict not in role_verdicts[role]:
         return None, f"invalid verdict '{verdict or '<empty>'}' for role {role} in profile {profile}"
-    if role == "architecture-guardian" and phase not in {"plan", "diff"}:
-        return None, "architecture-guardian result requires phase plan or diff"
-    if role == "bug-investigator" and phase not in {"evidence", "rca"}:
-        return None, "bug-investigator result requires phase evidence or rca"
-    if role not in {"architecture-guardian", "bug-investigator"} and phase:
+    allowed_phases = PROFILE_ROLE_PHASES.get(profile, {}).get(role)
+    if allowed_phases is not None and phase not in allowed_phases:
+        return None, f"role {role} requires phase one of {sorted(allowed_phases)}"
+    if allowed_phases is None and phase:
         return None, f"role {role} requires an empty phase"
     if not revision:
         return None, "WGC_AGENT_RESULT requires input_revision from SubagentStart"
@@ -1692,6 +1795,7 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, s
 
 def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[str]:
     gates: Set[str] = set()
+    profile = str(state.get("profile") or "implementation")
     results = state.get("subagent_results", [])
     if not isinstance(results, list):
         return gates
@@ -1704,7 +1808,37 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
         role = result.get("role")
         verdict = result.get("verdict")
         phase = result.get("phase")
-        if role == "bug-triage" and verdict == "triaged":
+        if role == "product-manager" and verdict == "specified" and profile == "task-creation":
+            gates.add("product")
+        elif role == "product-manager" and verdict == "accepted" and profile == "epic-implementation" and phase == "scope":
+            gates.add("product-scope")
+        elif role == "product-manager" and verdict == "accepted" and profile == "epic-implementation" and phase == "outcome":
+            gates.add("product-outcome")
+        elif role == "project-manager" and verdict == "project_ready":
+            gates.add("project")
+        elif role == "project-manager" and verdict == "planned" and phase == "scope":
+            gates.add("project-scope")
+        elif role == "project-manager" and verdict == "progress_updated" and phase == "reconcile":
+            gates.add("project-reconcile")
+        elif role == "implementation-auditor" and verdict == "audited":
+            gates.add("implementation-audit")
+        elif role == "backlog-reviewer" and verdict == "approved":
+            gates.add("backlog-review")
+        elif (
+            role == "github-project-operator"
+            and verdict in {"published", "no_changes"}
+            and profile == "task-creation"
+            and result.get("input_revision") == current_revision
+        ):
+            gates.add("project-publish")
+        elif (
+            role == "github-project-operator"
+            and verdict in {"synced", "no_changes"}
+            and profile == "epic-implementation"
+            and result.get("input_revision") == current_revision
+        ):
+            gates.add("project-sync")
+        elif role == "bug-triage" and verdict == "triaged":
             gates.add("bug-triage")
         elif role == "bug-investigator" and verdict == "evidence_ready" and phase == "evidence":
             gates.add("evidence")
@@ -1780,6 +1914,7 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         return None
     profile, activation = selected
     routes = bugfix_routes(prompt) if profile == "bugfix" else {}
+    project = project_routes(prompt, profile) if profile in {"task-creation", "epic-implementation"} else {}
 
     baseline = workspace_snapshot(context)
 
@@ -1797,6 +1932,19 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
             }
         else:
             state["bugfix_routes"] = {}
+        if profile in {"task-creation", "epic-implementation"}:
+            previous_project = state.get("project_routes", {}) if already_active and not profile_changed else {}
+            mutation_opt_out = bool(PROJECT_MUTATION_OPT_OUT.search(prompt))
+            state["project_routes"] = {
+                "project_targeted": bool(project.get("project_targeted") or previous_project.get("project_targeted")),
+                "mutation_requested": (
+                    False
+                    if mutation_opt_out
+                    else bool(project.get("mutation_requested") or previous_project.get("mutation_requested"))
+                ),
+            }
+        else:
+            state["project_routes"] = {}
         if not already_active or profile_changed:
             state["baseline_dirty"] = baseline
             state["current_dirty"] = baseline
@@ -1814,6 +1962,17 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         return additional_context(
             "UserPromptSubmit",
             f"WGC bugfix workflow activated {mode}; routes={enabled}. Build a redacted BugCase, reproduce before patching, support the root cause with scoped evidence, protect regression tests, then use independent architecture/review/QA gates. Runtime inspection is read-only and deployment still requires explicit human approval.",
+        )
+    if profile == "task-creation":
+        mutation = "publish only through an exact MutationPlan" if project.get("mutation_requested") else "remain read-only until publication is requested"
+        return additional_context(
+            "UserPromptSubmit",
+            f"WGC task-creation workflow activated {mode}. Resolve an unambiguous GitHub Project, audit the implementation, obtain product/project/architecture/backlog-review artifacts, and {mutation}. Do not persist raw prompts or guess missing product semantics.",
+        )
+    if profile == "epic-implementation":
+        return additional_context(
+            "UserPromptSubmit",
+            f"WGC epic-implementation workflow activated {mode}. Freeze selected Project item IDs, build dependency waves, require product/project/architecture/test/review/QA gates per item, and synchronize statuses only after evidence.",
         )
     return additional_context(
         "UserPromptSubmit",
@@ -1839,7 +1998,11 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> D
     evidence = (
         " For bugfix work, gather runtime evidence read-only with narrow time/service scope, redact secrets and personal data, and never persist raw logs or the user prompt."
         if profile == "bugfix"
-        else ""
+        else (
+            " For GitHub Project work, use only the assigned Project/item allowlist, never persist raw issue bodies or the user prompt, and do not mutate Project state unless assigned the github-project-operator role with explicit authority."
+            if profile in {"task-creation", "epic-implementation"}
+            else ""
+        )
     )
     message = (
         f"WGC subagent boundary: project={context['project']}; profile={profile}.{active} Read root and nested AGENTS.md before work. "
@@ -1943,6 +2106,7 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                 "security-reviewer",
                 "contract-qa",
                 "deployment-agent",
+                "github-project-operator",
             }
             if incremental_classification["tests"]:
                 invalidate.add("test-maker")
@@ -1954,6 +2118,10 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                     return False
                 role = result.get("role")
                 if role == "architecture-guardian" and result.get("phase") == "diff":
+                    return False
+                if role == "project-manager" and result.get("phase") == "reconcile":
+                    return False
+                if role == "product-manager" and result.get("phase") == "outcome":
                     return False
                 return role not in invalidate
 
@@ -2004,11 +2172,15 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
     state = update_state(payload, context, lambda value: None)
     if not state.get("active"):
         return None
+    profile = str(state.get("profile") or "implementation")
 
     snapshot = workspace_snapshot(context)
     relevant_snapshot = snapshot_since_baseline(snapshot, state.get("baseline_dirty"))
     classification = classify_paths(relevant_snapshot, state.get("touched_paths", []))
-    if not any((classification["production"], classification["tests"], classification["docs"], classification["k8s"])):
+    if (
+        profile not in {"task-creation", "epic-implementation"}
+        and not any((classification["production"], classification["tests"], classification["docs"], classification["k8s"]))
+    ):
         def no_changes(value: Dict[str, Any]) -> None:
             value["active"] = False
             value["completed_at"] = int(time.time())
@@ -2017,9 +2189,10 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
         update_state(payload, context, no_changes)
         return None
 
-    profile = str(state.get("profile") or "implementation")
     routes = state.get("bugfix_routes", {}) if profile == "bugfix" else {}
     routes = routes if isinstance(routes, dict) else {}
+    project = state.get("project_routes", {}) if profile in {"task-creation", "epic-implementation"} else {}
+    project = project if isinstance(project, dict) else {}
     required = required_checks(classification)
     if profile == "bugfix" and routes.get("ui"):
         required.add("browser")
@@ -2053,6 +2226,28 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
             required_gates.update({"devops", "infrastructure"})
         if routes.get("deployment"):
             required_gates.add("deployment")
+    elif profile == "task-creation":
+        required_gates = {"product", "project", "implementation-audit", "architect", "backlog-review"}
+        if project.get("mutation_requested"):
+            required_gates.add("project-publish")
+    elif profile == "epic-implementation":
+        required_gates = {
+            "product-scope",
+            "product-outcome",
+            "project-scope",
+            "architect",
+            "architecture-plan",
+            "test-maker",
+            "implementor",
+            "reviewer",
+            "architecture",
+            "qa",
+            "project-reconcile",
+        }
+        if project.get("mutation_requested"):
+            required_gates.add("project-sync")
+        if classification["k8s"]:
+            required_gates.update({"devops", "infrastructure"})
     else:
         required_gates = {"architect", "test-maker", "reviewer", "architecture", "qa"}
         if classification["k8s"]:
@@ -2088,7 +2283,7 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
 
     update_state(payload, context, updater)
 
-    workflow_name = "bugfix" if profile == "bugfix" else "implementation"
+    workflow_name = profile
     parts = [f"Before finishing the WGC {workflow_name}, close the observable completion gaps."]
     if missing:
         parts.append("Missing successful verification evidence: " + ", ".join(missing) + ".")

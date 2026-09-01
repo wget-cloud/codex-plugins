@@ -1,0 +1,4 @@
+interface:
+  display_name: "WGC Epic Implementation"
+  short_description: "Implement GitHub epics and task pools safely"
+  default_prompt: "Use $wgc-epic-implementation to implement this epic or task pool from the selected GitHub Project in dependency order."

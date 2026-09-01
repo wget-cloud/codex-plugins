@@ -1,11 +1,13 @@
 # Wget Cloud Engineering Plugin
 
-Один plugin bundle предоставляет два самостоятельных скилла и общий набор lifecycle hooks.
+Один plugin bundle предоставляет четыре самостоятельных скилла и общий набор lifecycle hooks.
 
 ## Компоненты
 
 | Компонент | Ответственность |
 |---|---|
+| `skills/wgc-task-creation` | product audit → business specification → dependency backlog → GitHub Project publication |
+| `skills/wgc-epic-implementation` | Project scope → dependency waves → implementation/review/QA → status reconciliation |
 | `skills/wgc-implementation` | planned architecture → tests → implementation → review → QA → optional GitOps/deployment |
 | `skills/wgc-bugfix` | triage → evidence → reproduction → RCA → regression → minimal fix → review/QA → optional rollout |
 | `hooks/hooks.json` | lifecycle event registration |
@@ -14,13 +16,13 @@
 
 ## Role contracts
 
-В каждом скилле его локальный `references/agents/index.md` — единственный источник assignment envelope, model routing и registry. Каждая рабочая роль лежит в отдельном файле `references/agents/<role>.md`. Это позволяет оркестратору загружать только применимые роли и не смешивать permissions/verdicts двух профилей.
+В каждом скилле его локальный `references/agents/index.md` — единственный источник assignment envelope, model routing и registry. Каждая рабочая роль лежит в отдельном файле `references/agents/<role>.md`. Это позволяет оркестратору загружать только применимые роли и не смешивать permissions/verdicts четырёх профилей.
 
 Каталог `skills/<name>/agents/` зарезервирован для Codex UI metadata (`openai.yaml`) и не содержит role prompts.
 
 ## Общие hooks
 
-Hooks автоматически выбирают профиль `implementation` или `bugfix`, но role/verdict contract проверяется отдельно для активного профиля. State не хранит исходный prompt, command text или tool output. Direct Kubernetes/Helm/Argo mutations и destructive Git operations блокируются. Единственное mutating cluster-исключение — точный clean-cluster bootstrap; остальные approval markers блокируются fail-closed.
+Hooks автоматически выбирают профиль `task-creation`, `epic-implementation`, `implementation` или `bugfix`, но role/verdict contract проверяется отдельно для активного профиля. State не хранит исходный prompt, GitHub Project URL, command text или tool output. Для Project-backed профилей hook требует структурированные product/project/operator gates, но фактические внешние изменения подтверждаются отдельным read-after-write. Direct Kubernetes/Helm/Argo mutations и destructive Git operations блокируются. Единственное mutating cluster-исключение — точный clean-cluster bootstrap; остальные approval markers блокируются fail-closed.
 
 Hooks не валидируют model или reasoning effort: поля lifecycle events для этого ещё не установлены. Эти решения принадлежат локальному agent registry до запуска субагента.
 

@@ -14,6 +14,8 @@ plugins/
     skills/
       wgc-implementation/                 # planned delivery workflow
       wgc-bugfix/                         # evidence-driven defect workflow
+      wgc-task-creation/                  # product backlog and GitHub Project workflow
+      wgc-epic-implementation/            # ordered Project task-pool delivery workflow
 scripts/validate_marketplace.py           # structural validation всего каталога
 ```
 
@@ -28,6 +30,8 @@ scripts/validate_marketplace.py           # structural validation всего к�
 
 ## Выбор скилла
 
+- `$wgc-task-creation` — аудит требований/реализации, декомпозиция и публикация product-quality backlog в выбранный GitHub Project.
+- `$wgc-epic-implementation` — массовая реализация выбранного эпика или пула Project items с dependency waves и синхронизацией статусов.
 - `$wgc-implementation` — новая функциональность, refactor, contract или плановое cross-repo/GitOps изменение.
 - `$wgc-bugfix` — пользовательский дефект, regression, crash, incident или неверное observable behavior, которое нужно воспроизвести и исправить.
 

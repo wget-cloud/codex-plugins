@@ -1,5 +1,5 @@
 {
-  "description": "Fast Wget Cloud implementation and bugfix context, safety, change tracking, and completion gates.",
+  "description": "Wget Cloud backlog, epic delivery, implementation, and bugfix context, safety, change tracking, and completion gates.",
   "hooks": {
     "SessionStart": [
       {

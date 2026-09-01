@@ -9,7 +9,7 @@
 - явно по `$wgc-bugfix`;
 - неявно, только когда prompt одновременно содержит действие исправления и сигнал дефекта/регрессии/ошибки.
 
-Обычная разработка остаётся профилем `wgc-implementation`. В state сохраняются только профиль, route flags, repository/change/check summaries и структурированные verdicts; исходный prompt, tool output, логи и секреты не сохраняются.
+Обычная разработка остаётся профилем `wgc-implementation`, создание backlog использует `task-creation`, а delivery эпика — `epic-implementation`. В state сохраняются только профиль, route flags, repository/change/check summaries и структурированные verdicts; исходный prompt, Project URL, tool output, логи и секреты не сохраняются.
 
 Route flags:
 

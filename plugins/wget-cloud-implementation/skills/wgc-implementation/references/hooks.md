@@ -23,12 +23,12 @@ Hooks работают только если `cwd` распознан как coo
 | Event | Handler | Поведение |
 | --- | --- | --- |
 | `SessionStart` | `session-start` | Добавляет текущий project, branch/dirty summary, обязательные docs и project-specific checks. Также срабатывает после compaction через source `compact`. |
-| `UserPromptSubmit` | `prompt-submit` | Выбирает профиль `$wgc-implementation` или `$wgc-bugfix`, выводит privacy-safe route flags и фиксирует baseline dirty paths. |
+| `UserPromptSubmit` | `prompt-submit` | Выбирает один из четырёх WGC-профилей с приоритетом явного `$skill`, выводит privacy-safe route flags и фиксирует baseline dirty paths. |
 | `SubagentStart` | `subagent-start` | Добавляет repository/scope/Git/deployment boundaries каждому субагенту. |
 | `SubagentStop` | `subagent-stop` | Проверяет профильный `WGC_AGENT_RESULT`, точный набор role/verdict/phase и назначенную revision; сохраняет структурированный verdict или один раз возвращает агента для исправления. |
 | `PreToolUse` | `pre-tool` | До Bash/edit блокирует однозначно опасные действия; для test/legacy/generated/publication changes добавляет предупреждение. |
 | `PostToolUse` | `post-tool` | Синхронно и в пределах bounded timeout фиксирует touched paths и успешные verification commands; сообщает только релевантные gaps. |
-| `Stop` | `stop` | Для активной implementation/bugfix-задачи один раз продолжает turn, если не хватает observable checks или profile-specific gate ledger. |
+| `Stop` | `stop` | Для активной WGC-задачи один раз продолжает turn, если не хватает observable checks или profile-specific gate ledger. |
 | `SessionEnd` | `session-end` | Деактивирует и компактно архивирует session ledger в `PLUGIN_DATA`. |
 
 `PreCompact`/`PostCompact` не используются: state обновляется после tool calls, а `SessionStart(source=compact)` уже восстанавливает контекст после compaction. `PermissionRequest` не используется, потому что плагин не должен автоматически разрешать escalation.

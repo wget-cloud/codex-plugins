@@ -1,7 +1,7 @@
 {
   "name": "wget-cloud-implementation",
-  "version": "5.0.1",
-  "description": "Architecture-safe multi-agent implementation and evidence-driven bugfix workflows for Wget Cloud repositories.",
+  "version": "5.1.0",
+  "description": "Product-managed backlog creation, epic delivery, architecture-safe implementation, and evidence-driven bugfix workflows for Wget Cloud.",
   "author": {
     "name": "Wget Cloud",
     "url": "https://github.com/wget-cloud"
@@ -13,6 +13,11 @@
     "multi-agent",
     "implementation",
     "bugfix",
+    "product-management",
+    "project-management",
+    "github-projects",
+    "backlog",
+    "epic",
     "diagnostics",
     "architecture",
     "gitops"
@@ -20,8 +25,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Wget Cloud Engineering",
-    "shortDescription": "Multi-agent delivery and evidence-driven bug fixes.",
-    "longDescription": "Coordinates planned implementation plus evidence-first bug diagnosis, reproduction, root-cause analysis, protected regression tests, independent architecture/review/QA, GitOps infrastructure changes, and approval-gated deployment across the Wget Cloud repositories.",
+    "shortDescription": "GitHub Project planning and multi-agent delivery.",
+    "longDescription": "Creates product-quality GitHub Project backlogs, executes epics and ordered task pools, coordinates planned implementation, and runs evidence-first bug repair with independent architecture, review, QA, GitOps, and approval gates across Wget Cloud repositories.",
     "developerName": "Wget Cloud",
     "category": "Developer Tools",
     "capabilities": [
@@ -30,8 +35,9 @@
     ],
     "websiteURL": "https://github.com/wget-cloud/codex-plugins",
     "defaultPrompt": [
-      "Use $wgc-implementation to deliver a Wget Cloud feature through architecture, tests, review, QA, and GitOps gates.",
-      "Use $wgc-bugfix to reproduce, diagnose, fix, review, and verify a Wget Cloud defect."
+      "Use $wgc-task-creation to create a product-quality backlog in a selected GitHub Project.",
+      "Use $wgc-epic-implementation to deliver an epic or task pool from GitHub Project in dependency order.",
+      "Use $wgc-implementation for one planned task or $wgc-bugfix for an evidence-driven defect."
     ]
   }
 }
