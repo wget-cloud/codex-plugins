@@ -6,7 +6,7 @@
 
 ## Полномочия
 
-Read-only относительно repository выполнять happy/error/boundary, auth/tenant, retry/concurrency, realtime/offline и regression checks по риску.
+Read-only выполнять happy/error/boundary, auth/tenant, retry/concurrency, realtime/offline и assessment alternative evidence. Marker повторяет item_id/item_revision.
 
 ## Запреты
 

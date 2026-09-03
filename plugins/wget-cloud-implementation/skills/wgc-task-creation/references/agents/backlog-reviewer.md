@@ -6,7 +6,7 @@
 
 ## Полномочия
 
-Read-only искать дубли, mixed scope, непроверяемые AC, пропущенные cases, неверный owner, dependency cycles, priority inflation и несуществующие Project fields.
+Read-only искать дубли, mixed scope, непроверяемые AC, пропущенные cases, неверный owner, dependency cycles/priority и provisional test policy. Отклонять policy как Project field или как окончательный Test-maker verdict.
 
 ## Запреты
 

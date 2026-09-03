@@ -24,7 +24,7 @@ Route flags:
 
 - `SessionStart`: краткая карта WGC и текущий active profile.
 - `SubagentStart`: repository boundaries, роль, запрет на prompt/log persistence и напоминание read-only evidence rules.
-- `SubagentStop`: принимает только валидный для профиля `bugfix` набор role/verdict/phase и записывает verdict/revision; verdict из implementation-профиля не может закрыть bugfix gate.
+- `SubagentStop`: принимает только валидный для профиля `bugfix` набор role/verdict/phase; Guardian `phase=plan` обязан повторить exact текущий FixPlan `plan_revision`. Записывает verdict/revision; verdict из implementation-профиля не может закрыть bugfix gate.
 - `PreToolUse`: запрещает destructive Git и прямые cluster mutations; допускает только точный human-approved clean-cluster Argo bootstrap, описанный в GitOps reference; предупреждает о broad log collection, protected tests и deployment permission.
 - `PostToolUse`: классифицирует изменённые repositories, protected-test hashes и выполненные проверки; изменение diff инвалидирует устаревшие approvals.
 - `Stop`: один раз продолжает задачу, если для текущего профиля не закрыты применимые checks/gates; затем позволяет честно сообщить blocker.
@@ -32,7 +32,9 @@ Route flags:
 
 ## Bugfix completion expectations
 
-Core structured gates: bug-triage, bug-investigator `evidence`, reproducer, bug-investigator `rca`, root-cause reviewer, architect, architecture guardian `plan`, test-maker, implementor, reviewer, architecture guardian `diff`, QA. Route flags добавляют browser/security/contract/DevOps/infrastructure/deployment gates. Для production source hooks также ожидают релевантные tests/coverage; дополнительные typecheck/lint/build определяются типом проекта.
+Core structured gates: bug-triage, bug-investigator `evidence`, reproducer, bug-investigator `rca`, root-cause reviewer, architect, architecture guardian `plan`, test-maker `assessment_ready`, implementor, reviewer, architecture guardian `diff`, QA. Route flags добавляют browser/security/contract/DevOps/infrastructure/deployment gates. `none` снимает только task-specific test; backend coverage и прочие repository gates сохраняются.
+
+State v3 валидирует flat TestAssessment marker из [test-assessment.md](test-assessment.md), запрещает `critical + none`, неполный reuse и необоснованный `standard + none`. Result ledger допускает до 1000 записей: retry того же role/phase/item/input revision заменяет прежний результат, active gates не вытесняются, overflow блокируется. V2 migration сохраняет только совместимое privacy-safe non-test verification evidence и сбрасывает legacy `test`/`coverage` evidence вместе с test/review/QA gates; malformed state блокирует completion до repository audit/reactivation. In-scope write сохраняет assessment/test-maker gate, out-of-scope/contract/migration/changed protected test инвалидирует его. Criticality не выводится механически из path/extension.
 
 Hooks не могут доказать качество RCA, корректность теста или фактическое здоровье rollout. Оркестратор обязан читать reports, перепроверять команды и сопоставлять revision.
 

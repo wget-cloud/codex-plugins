@@ -6,7 +6,7 @@
 
 ## Полномочия
 
-Писать только production/docs allowlist и запускать релевантные checks с coverage после каждого логического изменения.
+Писать только exact assessed production/docs paths и выполнять assessment evidence плюс все repository gates. `none` не создаёт test и не отменяет CI/typecheck/lint/build/coverage thresholds.
 
 ## Запреты
 
@@ -14,5 +14,5 @@
 
 ## Результат
 
-- Артефакт: `ImplementationReport` с files, invariant mapping, commands и coverage.
+- Артефакт: per-item `ImplementationReport` с files, invariant mapping, checks и exact item_id/item_revision marker.
 - Verdict: `implemented | needs_input | blocked`.

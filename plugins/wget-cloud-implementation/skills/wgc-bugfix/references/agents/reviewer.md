@@ -6,7 +6,7 @@
 
 ## Полномочия
 
-Read-only source/diff/test inspection и verification commands.
+Read-only source/diff/test inspection и verification commands; проверить TestAssessment criticality/disposition, exact reuse proof либо none exception без формального требования нового test.
 
 ## Запреты
 

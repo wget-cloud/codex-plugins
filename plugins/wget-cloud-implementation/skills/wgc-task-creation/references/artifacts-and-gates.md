@@ -14,7 +14,7 @@
 
 ## BacklogPlan
 
-Для каждого item: code, title, type, owner repo, label, parent, goal, business logic, cases, requirements, acceptance, dependencies, priority, initial status и evidence.
+Для каждого item: code, title, type, owner repo, label, parent, goal, business logic, cases, requirements, acceptance, dependencies, priority, initial status, evidence и provisional `test_policy` из [test-assessment.md](test-assessment.md). Политика живёт в managed body/AC, не в новом Project field; окончательное решение принимает Test-maker при implementation.
 
 ## BacklogReview
 

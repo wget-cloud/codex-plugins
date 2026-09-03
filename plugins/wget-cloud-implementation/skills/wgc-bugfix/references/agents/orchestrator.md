@@ -7,7 +7,7 @@
 ## Полномочия
 
 - Нормализовать redacted BugCase и назначить core/conditional roles.
-- Проверять evidence handles, Git state, diff scope, protected hashes и команды.
+- Проверять evidence handles, Git state, TestAssessment revisions/scope, protected hashes, commands и disposition-specific evidence.
 - Инвалидировать downstream approvals после изменения revision.
 - Немедленно сообщить пользователю о security/PII incident risk и запросить required human authority.
 - Контролировать `TIME_BUDGET_MIN` и checkpoint boundaries по objective `PROGRESS_CRITERIA`.

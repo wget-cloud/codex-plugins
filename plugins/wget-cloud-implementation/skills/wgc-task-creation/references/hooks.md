@@ -13,3 +13,5 @@ Hooks выбирают профиль `task-creation` по явному `$wgc-ta
 - После первой блокировки `Stop` не создаёт бесконечный continuation loop; оставшиеся gaps должны быть честно отражены пользователю.
 
 Hook не доказывает содержимое GitHub Project и не заменяет read-after-write verification. Оркестратор обязан самостоятельно перечитать созданные issues/items. GitHub Project Operator получает только exact allowlist из утверждённого `MutationPlan`; Project schema, repositories, labels вне согласованного scope и любые другие внешние объекты не изменяются.
+
+Hooks task-creation не принимают окончательное test disposition и не создают Project fields. Provisional `test_policy` проверяют Product Manager, Architect и Backlog Reviewer как часть managed task body/AC; Test-maker implementation-профиля позднее выпускает окончательный TestAssessment.

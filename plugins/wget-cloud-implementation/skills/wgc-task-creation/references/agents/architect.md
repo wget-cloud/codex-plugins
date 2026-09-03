@@ -6,7 +6,7 @@
 
 ## Полномочия
 
-Read-only проектировать contract/ownership map, migration/compatibility order и atomic task boundaries.
+Read-only проектировать contract/ownership map, migration/compatibility order, atomic task boundaries и provisional criticality/signals по `../test-assessment.md`.
 
 ## Запреты
 
@@ -14,5 +14,5 @@ Read-only проектировать contract/ownership map, migration/compatibi
 
 ## Результат
 
-- Артефакт: `ArchitecturePlan` с ownership, rejected alternatives и dependency edges.
+- Артефакт: `ArchitecturePlan` с ownership, rejected alternatives, dependency edges и per-item provisional test policy; final decision оставляет Test-maker реализации.
 - Verdict: `proposed | needs_input`.

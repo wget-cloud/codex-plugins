@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import os
 import re
@@ -14,6 +15,7 @@ from unittest import mock
 SCRIPT = Path(__file__).resolve().parents[1] / "wgc_hooks.py"
 HOOKS_JSON = SCRIPT.parent / "hooks.json"
 PLUGIN_JSON = SCRIPT.parent.parent / ".codex-plugin" / "plugin.json"
+ADAPTIVE_POLICY_FIXTURE = SCRIPT.parent / "tests" / "fixtures" / "adaptive_test_policy_cases.json"
 WORKDIR_ABSENT = object()
 
 class HooksConfigTest(unittest.TestCase):
@@ -66,7 +68,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
-        self.assertEqual(version, "5.1.0")
+        self.assertEqual(version, "6.0.0")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -321,7 +323,12 @@ contexts:
             cwd,
         )
 
-    def record_agent(self, cwd, role, verdict, phase=""):
+    def record_agent(self, cwd, role, verdict, phase="", auto_defaults=True, **extra):
+        if role == "test-maker" and verdict == "assessment_ready" and auto_defaults and "assessment" not in extra:
+            test_file = cwd / "tests" / "app.test.ts"
+            test_file.parent.mkdir(exist_ok=True)
+            test_file.write_text("it('app', () => {});\n", encoding="utf-8")
+            self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Add File: tests/app.test.ts\n+x\n*** End Patch"}, "tool_response": {"ok": True}}, cwd)
         self.agent_counter += 1
         agent_id = f"agent-{self.agent_counter}"
         started = self.call(
@@ -336,10 +343,47 @@ contexts:
         )
         context = started["hookSpecificOutput"]["additionalContext"]
         revision = re.search(r"revision is ([0-9a-f]{64})", context).group(1)
-        marker = json.dumps(
-            {"role": role, "verdict": verdict, "phase": phase, "input_revision": revision},
-            separators=(",", ":"),
-        )
+        marker_value = {"role": role, "verdict": verdict, "phase": phase, "input_revision": revision, **extra}
+        if auto_defaults and role == "architect" and verdict in {"proposed", "planned"}:
+            marker_value.setdefault("plan_revision", "test-plan-r1")
+            marker_value.setdefault("minimum_test_criticality", "low")
+            marker_value.setdefault("acceptance_revision", "test-ac-r1")
+        if auto_defaults and role == "reproducer" and verdict in {"reproduced", "characterized"}:
+            marker_value.setdefault("acceptance_revision", "test-ac-r1")
+        state = self.adaptive_state()
+        if auto_defaults and state.get("profile") == "epic-implementation" and role == "architecture-guardian" and phase == "plan":
+            marker_value.setdefault("item_id", "EPIC-1")
+            marker_value.setdefault("item_revision", "a" * 64)
+        if auto_defaults and role == "architecture-guardian" and verdict == "approved" and phase == "plan":
+            item_id = marker_value.get("item_id")
+            item_revision = marker_value.get("item_revision")
+            matched = next((item for item in state.get("selected_items", []) if isinstance(item, dict) and item.get("item_id") == item_id and item.get("item_revision") == item_revision), None)
+            marker_value.setdefault("plan_revision", (matched or state).get("plan_revision", "test-plan-r1"))
+        if auto_defaults and state.get("profile") == "epic-implementation":
+            if role == "project-manager" and verdict == "planned" and phase == "scope":
+                marker_value.setdefault("selected_items", [{"item_id": "EPIC-1", "item_revision": "a" * 64, "plan_revision": "test-plan-r1", "acceptance_revision": "test-ac-r1", "minimum_test_criticality": "low"}])
+            if role in {"test-maker", "implementor", "reviewer", "qa"} or (role == "architecture-guardian" and phase == "diff") or (role == "product-manager" and phase == "outcome"):
+                marker_value.setdefault("item_id", "EPIC-1")
+                marker_value.setdefault("item_revision", "a" * 64)
+        if role == "test-maker" and verdict == "assessment_ready" and "assessment" not in marker_value:
+            test_file = cwd / "tests" / "app.test.ts"
+            test_hash = hashlib.sha256(test_file.read_bytes()).hexdigest()
+            marker_value.update(
+                {
+                    "plan_revision": "test-plan-r1",
+                    "acceptance_revision": "test-ac-r1",
+                    "test_criticality": "standard",
+                    "test_disposition": "add",
+                    "scope_fingerprint": "test-scope-r1",
+                    "assessed_paths": ["src/app.ts"],
+                    "tested_invariants": ["app behavior remains observable"],
+                    "existing_tests": ["no_relevant_tests"],
+                    "coverage_mode": "targeted",
+                    "residual_risks": ["integration regression"],
+                    "test_plan": {"action": "add", "tests": ["tests/app.test.ts"], "protected_hashes": {"tests/app.test.ts": test_hash}, "commands": ["npm test -- tests/app.test.ts"], "expected_baseline": "red", "actual_baseline": "red"},
+                }
+            )
+        marker = json.dumps(marker_value, separators=(",", ":"))
         return self.call(
             "subagent-stop",
             {
@@ -352,6 +396,497 @@ contexts:
             },
             cwd,
         )
+
+    def record_test_assessment(self, cwd, assessment, verdict="assessment_ready", prepare=True, complete=True):
+        assessment = dict(assessment)
+        if complete:
+            assessment.setdefault("assessed_paths", ["src/app.ts"])
+            assessment.setdefault("tested_invariants", ["observable invariant"])
+            assessment.setdefault("existing_tests", ["no_relevant_tests"])
+            assessment.setdefault("coverage_mode", "targeted")
+            assessment.setdefault("residual_risks", ["integration risk"])
+            if assessment.get("test_disposition") in {"add", "update"}:
+                assessment.setdefault("test_plan", {"action": assessment["test_disposition"], "tests": ["tests/app.test.ts"], "protected_hashes": {"tests/app.test.ts": "0" * 64}, "commands": ["npm test -- tests/app.test.ts"], "expected_baseline": "red", "actual_baseline": "red"})
+        if prepare and self.adaptive_state().get("profile") != "epic-implementation":
+            state = self.adaptive_state()
+            if not state.get("plan_revision") or not state.get("acceptance_revision"):
+                self.record_agent(cwd, "architect", "proposed", plan_revision=assessment.get("plan_revision", "test-plan-r1"), acceptance_revision=assessment.get("acceptance_revision", "test-ac-r1"), minimum_test_criticality=assessment.get("test_criticality", "low"))
+        self.agent_counter += 1
+        agent_id = f"assessment-agent-{self.agent_counter}"
+        started = self.call(
+            "subagent-start",
+            {
+                "hook_event_name": "SubagentStart",
+                "turn_id": "turn-assessment",
+                "agent_id": agent_id,
+                "agent_type": "test-maker",
+            },
+            cwd,
+        )
+        revision = re.search(
+            r"revision is ([0-9a-f]{64})",
+            started["hookSpecificOutput"]["additionalContext"],
+        ).group(1)
+        marker = {
+            "role": "test-maker",
+            "verdict": verdict,
+            "phase": "",
+            "input_revision": revision,
+            **assessment,
+        }
+        return self.call(
+            "subagent-stop",
+            {
+                "hook_event_name": "SubagentStop",
+                "turn_id": "turn-assessment",
+                "agent_id": agent_id,
+                "agent_type": "test-maker",
+                "stop_hook_active": False,
+                "last_assistant_message": "WGC_AGENT_RESULT: " + json.dumps(marker, separators=(",", ":")),
+            },
+            cwd,
+        )
+
+    def record_epic_agent(self, cwd, role, verdict, phase="", item_id="EPIC-1", item_revision=None, **extra):
+        return self.record_agent(
+            cwd,
+            role,
+            verdict,
+            phase,
+            item_id=item_id,
+            item_revision=item_revision or "a" * 64,
+            **extra,
+        )
+
+    def freeze_epic_items(self, cwd, items=None):
+        return self.record_agent(
+            cwd,
+            "project-manager",
+            "planned",
+            "scope",
+            selected_items=items or [{"item_id": "EPIC-1", "item_revision": "a" * 64}],
+        )
+
+    def adaptive_state(self):
+        state_path = next((self.data / "hook-state").glob("*.json"))
+        return json.loads(state_path.read_text(encoding="utf-8"))
+
+    def test_adaptive_policy_fixture_covers_twenty_sanitized_cases(self):
+        cases = json.loads(ADAPTIVE_POLICY_FIXTURE.read_text(encoding="utf-8"))
+        self.assertGreaterEqual(len(cases), 20)
+        self.assertEqual(len({case["id"] for case in cases}), len(cases))
+        required = {"css-token-5px", "tsx-cosmetic-5px", "a11y-focus-order", "critical-none-invalid", "state-v2-legacy", "malformed-assessment", "epic-mixed-ledger"}
+        self.assertTrue(required.issubset({case["id"] for case in cases}))
+        self.assertEqual(
+            {case["test_disposition"] for case in cases},
+            {"add", "update", "reuse", "none"},
+        )
+        reuse = next(case for case in cases if case["id"] == "reuse-proof")["reuse_proof"]
+        self.assertEqual(reuse["file_sha256"], hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+
+    def test_state_v3_requires_empty_adaptive_assessment_ledger(self):
+        self.activate()
+        state = self.adaptive_state()
+        self.assertEqual(state["version"], 3)
+        self.assertEqual(state["test_assessments"], [])
+        self.assertEqual(state["selected_items"], [])
+
+    def test_v2_migration_preserves_verification_and_resets_legacy_downstream_gates(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        path = next((self.data / "hook-state").glob("*.json"))
+        path.write_text(json.dumps({"version": 2, "active": True, "verification": {"test": {"at": 1}, "coverage": {"at": 1}, "typecheck": {"at": 1}}, "subagent_results": [{"role": "architect", "verdict": "proposed", "phase": ""}, {"role": "test-maker", "verdict": "baseline_ready", "phase": ""}, {"role": "qa", "verdict": "pass", "phase": ""}]}), encoding="utf-8")
+        self.call("session-start", {"hook_event_name": "SessionStart", "source": "resume"}, cwd)
+        state = self.adaptive_state()
+        self.assertEqual(state["version"], 3)
+        self.assertNotIn("test", state["verification"])
+        self.assertNotIn("coverage", state["verification"])
+        self.assertIn("typecheck", state["verification"])
+        self.assertEqual([result["role"] for result in state["subagent_results"]], ["architect"])
+        self.assertEqual(state["test_assessments"], [])
+
+    def test_malformed_state_blocks_completion_fail_closed(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        path = next((self.data / "hook-state").glob("*.json"))
+        path.write_text("{broken", encoding="utf-8")
+        blocked = self.call("stop", {"hook_event_name": "Stop", "turn_id": "malformed", "stop_hook_active": False, "last_assistant_message": "done"}, cwd)
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("malformed", blocked["reason"])
+
+    def test_every_disposition_requires_bounded_assessment_evidence_and_allowlisted_shape(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        for disposition in ("add", "update", "reuse", "none"):
+            assessment = {"plan_revision": "plan-r1", "acceptance_revision": "accept-r1", "test_criticality": "low", "test_disposition": disposition, "scope_fingerprint": "scope-r1"}
+            blocked = self.record_test_assessment(cwd, assessment)
+            self.assertIsNotNone(blocked, f"{disposition} must require assessment evidence")
+            self.assertEqual(blocked["decision"], "block")
+        raw_blob = {"plan_revision": "plan-r1", "acceptance_revision": "accept-r1", "test_criticality": "low", "test_disposition": "add", "scope_fingerprint": "scope-r1", "assessed_paths": ["src/a.ts"], "tested_invariants": ["invariant"], "existing_tests": ["no_relevant_tests"], "coverage_mode": "targeted", "residual_risks": ["risk"], "untrusted_raw_blob": {"prompt": "must not persist"}}
+        blocked = self.record_test_assessment(cwd, raw_blob)
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("unknown", blocked["reason"].lower())
+
+    def test_execution_plan_and_acceptance_revisions_are_required_before_assessment(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        architect = self.record_agent(cwd, "architect", "proposed", auto_defaults=False)
+        self.assertIsNotNone(architect, "execution architect marker must include plan revision and criticality floor")
+        self.assertEqual(architect["decision"], "block")
+        self.assertIn("plan_revision", architect["reason"])
+        assessment = {"plan_revision": "plan-r1", "acceptance_revision": "accept-r1", "test_criticality": "standard", "test_disposition": "add", "scope_fingerprint": "scope-r1"}
+        blocked = self.record_test_assessment(cwd, assessment, prepare=False)
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("plan", blocked["reason"].lower())
+
+    def test_v2_migration_clears_test_and_coverage_verification_and_epic_capacity_is_bounded(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        path = next((self.data / "hook-state").glob("*.json"))
+        path.write_text(json.dumps({"version": 2, "active": True, "verification": {"test": {"at": 1}, "coverage": {"at": 1}, "typecheck": {"at": 1}}}), encoding="utf-8")
+        self.call("session-start", {"hook_event_name": "SessionStart", "source": "resume"}, cwd)
+        verification = self.adaptive_state()["verification"]
+        self.assertNotIn("test", verification)
+        self.assertNotIn("coverage", verification)
+        self.assertIn("typecheck", verification)
+
+    def test_unknown_or_unbounded_assessment_data_is_rejected_and_never_persisted(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        assessment = {"plan_revision": "plan-r1", "acceptance_revision": "accept-r1", "test_criticality": "low", "test_disposition": "add", "scope_fingerprint": "scope-r1", "assessed_paths": ["src/a.ts"] * 201, "tested_invariants": ["i"], "existing_tests": ["no_relevant_tests"], "coverage_mode": "targeted", "residual_risks": ["r"], "test_plan": {"action": "add", "tests": ["a.test.ts"], "protected_hashes": {"a.test.ts": "0" * 64}}, "nested_raw": {"secret": "never-persist"}}
+        blocked = self.record_test_assessment(cwd, assessment)
+        self.assertIsNotNone(blocked)
+        self.assertEqual(blocked["decision"], "block")
+        self.assertNotIn("never-persist", json.dumps(self.adaptive_state()))
+
+    def test_none_preserves_frontend_and_site_repository_test_gates(self):
+        for project, expected in (("frontend", {"test", "typecheck"}), ("wget-cloud-site", {"test", "typecheck", "lint", "build"})):
+            cwd = self.projects[project]
+            self.activate(project)
+            source = cwd / "src" / "card.tsx"
+            source.parent.mkdir(exist_ok=True)
+            source.write_text("export const Card = () => null;\n", encoding="utf-8")
+            self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Add File: src/card.tsx\n+x\n*** End Patch"}, "tool_response": {"ok": True}}, cwd)
+            assessment = {"plan_revision": "plan-r1", "acceptance_revision": "accept-r1", "test_criticality": "low", "test_disposition": "none", "scope_fingerprint": "scope-r1", "assessed_paths": ["src/card.tsx"], "tested_invariants": ["visual spacing"], "existing_tests": ["no_relevant_tests"], "coverage_mode": "none", "residual_risks": ["visual drift"], "alternative_evidence": ["screenshot"], "rationale": "cosmetic"}
+            self.assertIsNone(self.record_test_assessment(cwd, assessment))
+            self.assertTrue(expected.issubset(set(self.adaptive_state()["repository_gates"])))
+
+    def test_epic_item_scoped_assessments_preserve_sibling_and_reject_stale_revision(self):
+        cwd = self.projects["backend"]
+        self.activate_profile("epic-implementation")
+        items = [
+            {"item_id": "A", "item_revision": "a" * 64, "plan_revision": "p-a", "acceptance_revision": "ac-a", "minimum_test_criticality": "critical"},
+            {"item_id": "B", "item_revision": "b" * 64, "plan_revision": "p-b", "acceptance_revision": "ac-b", "minimum_test_criticality": "standard"},
+        ]
+        self.assertIsNone(self.freeze_epic_items(cwd, items))
+        prepared = []
+        for item, path in zip(items, ("src/a.ts", "src/b.ts")):
+            test_path = f"tests/{item['item_id'].lower()}.test.ts"
+            test_file = cwd / test_path; test_file.parent.mkdir(exist_ok=True); test_file.write_text(f"it('{item['item_id']}', () => {{}});\n", encoding="utf-8")
+            test_hash = hashlib.sha256(test_file.read_bytes()).hexdigest()
+            self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_input": {"command": f"*** Begin Patch\n*** Add File: {test_path}\n+x\n*** End Patch"}, "tool_response": {"ok": True}}, cwd)
+            prepared.append((item, path, test_path, test_hash))
+        for item, path, test_path, test_hash in prepared:
+            assessment = {"plan_revision": item["plan_revision"], "acceptance_revision": item["acceptance_revision"], "test_criticality": item["minimum_test_criticality"], "test_disposition": "add", "scope_fingerprint": path, "item_id": item["item_id"], "item_revision": item["item_revision"], "assessed_paths": [path], "tested_invariants": [item["item_id"]], "existing_tests": ["no_relevant_tests"], "coverage_mode": "targeted", "residual_risks": ["risk"], "test_plan": {"action": "add", "tests": [test_path], "protected_hashes": {test_path: test_hash}, "commands": [f"npm test -- {test_path}"], "expected_baseline": "red", "actual_baseline": "red"}}
+            self.assertIsNone(self.record_test_assessment(cwd, assessment))
+        (cwd / "src").mkdir(exist_ok=True)
+        (cwd / "src" / "a.ts").write_text("export const a = 1;\n", encoding="utf-8")
+        self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Add File: src/a.ts\n+x\n*** End Patch"}, "tool_response": {"ok": True}}, cwd)
+        remaining = self.adaptive_state()["test_assessments"]
+        self.assertEqual([value["item_id"] for value in remaining], ["A", "B"])
+        stale = {**next(value for value in remaining if value["item_id"] == "A"), "item_revision": "z" * 64}
+        self.assertEqual(self.record_test_assessment(cwd, stale)["decision"], "block")
+
+    def test_epic_assessment_capacity_fails_closed_without_eviction(self):
+        cwd = self.projects["backend"]
+        self.activate_profile("epic-implementation")
+        state = self.adaptive_state()
+        capacity = 100
+        items = [{"item_id": f"I{i}", "item_revision": f"{i:064x}", "plan_revision": "p", "acceptance_revision": "ac", "minimum_test_criticality": "critical" if i == 0 else "low"} for i in range(capacity)]
+        self.assertIsNone(self.freeze_epic_items(cwd, items))
+        state = self.adaptive_state(); state["test_assessments"] = [{"item_id": item["item_id"], "item_revision": item["item_revision"], "test_criticality": item["minimum_test_criticality"]} for item in items]; path = next((self.data / "hook-state").glob("*.json")); path.write_text(json.dumps(state), encoding="utf-8")
+        oversized = items + [{"item_id": "I100", "item_revision": "f" * 64, "plan_revision": "p", "acceptance_revision": "ac", "minimum_test_criticality": "low"}]
+        blocked = self.record_agent(cwd, "project-manager", "planned", "scope", auto_defaults=False, selected_items=oversized)
+        self.assertEqual(blocked["decision"], "block")
+        self.assertRegex(blocked["reason"], r"(?i)(100|bound|capacity)")
+        self.assertEqual(self.adaptive_state()["test_assessments"][0]["item_id"], "I0")
+
+    def test_malformed_reactivation_resets_snapshots_and_untrusted_gates(self):
+        cwd = self.projects["backend"]
+        self.activate(); path = next((self.data / "hook-state").glob("*.json"))
+        state = self.adaptive_state(); state.update({"baseline_dirty": {"bad": {"x": "1"}}, "current_dirty": {"bad": {"x": "2"}}, "verification": {"test": {"at": 1}, "coverage": {"at": 1}}, "subagent_results": [{"role": "reviewer"}, {"role": "qa"}], "test_assessments": [{"item_id": "bad"}]}); path.write_text(json.dumps(state), encoding="utf-8")
+        path.write_text("{broken", encoding="utf-8")
+        self.assertEqual(self.call("stop", {"hook_event_name": "Stop", "turn_id": "bad", "stop_hook_active": False}, cwd)["decision"], "block")
+        self.activate()
+        state = self.adaptive_state()
+        self.assertEqual(state["state_health"], "healthy")
+        self.assertEqual(state["test_assessments"], [])
+        self.assertEqual(state["subagent_results"], [])
+        self.assertNotEqual(state["baseline_dirty"], {"bad": {"x": "1"}})
+        self.assertNotIn("test", state["verification"])
+        self.assertNotIn("coverage", state["verification"])
+
+    def test_same_plan_floor_downgrade_requires_new_plan_and_guardian_reapproval(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        self.assertIsNone(self.record_agent(cwd, "architect", "proposed", plan_revision="p1", minimum_test_criticality="critical", acceptance_revision="ac1"))
+        self.record_agent(cwd, "architect", "planned")
+        self.record_agent(cwd, "architecture-guardian", "approved", "plan")
+        lowered = self.record_agent(cwd, "architect", "proposed", plan_revision="p1", minimum_test_criticality="low", acceptance_revision="ac1")
+        self.assertIsNotNone(lowered, "same-plan criticality downgrade must fail closed")
+        self.assertEqual(lowered["decision"], "block")
+        self.assertIn("criticality", lowered["reason"].lower())
+        self.assertIsNone(self.record_agent(cwd, "architect", "proposed", plan_revision="p2", minimum_test_criticality="low", acceptance_revision="ac2"))
+        p2_test = cwd / "tests" / "p2.test.ts"; p2_test.parent.mkdir(exist_ok=True); p2_test.write_text("it('p2', () => {});\n", encoding="utf-8")
+        p2_hash = hashlib.sha256(p2_test.read_bytes()).hexdigest()
+        assessment = {"plan_revision": "p2", "acceptance_revision": "ac2", "test_criticality": "low", "test_disposition": "add", "scope_fingerprint": "p2", "assessed_paths": ["src/p2.ts"], "tested_invariants": ["p2"], "existing_tests": ["no_relevant_tests"], "coverage_mode": "targeted", "residual_risks": ["r"], "alternative_evidence": ["focused review"], "test_plan": {"action": "add", "tests": ["tests/p2.test.ts"], "protected_hashes": {"tests/p2.test.ts": p2_hash}, "commands": ["npm test -- tests/p2.test.ts"], "expected_baseline": "red", "actual_baseline": "red"}}
+        self.assertIsNotNone(self.record_test_assessment(cwd, assessment), "new plan requires new guardian plan approval")
+        self.assertIsNone(self.record_agent(cwd, "architecture-guardian", "approved", "plan"))
+        self.assertIsNone(self.record_test_assessment(cwd, assessment))
+
+    def test_guardian_plan_marker_must_match_current_plan_revision(self):
+        cwd = self.projects["backend"]; self.activate()
+        self.assertIsNone(self.record_agent(cwd, "architect", "proposed", plan_revision="p1", minimum_test_criticality="standard", acceptance_revision="ac1"))
+        missing = self.record_agent(cwd, "architecture-guardian", "approved", "plan", auto_defaults=False)
+        self.assertIsNotNone(missing)
+        self.assertIsNone(self.record_agent(cwd, "architect", "proposed", plan_revision="p2", minimum_test_criticality="standard", acceptance_revision="ac2"))
+        stale = self.record_agent(cwd, "architecture-guardian", "approved", "plan", plan_revision="p1")
+        self.assertIsNotNone(stale, "stale guardian p1 must not approve current p2 plan")
+        self.assertIsNone(self.record_agent(cwd, "architecture-guardian", "approved", "plan", plan_revision="p2"))
+
+    def test_epic_guardian_plan_marker_binds_item_revision_and_current_plan(self):
+        cwd = self.projects["backend"]; self.activate_profile("epic-implementation")
+        item = {"item_id": "I1", "item_revision": "e" * 64, "plan_revision": "p1", "acceptance_revision": "ac", "minimum_test_criticality": "standard"}
+        self.assertIsNone(self.freeze_epic_items(cwd, [item]))
+        self.assertIsNone(self.record_agent(cwd, "architect", "proposed", item_id="I1", item_revision=item["item_revision"], plan_revision="p2", minimum_test_criticality="standard", acceptance_revision="ac"))
+        missing = self.record_agent(cwd, "architecture-guardian", "approved", "plan", item_id="I1", item_revision=item["item_revision"], auto_defaults=False)
+        self.assertIsNotNone(missing)
+        stale = self.record_agent(cwd, "architecture-guardian", "approved", "plan", item_id="I1", item_revision=item["item_revision"], plan_revision="p1")
+        self.assertIsNotNone(stale)
+        self.assertIsNone(self.record_agent(cwd, "architecture-guardian", "approved", "plan", item_id="I1", item_revision=item["item_revision"], plan_revision="p2"))
+
+    def test_result_ledger_accepts_exact_capacity_without_eviction(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        state = self.adaptive_state()
+        state["subagent_results"] = [
+            {"role": "explorer", "verdict": "mapped", "phase": "", "input_revision": f"seed-{index:04d}"}
+            for index in range(999)
+        ]
+        path = next((self.data / "hook-state").glob("*.json"))
+        path.write_text(json.dumps(state), encoding="utf-8")
+
+        self.assertIsNone(self.record_agent(cwd, "explorer", "mapped", auto_defaults=False))
+        results = self.adaptive_state()["subagent_results"]
+        self.assertEqual(len(results), 1000)
+        self.assertEqual(results[0]["input_revision"], "seed-0000")
+        self.assertEqual(results[998]["input_revision"], "seed-0998")
+
+    def test_result_ledger_rejects_1001st_unique_without_eviction(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        seeded = [
+            {"role": "explorer", "verdict": "mapped", "phase": "", "input_revision": f"seed-{index:04d}"}
+            for index in range(1000)
+        ]
+        state = self.adaptive_state()
+        state["subagent_results"] = seeded
+        path = next((self.data / "hook-state").glob("*.json"))
+        path.write_text(json.dumps(state), encoding="utf-8")
+
+        blocked = self.record_agent(cwd, "reviewer", "approved", auto_defaults=False)
+        self.assertIsNotNone(blocked)
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("bounded capacity of 1000", blocked["reason"])
+        self.assertEqual(self.adaptive_state()["subagent_results"], seeded)
+
+    def test_result_ledger_retry_at_capacity_replaces_in_place(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        state = self.adaptive_state()
+        state["subagent_results"] = [
+            {"role": "explorer", "verdict": "mapped", "phase": "", "input_revision": f"seed-{index:04d}"}
+            for index in range(999)
+        ]
+        path = next((self.data / "hook-state").glob("*.json"))
+        path.write_text(json.dumps(state), encoding="utf-8")
+        self.assertIsNone(self.record_agent(cwd, "explorer", "mapped", auto_defaults=False))
+        first_results = self.adaptive_state()["subagent_results"]
+        first_record = first_results[-1]
+        self.assertEqual(len(first_results), 1000)
+
+        self.assertIsNone(self.record_agent(cwd, "explorer", "mapped", auto_defaults=False))
+        retried_results = self.adaptive_state()["subagent_results"]
+        self.assertEqual(len(retried_results), 1000)
+        self.assertEqual(retried_results[0]["input_revision"], "seed-0000")
+        self.assertEqual(retried_results[-1]["input_revision"], first_record["input_revision"])
+        self.assertNotEqual(retried_results[-1]["agent_id"], first_record["agent_id"])
+
+    def test_add_update_test_plan_requires_real_matching_file_hash_and_evidence(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        base = {"plan_revision": "p", "acceptance_revision": "ac", "test_criticality": "standard", "test_disposition": "add", "scope_fingerprint": "s", "assessed_paths": ["src/a.ts"], "tested_invariants": ["a"], "existing_tests": ["no_relevant_tests"], "coverage_mode": "targeted", "residual_risks": ["r"]}
+        fake = {**base, "test_plan": {"action": "add", "tests": ["tests/a.test.ts"], "protected_hashes": {"tests/a.test.ts": "0" * 64}, "commands": ["npm test -- tests/a.test.ts"], "expected_baseline": "red", "actual_baseline": "red"}}
+        blocked = self.record_test_assessment(cwd, fake)
+        self.assertIsNotNone(blocked, "fake protected hash must fail closed")
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("hash", blocked["reason"].lower())
+        test_file = cwd / "tests" / "a.test.ts"; test_file.parent.mkdir(); test_file.write_text("it('a', () => {});\n", encoding="utf-8")
+        digest = hashlib.sha256(test_file.read_bytes()).hexdigest()
+        valid = {**base, "test_plan": {"action": "add", "tests": ["tests/a.test.ts"], "protected_hashes": {"tests/a.test.ts": digest}, "commands": ["npm test -- tests/a.test.ts"], "expected_baseline": "red", "actual_baseline": "red"}}
+        self.assertIsNone(self.record_test_assessment(cwd, valid))
+
+    def test_epic_same_plan_floor_downgrade_requires_new_plan_guardian_approval(self):
+        cwd = self.projects["backend"]; self.activate_profile("epic-implementation")
+        item = {"item_id": "E1", "item_revision": "e" * 64, "plan_revision": "p1", "acceptance_revision": "ac1", "minimum_test_criticality": "critical"}
+        self.assertIsNone(self.freeze_epic_items(cwd, [item]))
+        lowered = {**item, "minimum_test_criticality": "low"}
+        blocked = self.record_agent(cwd, "architect", "proposed", item_id="E1", item_revision=item["item_revision"], plan_revision="p1", minimum_test_criticality="low", acceptance_revision="ac1")
+        self.assertIsNotNone(blocked, "same item plan floor downgrade must block")
+
+    def test_test_plan_keyset_and_update_path_integrity_fail_closed(self):
+        cwd = self.projects["backend"]; self.activate()
+        common = {"plan_revision": "p", "acceptance_revision": "ac", "test_criticality": "standard", "scope_fingerprint": "s", "assessed_paths": ["src/a.ts"], "tested_invariants": ["a"], "existing_tests": ["no_relevant_tests"], "coverage_mode": "targeted", "residual_risks": ["r"]}
+        mismatch = {**common, "test_disposition": "add", "test_plan": {"action": "add", "tests": ["tests/a.test.ts"], "protected_hashes": {"tests/b.test.ts": "0" * 64}}}
+        self.assertIsNotNone(self.record_test_assessment(cwd, mismatch), "test and hash keysets must match")
+        missing = {**common, "test_disposition": "update", "test_plan": {"action": "update", "tests": ["tests/missing.test.ts"], "protected_hashes": {"tests/missing.test.ts": "0" * 64}, "protected_test_handshake": True}}
+        self.assertIsNotNone(self.record_test_assessment(cwd, missing), "update must require an existing test file")
+
+    def test_epic_docs_or_yaml_write_clears_all_stale_item_gates(self):
+        cwd = self.projects["backend"]; self.activate_profile("epic-implementation")
+        items = [{"item_id": "A", "item_revision": "a" * 64, "plan_revision": "p", "acceptance_revision": "ac", "minimum_test_criticality": "low"}, {"item_id": "B", "item_revision": "b" * 64, "plan_revision": "p", "acceptance_revision": "ac", "minimum_test_criticality": "low"}]
+        self.assertIsNone(self.freeze_epic_items(cwd, items)); state = self.adaptive_state(); state["selected_items"][0]["gates"] = ["reviewer", "qa"]; state["selected_items"][1]["gates"] = ["reviewer", "qa"]; path = next((self.data / "hook-state").glob("*.json")); path.write_text(json.dumps(state), encoding="utf-8")
+        (cwd / "docs").mkdir(); (cwd / "docs" / "note.md").write_text("x\n", encoding="utf-8")
+        self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Add File: docs/note.md\n+x\n*** End Patch"}, "tool_response": {"ok": True}}, cwd)
+        self.assertEqual([item["gates"] for item in self.adaptive_state()["selected_items"]], [[], []])
+
+    def test_test_maker_requires_assessment_ready_with_mandatory_fields(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        output = self.record_agent(cwd, "test-maker", "baseline_ready")
+        self.assertIsNotNone(output, "legacy baseline_ready must not satisfy TestAssessment gate")
+        self.assertEqual(output["decision"], "block")
+        self.assertIn("TestAssessment", output["reason"])
+
+    def test_critical_none_and_unknown_semantics_fail_closed(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        invalid = self.record_test_assessment(
+            cwd,
+            {
+                "plan_revision": "plan-r1",
+                "acceptance_revision": "accept-r1",
+                "test_criticality": "critical",
+                "test_disposition": "none",
+                "scope_fingerprint": "scope-r1",
+            },
+        )
+        self.assertIsNotNone(invalid, "critical + none TestAssessment must fail closed")
+        self.assertEqual(invalid["decision"], "block")
+        self.assertIn("critical", invalid["reason"])
+        unknown = self.record_test_assessment(
+            cwd,
+            {
+                "plan_revision": "plan-r2",
+                "acceptance_revision": "accept-r2",
+                "test_criticality": "unknown",
+                "test_disposition": "reuse",
+                "scope_fingerprint": "scope-r2",
+                "reuse_proof": {"test_path": "tests/existing.test.ts", "covered_branch": "unknown semantic branch"},
+            },
+        )
+        self.assertIsNotNone(unknown, "unknown semantics must be normalized to critical")
+        self.assertEqual(unknown["decision"], "block")
+        self.assertIn("critical", unknown["reason"])
+
+    def test_standard_none_requires_complete_exception_evidence(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        assessment = {
+            "plan_revision": "plan-r1", "acceptance_revision": "accept-r1",
+            "test_criticality": "standard", "test_disposition": "none", "scope_fingerprint": "scope-r1",
+            "disproportionate_cost": True, "stronger_alternative_evidence": ["manual trace"], "alternative_evidence": ["manual trace"],
+        }
+        missing = self.record_test_assessment(cwd, assessment)
+        self.assertIsNotNone(missing, "standard + none must reject incomplete exception evidence")
+        self.assertEqual(missing["decision"], "block")
+        self.assertIn("rationale", missing["reason"])
+        complete = {**assessment, "rationale": "isolated non-observable rendering detail", "residual_risks": ["visual drift"], "follow_up": "verify in release smoke"}
+        self.assertIsNone(self.record_test_assessment(cwd, complete))
+
+    def test_reuse_proof_requires_exact_protected_file_and_critical_branch_evidence(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        protected = cwd / "tests" / "price.test.ts"
+        protected.parent.mkdir()
+        protected.write_text("it('rounding boundary', () => {});\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "npm test -- --coverage"}, "tool_response": {"exit_code": 0}},
+            cwd,
+        )
+        incomplete = {
+            "plan_revision": "plan-r1",
+            "acceptance_revision": "accept-r1",
+            "test_criticality": "critical",
+            "test_disposition": "reuse",
+            "scope_fingerprint": "scope-r1",
+            "reuse_proof": {"test_id": "rounding-boundary", "test_path": "tests/price.test.ts", "invariant_mapping": "rounding", "successful_run": True, "file_sha256": "0" * 64},
+        }
+        rejected = self.record_test_assessment(cwd, incomplete)
+        self.assertEqual(rejected["decision"], "block")
+        self.assertIn("file_sha256", rejected["reason"])
+        valid = dict(incomplete)
+        valid["reuse_proof"] = {**incomplete["reuse_proof"], "file_sha256": __import__("hashlib").sha256(protected.read_bytes()).hexdigest(), "critical_branch_evidence": "rounding boundary branch"}
+        self.assertIsNone(self.record_test_assessment(cwd, valid))
+
+    def test_assessment_retains_in_scope_write_and_invalidates_out_of_scope_write(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        protected = cwd / "tests" / "price.test.ts"; protected.parent.mkdir(exist_ok=True); protected.write_text("it('price', () => {});\n", encoding="utf-8")
+        digest = hashlib.sha256(protected.read_bytes()).hexdigest()
+        self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Add File: tests/price.test.ts\n+x\n*** End Patch"}, "tool_response": {"ok": True}}, cwd)
+        assessment = {"plan_revision": "plan-r1", "acceptance_revision": "accept-r1", "test_criticality": "standard", "test_disposition": "add", "scope_fingerprint": "scope-r1", "assessed_paths": ["src/price.ts"], "tested_invariants": ["price boundary"], "existing_tests": ["no_relevant_tests"], "coverage_mode": "targeted", "residual_risks": ["integration"], "test_plan": {"action": "add", "tests": ["tests/price.test.ts"], "protected_hashes": {"tests/price.test.ts": digest}, "commands": ["npm test -- tests/price.test.ts"], "expected_baseline": "red", "actual_baseline": "red"}}
+        self.assertIsNone(self.record_test_assessment(cwd, assessment))
+        source = cwd / "src" / "price.ts"
+        source.parent.mkdir()
+        source.write_text("export const total = 1;\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {"command": "*** Begin Patch\n*** Add File: src/price.ts\n+x\n*** End Patch"},
+                "tool_response": {"ok": True},
+            },
+            cwd,
+        )
+        self.assertEqual(self.adaptive_state()["test_assessments"][-1]["scope_fingerprint"], "scope-r1")
+        outside = cwd / "src" / "tax.ts"
+        outside.write_text("export const tax = 1;\n", encoding="utf-8")
+        self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "apply_patch", "tool_input": {"command": "*** Begin Patch\n*** Add File: src/tax.ts\n+x\n*** End Patch"}, "tool_response": {"ok": True}}, cwd)
+        self.assertEqual(self.adaptive_state()["test_assessments"], [])
+
+    def test_epic_assessment_requires_item_revision_ledger_and_preserves_repository_gates(self):
+        cwd = self.projects["frontend"]
+        self.activate_profile("epic-implementation")
+        item = {"item_id": "CRM-42", "item_revision": "b" * 64, "plan_revision": "plan-r1", "acceptance_revision": "accept-r1", "minimum_test_criticality": "low"}
+        self.assertIsNone(self.freeze_epic_items(cwd, [item]))
+        self.assertIsNone(self.record_test_assessment(
+            cwd,
+            {
+                "plan_revision": "plan-r1",
+                "acceptance_revision": "accept-r1",
+                "test_criticality": "low",
+                "test_disposition": "none",
+                "scope_fingerprint": "scope-r1",
+                "alternative_evidence": ["visual review"], "rationale": "cosmetic adjustment",
+                "item_id": item["item_id"],
+                "item_revision": item["item_revision"],
+            },
+        ), "assessment_ready must be accepted before the epic ledger can be evaluated")
+        state = self.adaptive_state()
+        self.assertEqual(state["selected_items"], [{**item, "gates": ["test-maker"]}])
 
     def test_session_start_loads_project_context(self):
         output = self.call(
@@ -461,7 +996,7 @@ contexts:
         state_path = next((self.data / "hook-state").glob("*.json"))
         raw = state_path.read_text(encoding="utf-8")
         state = json.loads(raw)
-        self.assertEqual(state["version"], 2)
+        self.assertEqual(state["version"], 3)
         self.assertEqual(state["profile"], "bugfix")
         self.assertTrue(state["bugfix_routes"]["ui"])
         self.assertTrue(state["bugfix_routes"]["security"])
@@ -545,16 +1080,16 @@ contexts:
         self.assertFalse(state["project_routes"]["mutation_requested"])
         for role, verdict, phase in (
             ("product-manager", "accepted", "scope"),
-            ("product-manager", "accepted", "outcome"),
             ("project-manager", "planned", "scope"),
-            ("project-manager", "progress_updated", "reconcile"),
             ("architect", "proposed", ""),
             ("architecture-guardian", "approved", "plan"),
-            ("architecture-guardian", "approved", "diff"),
-            ("test-maker", "baseline_ready", ""),
+            ("test-maker", "assessment_ready", ""),
             ("implementor", "implemented", ""),
             ("reviewer", "approved", ""),
+            ("architecture-guardian", "approved", "diff"),
             ("qa", "pass", ""),
+            ("product-manager", "accepted", "outcome"),
+            ("project-manager", "progress_updated", "reconcile"),
         ):
             self.record_agent(cwd, role, verdict, phase)
         completed = self.call(
@@ -1771,7 +2306,8 @@ metadata:
             cwd,
         )
         self.record_agent(cwd, "architect", "proposed")
-        self.record_agent(cwd, "test-maker", "baseline_ready")
+        self.record_agent(cwd, "test-maker", "assessment_ready")
+        self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "npm test -- --coverage"}, "tool_response": {"exit_code": 0}}, cwd)
         self.record_agent(cwd, "reviewer", "approved")
         self.record_agent(cwd, "architecture-guardian", "approved", "diff")
         self.record_agent(cwd, "qa", "pass")
@@ -1786,6 +2322,61 @@ metadata:
             cwd,
         )
         self.assertIsNone(output)
+
+    def test_positive_final_prose_cannot_replace_structured_review_gates(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        source = cwd / "src" / "app.ts"
+        source.parent.mkdir()
+        source.write_text("export const value = 1;\n", encoding="utf-8")
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "apply_patch",
+                "tool_input": {"command": "*** Begin Patch\n*** Add File: src/app.ts\n+x\n*** End Patch"},
+                "tool_response": {"ok": True},
+            },
+            cwd,
+        )
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "npm test -- --coverage"},
+                "tool_response": {"exit_code": 0, "output": "passed"},
+            },
+            cwd,
+        )
+        self.assertIsNone(self.record_agent(cwd, "architect", "proposed"))
+        self.assertIsNone(self.record_agent(cwd, "test-maker", "assessment_ready"))
+        self.call(
+            "post-tool",
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "npm test -- --coverage"},
+                "tool_response": {"exit_code": 0, "output": "passed"},
+            },
+            cwd,
+        )
+
+        blocked = self.call(
+            "stop",
+            {
+                "hook_event_name": "Stop",
+                "turn_id": "turn-prose-gates",
+                "stop_hook_active": False,
+                "last_assistant_message": "Reviewer approved; Architecture Guardian approved; QA pass.",
+            },
+            cwd,
+        )
+        self.assertIsNotNone(blocked, "positive prose must not deactivate a workflow without structured review artifacts")
+        self.assertEqual(blocked["decision"], "block")
+        self.assertIn("reviewer", blocked["reason"])
+        self.assertIn("architecture", blocked["reason"])
+        self.assertIn("qa", blocked["reason"])
 
     def test_task_creation_requires_structured_gates_without_local_diff(self):
         cwd = self.projects["backend"]
@@ -1870,7 +2461,7 @@ metadata:
             ("project-manager", "planned", "scope"),
             ("architect", "proposed", ""),
             ("architecture-guardian", "approved", "plan"),
-            ("test-maker", "baseline_ready", ""),
+            ("test-maker", "assessment_ready", ""),
             ("implementor", "implemented", ""),
             ("reviewer", "approved", ""),
             ("architecture-guardian", "approved", "diff"),
@@ -1926,13 +2517,17 @@ metadata:
             ("reproducer", "reproduced", ""),
             ("architect", "planned", ""),
             ("architecture-guardian", "approved", "plan"),
-            ("test-maker", "tests_ready", ""),
+            ("test-maker", "assessment_ready", ""),
             ("implementor", "implemented", ""),
             ("reviewer", "approved", ""),
             ("architecture-guardian", "approved", "diff"),
             ("qa", "pass", ""),
         ):
             self.record_agent(cwd, role, verdict, phase)
+        self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "npm test -- --coverage"}, "tool_response": {"exit_code": 0}}, cwd)
+        self.record_agent(cwd, "reviewer", "approved")
+        self.record_agent(cwd, "architecture-guardian", "approved", "diff")
+        self.record_agent(cwd, "qa", "pass")
         output = self.call(
             "stop",
             {
@@ -2082,6 +2677,7 @@ metadata:
             cwd,
         )
         self.record_agent(cwd, "bug-investigator", "root_cause_supported", "rca")
+        self.record_agent(cwd, "architect", "planned")
         self.record_agent(cwd, "architecture-guardian", "approved", "plan")
         self.record_agent(cwd, "reviewer", "approved")
         self.record_agent(cwd, "architecture-guardian", "approved", "diff")
@@ -2122,7 +2718,7 @@ metadata:
             cwd,
         )
         self.record_agent(cwd, "architect", "proposed")
-        self.record_agent(cwd, "test-maker", "baseline_ready")
+        self.record_agent(cwd, "test-maker", "assessment_ready")
         self.record_agent(cwd, "reviewer", "approved")
         self.record_agent(cwd, "architecture-guardian", "approved", "diff")
         self.record_agent(cwd, "qa", "pass")

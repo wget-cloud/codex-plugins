@@ -10,7 +10,7 @@ reported
   -> root_cause_supported
   -> root_cause_approved
   -> fix_plan_approved
-  -> regression_contract_ready
+  -> test_assessment_ready
   -> implemented
   -> reviewed
   -> architecture_approved
@@ -32,7 +32,7 @@ reported
 | RCA | bug-investigator `phase=rca` | reproduction + evidence | `RootCauseAnalysis` | `root_cause_supported` |
 | RCA review | root-cause-reviewer | RCA + evidence | `RootCauseReviewReport` | `approved` |
 | Design | architect | RCA | `FixPlan` | `approved` guardian |
-| Regression | test-maker | RCA + plan | `TestPlan` + tests | `tests_ready` |
+| Test assessment | test-maker | RCA + approved plan | `TestAssessment` + conditional TestPlan | `assessment_ready` |
 | Fix | implementor | approved plan + protected tests | `ImplementationReport` | `implemented` |
 | Review | reviewer + guardian | current diff | reports | оба `approved` |
 | QA | qa + conditional specialists | reviewed revision | QA reports | все `pass/approved` |
@@ -56,7 +56,7 @@ Incident route не отменяет основной поток. Сначала
 
 ## Rework и invalidation
 
-- `not_reproduced`: вернись к intake/evidence; production-код не менять. Исключительный waiver-маршрут линеен: (1) evidence однозначно локализует ветку; (2) architect выпускает ограниченный `CharacterizationPlan`; (3) guardian одобряет только этот plan; (4) человек явно задаёт `reproduction_waiver`; (5) test-maker создаёт failing task-owned `CharacterizationTest`; (6) reproducer независимо запускает его и возвращает `characterized`; (7) investigator формирует RCA, root-cause reviewer её одобряет; (8) architect, guardian и test-maker повторно выпускают финальные FixPlan/regression gates. Ранние characterization approvals не закрывают финальные gates. Без waiver или failing test gate остаётся незакрытым.
+- `not_reproduced`: вернись к intake/evidence; production-код не менять. Исключительный waiver-маршрут линеен: (1) evidence однозначно локализует ветку; (2) architect выпускает ограниченный `CharacterizationPlan`; (3) guardian одобряет только этот plan; (4) человек явно задаёт `reproduction_waiver`; (5) test-maker создаёт failing task-owned `CharacterizationTest`; (6) reproducer независимо запускает его и возвращает `characterized`; (7) investigator формирует RCA, root-cause reviewer её одобряет; (8) architect, guardian и test-maker повторно выпускают финальные FixPlan/TestAssessment gates. CharacterizationTest может стать `reuse/update`, но waiver не разрешает `none` для critical fix. Ранние approvals не закрывают финальные gates.
 - `root_cause_supported` не достигнут: продолжи read-only исследование или остановись `needs_input`; не выбирай «наиболее вероятную» правку.
 - Guardian отклонил план: architect выпускает новую revision плана; старый approval недействителен.
 - Implementor изменил protected test: отклони его результат, восстановление поручить test-maker/оркестратору без потери пользовательских изменений, обновить hashes и повторить реализацию.

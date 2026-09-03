@@ -10,7 +10,7 @@
 
 ## Запреты
 
-Не менять Project schema, unmarked/чужие или конфликтно изменённые items, свободный текст вне managed sections, assignees/mentions, issue state, commits или deployment; при conflict/partial failure не продолжать dependent writes.
+Не менять Project schema и не создавать test-policy fields; provisional policy писать только в exact managed body/AC. Не менять unmarked/чужие items, assignees/mentions, issue state, commits/deployment; при conflict не продолжать dependent writes.
 
 ## Результат
 

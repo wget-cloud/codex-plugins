@@ -46,7 +46,7 @@ INPUT_REVISION: <exact current workflow revision>
 | Explorer | explorer | repository mapping | нет | fast | [explorer.md](explorer.md) |
 | Architect | architect | ImplementationDAG | нет | frontier | [architect.md](architect.md) |
 | Architecture Guardian | architecture_guardian | plan/diff gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | test_maker | protected baseline | tests allowlist | balanced | [test-maker.md](test-maker.md) |
+| Test-maker | test_maker | per-item adaptive TestAssessment | tests allowlist при add/update | balanced | [test-maker.md](test-maker.md) |
 | Implementor | implementor | one atomic slice | production/docs allowlist | balanced | [implementor.md](implementor.md) |
 | Reviewer | reviewer | independent review | нет | balanced | [reviewer.md](reviewer.md) |
 | QA | qa | behavior verification | нет в repository | balanced | [qa.md](qa.md) |
@@ -61,7 +61,9 @@ INPUT_REVISION: <exact current workflow revision>
 WGC_AGENT_RESULT: {"role":"<role>","verdict":"<role verdict>","phase":"<scope|outcome для product-manager; scope|reconcile для project-manager; plan|diff для architecture-guardian; иначе пусто>","input_revision":"<exact-input-revision>"}
 ```
 
-Текст не заменяет артефакт. Оркестратор проверяет revision, diff и evidence.
+Project Manager scope marker передаёт bounded максимум 100 entries `selected_items[{item_id,item_revision=sha256,plan_revision,acceptance_revision,minimum_test_criticality}]`. Item-facing Architect добавляет exact `item_id`, `item_revision`, `plan_revision`, `minimum_test_criticality`; Product scope marker добавляет per-item `acceptance_revision`, если ledger ещё не содержал его. Item-facing Test-maker, Implementor, Reviewer, Guardian diff, QA и Product outcome добавляют exact `item_id`/`item_revision`; Test-maker использует полный flat marker из [test-assessment.md](../test-assessment.md). Global revision/floor не подменяет per-item поля. Текст не заменяет артефакт.
+
+Architecture Guardian `phase=plan` также всегда item-facing: marker содержит exact frozen `item_id`, SHA-256 `item_revision` и текущий per-item `plan_revision`. Global, missing или stale marker запрещён; пример находится в [architecture-guardian.md](architecture-guardian.md).
 
 ## Независимость
 

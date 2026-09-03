@@ -14,5 +14,5 @@
 
 ## Результат
 
-- Артефакт: `ProductSpec`, material questions и mapping требований к outcomes.
+- Артефакт: `ProductSpec`, material questions, outcome mapping и candidate invariants для provisional test policy без окончательного disposition.
 - Verdict: `specified | needs_input`.

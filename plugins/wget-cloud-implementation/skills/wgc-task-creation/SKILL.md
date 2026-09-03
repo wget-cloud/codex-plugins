@@ -20,7 +20,7 @@ GitHub Project обязателен для массового создания. 
 ## Сначала загрузить контекст
 
 1. Полностью прочитай корневой `AGENTS.md`, затем инструкции и обязательную документацию затронутых репозиториев.
-2. Прочитай [workflow.md](references/workflow.md), [GitHub Project contract](references/github-projects.md), [artifacts-and-gates.md](references/artifacts-and-gates.md), [lifecycle hooks](references/hooks.md) и [agent registry](references/agents/index.md).
+2. Прочитай [workflow.md](references/workflow.md), [provisional test policy](references/test-assessment.md), [GitHub Project contract](references/github-projects.md), [artifacts-and-gates.md](references/artifacts-and-gates.md), [lifecycle hooks](references/hooks.md) и [agent registry](references/agents/index.md).
 3. Проверь фактические remotes, ветки/status, source execution path, contracts/schema, тесты, docs и уже существующие GitHub issues/items. Mock, placeholder, dormant или неподключённый код не считай готовой функцией.
 4. Не полагайся на название страницы или README как единственное доказательство реализации.
 
@@ -33,6 +33,7 @@ GitHub Project обязателен для массового создания. 
 - Приоритет и порядок — разные измерения. P0 может стоять поздно в DAG как release gate; dependency sequence всё равно должен быть явным.
 - Пользовательские продуктовые решения не заменяй техническими предположениями. Если выбор меняет деньги, lifecycle, ownership, compliance, migration или UX, спроси пользователя.
 - Создание/редактирование issues и Project items допустимо только когда пользователь попросил создать/добавить/обновить backlog. Анализ без такого запроса остаётся read-only.
+- Test policy остаётся provisional и хранится только в managed task body/AC; не создавай ради неё Project fields и не подменяй финальное решение Test-maker реализации.
 - Не выполнять implementation, commit, push, PR, merge, release или deployment в этом skill.
 
 ## Выполнить workflow
@@ -55,7 +56,8 @@ GitHub Project обязателен для массового создания. 
 - текущую проблему/evidence, если это bug или refactor;
 - бизнес-логику и ownership boundary;
 - normal, error, boundary, authorization/tenant, concurrency/retry cases по применимости;
-- требования к contracts, migration, observability, tests/coverage и docs;
+- предварительный `test_policy` в task body/AC: criticality signals, candidate invariants, existing-test leads и likely disposition; окончательное решение остаётся Test-maker implementation-профиля;
+- требования к contracts, migration, observability, repository/CI gates и docs;
 - критерии приёмки, проверяемые без чтения намерений автора;
 - зависимости, exclusions, repository, label, priority и parent epic.
 

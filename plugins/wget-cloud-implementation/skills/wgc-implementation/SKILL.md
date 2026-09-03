@@ -12,7 +12,7 @@ description: Coordinate architecture-safe planned implementation work across the
 1. Полностью прочитай корневой `AGENTS.md`, затем `AGENTS.md` каждого затронутого проекта. Вложенные инструкции имеют приоритет.
 2. Прочитай README и обязательную архитектурную/бизнес-документацию затронутых проектов до планирования изменений.
 3. Прочитай [project-map.md](references/project-map.md). Это карта, проверенная 2026-08-13, а не замена текущему коду и локальным инструкциям.
-4. Прочитай [workflow.md](references/workflow.md), [agent registry](references/agents/index.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md). Файл роли открывай непосредственно перед её назначением; downstream-роли не загружай заранее.
+4. Прочитай [workflow.md](references/workflow.md), [adaptive test policy](references/test-assessment.md), [agent registry](references/agents/index.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md). Файл роли открывай непосредственно перед её назначением; downstream-роли не загружай заранее.
 5. Если затронуты `k8s`, CI/CD, release или rollout, дополнительно полностью прочитай [gitops-and-deployment.md](references/gitops-and-deployment.md).
 6. Lifecycle hooks плагина автоматически добавляют workspace-контекст, safety checks и completion reminders. При блокировке или диагностике прочитай [hooks.md](references/hooks.md).
 
@@ -26,7 +26,7 @@ description: Coordinate architecture-safe planned implementation work across the
 - Вся межсервисная orchestration принадлежит backend-сервису `orchestrator`; доменные сервисы предоставляют activities и собственные инварианты.
 - Переиспользуемый браузерный код и публичные TypeScript-контракты принадлежат `wget-cloud-front-lib`; application-specific код остаётся в потребителе.
 - Kubernetes изменяется строго GitOps: DevOps правит только Git-источник желаемого состояния. Единственное исключение — одноразовый clean-cluster bootstrap Argo CD, repository credential и immutable cluster root по точному контракту из [gitops-and-deployment.md](references/gitops-and-deployment.md) после явного human approval. Любые другие `kubectl apply/edit/patch/delete/scale`, прямой Helm upgrade или ручное исправление кластера запрещены.
-- Production-код нельзя считать законченным без немедленной проверки актуальности тестов и покрытия изменённых веток.
+- Каждая production-правка требует актуального `TestAssessment`, а не автоматического нового теста. Disposition `none` снимает только task-specific test и не отменяет repository/CI/specialist/review/QA gates.
 - Implementor не изменяет тесты, созданные или защищённые test-maker. Любое изменение такого теста возвращается test-maker и заново проходит gate.
 - Architecture guardian, reviewer и infrastructure reviewer ничего не пишут. QA не исправляет найденные дефекты.
 - Deployment agent не пишет код или манифесты. Он активируется только при явном запросе на deployment либо после отдельного человеческого approval, привязанного к commit, environment и image digest/tag.
@@ -46,10 +46,10 @@ description: Coordinate architecture-safe planned implementation work across the
 
 1. **Intake.** Сформируй `WorkItem`: цель, критерии приёмки, exclusions, затронутые repositories, риски, требования к deployment и текущие dirty changes.
 2. **Reconnaissance.** Параллельно исследуй независимые проекты read-only explorer-агентами. Оркестратор сам проверяет ключевые факты и объединяет отчёты.
-3. **Design.** Architect выдаёт implementation DAG, contracts, migration/compatibility plan, test strategy, documentation и rollout order.
+3. **Design.** Architect выдаёт implementation DAG, contracts, migration/compatibility plan, minimum test criticality, documentation и rollout order.
 4. **Architecture gate.** Architecture guardian независимо проверяет план. При `changes_requested` верни его architect; не переходи к тестам или коду.
-5. **Test baseline.** Test-maker фиксирует executable acceptance/regression tests там, где test-first применим, и список защищённых файлов с хешами. Если новый интерфейс ещё невозможно скомпилировать, он создаёт согласованную failing baseline или точную test specification и завершает тесты сразу после появления минимального контракта.
-6. **Implementation.** Implementor выполняет одну атомарную часть DAG, не трогая защищённые тесты. После каждого логического изменения обновляет только разрешённую документацию и запускает минимальные релевантные проверки с coverage.
+5. **Test assessment.** Test-maker оценивает `critical | standard | low`, выбирает `add | update | reuse | none` и возвращает `assessment_ready`. При `add/update` `TestPlan` содержит exact runnable commands, expected/actual baseline и реально совпавшие protected hashes для exact test keyset; `reuse` доказывается exact test ID/run/mapping/hash, `none` — альтернативным evidence.
+6. **Implementation.** Implementor выполняет одну атомарную часть DAG, не трогая защищённые тесты. После каждого логического изменения запускает проверки, предписанные TestAssessment, и все независимые repository gates.
 7. **Integrity check.** Оркестратор сравнивает фактический diff со scope, хеши защищённых тестов и отсутствие чужих изменений. Нарушение границ отклоняет результат независимо от passing tests.
 8. **Independent review.** Reviewer и architecture guardian независимо проверяют готовый diff; для независимых областей запускай их параллельно. Все blocking findings возвращаются соответствующему автору, затем проверки повторяются полностью.
 9. **QA.** После code review QA пытается сломать функцию через boundary, error, authorization, tenant, concurrency, offline/realtime и regression scenarios. QA сообщает воспроизводимые дефекты, но не исправляет их.
@@ -101,8 +101,8 @@ Hooks являются механическими guardrails, а не замен
 Задача готова только когда выполнены все применимые условия:
 
 - критерии приёмки имеют доказательства;
-- test-maker подтвердил тестовый контракт, защищённые тесты не изменены implementor;
-- релевантные tests/typecheck/lint/build/coverage прошли либо конкретное ограничение явно зафиксировано;
+- test-maker вернул актуальный `assessment_ready`; при `add/update` защищённые тесты не изменены implementor, при `reuse/none` искусственный test diff отсутствует;
+- предписанные assessment tests/evidence и все repository typecheck/lint/build/coverage/consumer/generation gates прошли либо точный blocker зафиксирован;
 - reviewer дал `approved` без blocking findings;
 - architecture guardian подтвердил соответствие архитектуре и стилю каждого проекта;
 - QA дал `pass` или все найденные дефекты прошли полный rework loop;

@@ -23,7 +23,7 @@ flowchart TD
     R --> D["Architect: design и DAG"]
     D --> AG1{"Architecture gate"}
     AG1 -- changes_requested --> D
-    AG1 -- approved --> T["Test-maker: acceptance baseline"]
+    AG1 -- approved --> T["Test-maker: TestAssessment"]
     T --> IM["Implementor: один DAG slice"]
     IM --> V["Integrity и targeted verification"]
     V -- fail --> IM
@@ -58,9 +58,9 @@ flowchart TD
 | `intake` | запрос пользователя | `reconnaissance`, `blocked` |
 | `reconnaissance` | WorkItem draft | `design`, `blocked` |
 | `design` | evidence map | `architecture_plan_review` |
-| `architecture_plan_review` | ArchitecturePlan | `test_baseline`, `design`, `blocked` |
-| `test_baseline` | approved plan | `implementation`, `blocked` |
-| `implementation` | TestPlan/protected paths | `verification`, `blocked` |
+| `architecture_plan_review` | ArchitecturePlan | `test_assessment`, `design`, `blocked` |
+| `test_assessment` | approved plan + acceptance revision | `implementation`, `blocked` |
+| `implementation` | TestAssessment и условный TestPlan/protected paths | `verification`, `blocked` |
 | `verification` | diff + command evidence | `review`, `implementation`, `blocked` |
 | `review` | verified diff | `qa`, `implementation`, `design`, `blocked` |
 | `qa` | reviewer + architecture approvals | `integration`, `implementation`, `blocked` |
@@ -127,9 +127,9 @@ Architecture guardian проверяет план относительно те�
 - GitOps source оказывается не владельцем runtime state;
 - public contract меняется без consumers/versioning/migration.
 
-### 5. Test baseline
+### 5. Test assessment
 
-Test-maker переводит критерии приёмки в executable evidence. Он проверяет существующие тесты до добавления новых, избегает дублей и моков, которые обходят изменяемый инвариант. Обязательны релевантные happy path, regression, boundary/error paths и security/tenant cases.
+Test-maker сначала выпускает описанный в [test-assessment.md](test-assessment.md) `TestAssessment`. Он проверяет существующие tests до новых и выбирает `add/update/reuse/none`; executable TestPlan создаётся только при `add/update`. Critical behavior требует максимального evidence изменённых happy/error/boundary/security branches и не допускает `none`.
 
 Сразу после его работы оркестратор фиксирует:
 
@@ -141,7 +141,7 @@ Test-maker переводит критерии приёмки в executable evid
 
 ### 6. Implementation slices
 
-Implementor получает ровно один готовый узел DAG. Он не расширяет scope и не редактирует защищённые тесты. После минимального связного изменения он запускает наиболее узкие tests с coverage, затем typecheck/lint/build в мере риска. Если контракт заставляет изменить тест, implementor останавливается и возвращает вопрос оркестратору; test-maker решает его независимо.
+Implementor получает ровно один готовый узел DAG. Он не расширяет scope и не редактирует защищённые тесты. После минимального связного изменения он выполняет assessment-prescribed evidence и все repository gates; `none` не разрешает пропустить typecheck/lint/build/CI thresholds/consumer/generation checks. Если contract или test scope изменился, assessment инвалидируется и решение возвращается Test-maker.
 
 После каждого write-agent оркестратор проверяет:
 
@@ -175,12 +175,12 @@ Integration gate выполняет оркестратор:
 
 | Источник проблемы | Кому вернуть | Какие gates повторить |
 | --- | --- | --- |
-| Test baseline неверен | test-maker | test baseline → implementation verification → reviews → QA |
+| TestAssessment/TestPlan неверен | test-maker | assessment/evidence → implementation verification → reviews → QA |
 | Реализация неверна | implementor | verification → reviewer → architecture guardian при структурном diff → QA |
-| План нарушает архитектуру | architect | architecture plan review → test baseline и всё ниже |
+| План нарушает архитектуру | architect | architecture plan review → test assessment и всё ниже |
 | Готовый diff нарушает архитектуру | architect + implementor | architecture plan review для изменённой части → implementation → оба reviews → QA |
 | QA product defect | implementor | verification → reviews → QA |
-| QA test defect | test-maker | protected baseline → implementation verification → reviews → QA |
+| QA test defect | test-maker | assessment/protected evidence → implementation verification → reviews → QA |
 | GitOps diff неверен | DevOps | infrastructure review → human gate |
 | Rollout failure | deployment agent диагностирует; автор исправляет | полный применимый code/infra цикл, новый approval |
 

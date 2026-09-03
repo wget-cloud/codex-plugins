@@ -56,9 +56,9 @@ Hooks распознают envelope как вспомогательный ledger
 
 `CharacterizationPlan` — отдельный pre-RCA артефакт waiver-маршрута: `localized_branch`, `evidence`, `task_owned_test_scope`, `expected_failing_observable`, `forbidden_production_changes`, `waiver_owner`. Он не заменяет `FixPlan`.
 
-### TestPlan
+### TestAssessment и условный TestPlan
 
-`regression_scenario`, `baseline_result`, `test_files`, `protected_files[{path,sha256}]`, `coverage_targets`, `conditional_suites`, `limitations`, `verdict`.
+Полная schema и decision table находятся в [test-assessment.md](test-assessment.md). Обязательны revisions, scope fingerprint/exact paths, criticality, disposition, regression/invariant mapping, existing tests, coverage mode, alternative evidence и residual risks. При `add/update` `TestPlan` обязательно содержит exact runnable commands, expected/actual baseline и реально совпавшие protected hashes для exact test keyset; `reuse` использует exact proof; `none` — только допустимый evidence plan. Verdict: `assessment_ready`.
 
 `CharacterizationTest` waiver-маршрута должен падать на исходной revision и создаётся до RCA только в task-owned test scope. После RCA test-maker заново подтверждает его как regression contract либо создаёт финальный `TestPlan`; ранний verdict не закрывает финальный test-maker gate.
 
@@ -91,7 +91,7 @@ Core gates:
 5. `root-cause-reviewer: approved`
 6. `architect: planned`
 7. `architecture-guardian phase=plan: approved`
-8. `test-maker: tests_ready`
+8. `test-maker: assessment_ready`
 9. `implementor: implemented`
 10. `reviewer: approved`
 11. `architecture-guardian phase=diff: approved`

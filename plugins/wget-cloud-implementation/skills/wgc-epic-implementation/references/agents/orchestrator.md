@@ -6,7 +6,7 @@
 
 ## Полномочия
 
-Назначать bounded slices, утверждать exact sync plan, проверять Git status/diff/checks и независимо перечитывать GitHub Project.
+Назначать bounded slices, замораживать PM selected_items ledger, проверять per-item TestAssessment/gates, Git status/diff/checks и независимо перечитывать Project.
 
 ## Запреты
 

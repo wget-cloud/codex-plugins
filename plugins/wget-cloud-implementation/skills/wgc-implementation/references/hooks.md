@@ -53,7 +53,7 @@ Hooks работают только если `cwd` распознан как coo
 - изменение `legacy/` или generated GitOps profile без видимого source profile;
 - commit/push/merge, которым всё равно требуется явное разрешение пользователя;
 - runtime log collection без гарантии узкого time/service scope и redaction;
-- production change без зафиксированного targeted test/coverage;
+- production change без актуального TestAssessment либо требуемого им evidence;
 - cross-repository diff;
 - k8s change без renderer/validation/infrastructure review.
 
@@ -81,7 +81,7 @@ Bootstrap exception никогда не получает supplied `workdir`: о�
 
 ## State и производительность
 
-State хранится только в `${PLUGIN_DATA}/hook-state/<session-id>.json`. В product repositories не создаются lock, cache или ledger files. Исходный prompt, текст shell-команд и runtime output не сохраняются — только SHA-256, безопасное имя runner, exit code, профиль, route flags и verification tags.
+State v3 хранится только в `${PLUGIN_DATA}/hook-state/<session-id>.json`. В product repositories не создаются lock, cache или ledger files. Исходный prompt, текст shell-команд и runtime output не сохраняются — только SHA-256, безопасное имя runner, exit code, профиль, route flags, TestAssessment ledger и verification tags. V2 migration сохраняет только совместимое privacy-safe non-test verification evidence, но сбрасывает legacy `test`/`coverage` evidence и несовместимые test/review/QA gates; malformed state блокирует completion до repository audit/reactivation.
 
 `PostToolUse` выполняется синхронно с timeout 10 секунд и делает только ограниченное bookkeeping без запуска tests или других длительных команд. JSON updates защищены platform-specific lock и atomic replace. Ledger ограничивает количество commands, paths и guard events.
 
@@ -91,7 +91,7 @@ State хранится только в `${PLUGIN_DATA}/hook-state/<session-id>.j
 
 Runner классифицирует изменённые paths и успешные команды:
 
-- production code требует `test`;
+- production code требует актуальный `TestAssessment`; `add/update/reuse` требуют `test`, `none` снимает только task-specific test;
 - backend production code дополнительно требует `coverage`;
 - frontend требует `typecheck`;
 - front-lib требует `typecheck` и `build`;
@@ -100,7 +100,9 @@ Runner классифицирует изменённые paths и успешны
 - backend proto/Prisma paths требуют штатные generation/validation commands;
 - k8s требует `gitops-render` и `validate`.
 
-Lifecycle ledger ожидает структурированные успешные результаты Architect, Test-maker, Reviewer, post-implementation Architecture Guardian и QA; для k8s также Infrastructure Reviewer. Diff-facing approvals привязаны к workspace revision и инвалидируются после новой правки. Финальный текст может перечислить эти verdicts, но не заменяет агентные артефакты. Если evidence отсутствует, первый `Stop` возвращает `decision: block` с точным списком gaps. Следующее событие имеет `stop_hook_active: true`, поэтому runner не создаёт бесконечный цикл: он позволяет завершить turn, деактивирует workflow и сохраняет оставшиеся gaps. Агент обязан выполнить проверки или честно описать blocker.
+Lifecycle ledger ожидает структурированные успешные результаты Architect, Test-maker, Reviewer, post-implementation Architecture Guardian и QA; для k8s также Infrastructure Reviewer. Guardian `phase=plan` marker обязан повторить exact текущий `plan_revision`; missing/stale marker не закрывает gate. Result ledger допускает до 1000 записей: retry того же role/phase/item/input revision заменяет прежнюю запись, active gates не вытесняются, overflow блокируется. Diff-facing approvals привязаны к workspace revision и инвалидируются после новой правки. Финальный текст может перечислить эти verdicts, но не заменяет агентные артефакты. Если evidence отсутствует, первый `Stop` возвращает `decision: block` с точным списком gaps. Следующее событие имеет `stop_hook_active: true`, поэтому runner не создаёт бесконечный цикл: он позволяет завершить turn, деактивирует workflow и сохраняет оставшиеся gaps. Агент обязан выполнить проверки или честно описать blocker.
+
+Test-maker использует только `assessment_ready` и flat marker из [test-assessment.md](test-assessment.md). `critical + none`, неполный reuse и необоснованный `standard + none` отклоняются. Exact in-scope production write сохраняет assessment/test-maker gate, но сбрасывает diff approvals и старое test/coverage evidence; out-of-scope, contract/migration или changed protected test инвалидируют assessment. Hooks не выводят criticality из расширения или пути файла.
 
 Профиль bugfix дополнительно требует структурированные gates Bug-triage, Bug-investigator/RCA, Reproducer, Implementor и plan approval Architecture Guardian. Route flags добавляют browser, security, contract, DevOps/infrastructure и approval-gated deployment gates; UI требует e2e/browser evidence, разрешённый deployment — smoke evidence.
 

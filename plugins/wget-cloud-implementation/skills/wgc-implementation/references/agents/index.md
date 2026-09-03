@@ -51,7 +51,7 @@ Default `FORK_TURNS` — `none`. Если без незаменимого conver
 | Explorer | explorer | reconnaissance | нет | fast | [explorer.md](explorer.md) |
 | Architect | architect | design и DAG | нет | frontier | [architect.md](architect.md) |
 | Architecture guardian | architecture_guardian | plan/diff architecture gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | test_maker | executable acceptance baseline | только tests allowlist | balanced | [test-maker.md](test-maker.md) |
+| Test-maker | test_maker | adaptive TestAssessment; conditional tests | только tests allowlist при add/update | balanced | [test-maker.md](test-maker.md) |
 | Implementor | implementor | один DAG slice | production/docs allowlist | balanced | [implementor.md](implementor.md) |
 | Reviewer | reviewer | code review | нет | balanced | [reviewer.md](reviewer.md) |
 | QA | qa | adversarial behavior verification | нет в repository | balanced | [qa.md](qa.md) |
@@ -68,6 +68,12 @@ WGC_AGENT_RESULT: {"role":"<role>","verdict":"<role verdict>","phase":"<plan|dif
 ```
 
 Строка не заменяет артефакт и evidence. Оркестратор перепроверяет diff, команды и revision. Допустимые verdicts определены в role files и проверяются hooks с учётом профиля `implementation`.
+
+Test-maker использует расширенный flat marker из [test-assessment.md](../test-assessment.md) и verdict `assessment_ready`; generic marker выше для него недостаточен.
+
+Architect marker также обязательно добавляет `plan_revision`, `minimum_test_criticality` и принадлежащий Architect в этом профиле `acceptance_revision`; exact пример находится в [architect.md](architect.md).
+
+Architecture Guardian в `phase=plan` добавляет exact текущий `plan_revision`; missing/stale revision не закрывает gate. Exact marker находится в [architecture-guardian.md](architecture-guardian.md).
 
 ## Независимость
 

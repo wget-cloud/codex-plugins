@@ -1,6 +1,6 @@
 {
   "name": "wget-cloud-implementation",
-  "version": "5.1.0",
+  "version": "6.0.0",
   "description": "Product-managed backlog creation, epic delivery, architecture-safe implementation, and evidence-driven bugfix workflows for Wget Cloud.",
   "author": {
     "name": "Wget Cloud",

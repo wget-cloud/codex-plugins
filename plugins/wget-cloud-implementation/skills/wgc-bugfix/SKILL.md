@@ -5,13 +5,13 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 
 # WGC Bugfix
 
-Исправляй дефект как доказуемую цепочку «наблюдение → воспроизведение → первопричина → регрессионный тест → минимальная правка → независимая проверка». Главный агент остаётся оркестратором: он управляет состоянием, назначает роли, перепроверяет факты и единолично переводит задачу между gate. Субагенты возвращают артефакты и verdict, но не объявляют задачу завершённой и не разрешают deployment.
+Исправляй дефект как доказуемую цепочку «наблюдение → воспроизведение → первопричина → TestAssessment → минимальная правка → независимая проверка». Главный агент остаётся оркестратором: он управляет состоянием, назначает роли, перепроверяет факты и единолично переводит задачу между gate. Субагенты возвращают артефакты и verdict, но не объявляют задачу завершённой и не разрешают deployment.
 
 ## Сначала загрузить контекст
 
 1. Полностью прочитай корневой `AGENTS.md`, затем `AGENTS.md` каждого затронутого проекта. Вложенные инструкции имеют приоритет.
 2. Прочитай README и обязательную архитектурную/бизнес-документацию затронутых проектов до изменения кода.
-3. Прочитай [project-routing.md](references/project-routing.md), [workflow.md](references/workflow.md), [agent registry](references/agents/index.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md). Файл роли открывай непосредственно перед её назначением; downstream-роли не загружай заранее, а conditional-роли подключай только при активном route signal.
+3. Прочитай [project-routing.md](references/project-routing.md), [workflow.md](references/workflow.md), [adaptive test policy](references/test-assessment.md), [agent registry](references/agents/index.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md). Файл роли открывай непосредственно перед её назначением; downstream-роли не загружай заранее, а conditional-роли подключай только при активном route signal.
 4. Для логов, трассировки, воспроизведения и работы с чувствительными данными прочитай [evidence-and-reproduction.md](references/evidence-and-reproduction.md).
 5. Для UI, API, realtime, PWA, RBAC, tenant isolation или контрактов прочитай [ui-api-security-testing.md](references/ui-api-security-testing.md).
 6. Если затронуты `k8s`, CI/CD, release или rollout, полностью прочитай [gitops-and-deployment.md](references/gitops-and-deployment.md).
@@ -27,7 +27,7 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 - Рассматривай корень и пять submodules как отдельные Git-репозитории. Не смешивай их commits, ветки или историю.
 - Сохраняй пользовательские изменения. Не делай reset, checkout, rebase, merge, cleanup, pull или массовое переключение веток без отдельного основания и разрешения.
 - Не создавай commit, push, PR, merge, release или deployment, если пользователь явно этого не разрешил. Разрешение на bugfix не означает разрешение на публикацию.
-- Test-maker владеет регрессионными тестами и фиксирует их SHA-256. Implementor не изменяет защищённые тесты; изменение возвращается test-maker и инвалидирует downstream gates.
+- Test-maker всегда владеет TestAssessment, а при `add/update` — regression tests и их SHA-256. Implementor не изменяет защищённые тесты; изменение возвращается test-maker и инвалидирует downstream gates.
 - Architecture guardian, reviewer, security reviewer, contract QA и infrastructure reviewer ничего не пишут. QA и browser QA не исправляют найденные дефекты.
 - Любое исправление должно быть минимальным относительно доказанной первопричины. Сопутствующий refactor выноси из bugfix, если без него можно безопасно устранить дефект.
 - Kubernetes изменяется строго GitOps. Одноразовый clean-cluster bootstrap Argo CD допускается только по точному контракту из [gitops-and-deployment.md](references/gitops-and-deployment.md); это не разрешение исправлять incident или drift вручную. Deployment agent не пишет код или манифесты и работает только после явного deployment-запроса либо отдельного человеческого approval, привязанного к commit, environment и image digest/tag.
@@ -65,8 +65,8 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 3. **Reproduction.** Reproducer получает стабильный сценарий и baseline. Если дефект не воспроизводится, не переходи к случайной правке: запроси недостающий сигнал или создай согласованную characterization strategy.
 4. **Root cause.** Bug-investigator связывает дефект с конкретным execution path, данными, контрактом или rollout delta. Gate требует `root_cause_supported`; независимый root-cause reviewer проверяет доказательность до проектирования fix.
 5. **Fix design.** Architect выдаёт минимальный `FixPlan`, rollback boundary, test strategy и порядок cross-repo изменений. Architecture guardian независимо одобряет план. Если до RCA использовался waiver-маршрут, ранние `CharacterizationPlan/Test` не закрывают эти финальные gates — architect, guardian и test-maker повторяют их уже против одобренной RCA.
-6. **Regression contract.** Test-maker создаёт failing regression test или точную executable specification, фиксирует protected files и SHA-256.
-7. **Implementation.** Implementor выполняет одну атомарную часть плана и не трогает защищённые тесты. После каждого логического изменения запускает минимальные релевантные проверки с coverage.
+6. **Test assessment.** Test-maker выпускает `TestAssessment` и `assessment_ready`: выбирает `add/update/reuse/none`; critical defect не допускает `none`. При `add/update` regression `TestPlan` содержит exact runnable commands, expected/actual baseline и реально совпавшие protected hashes для exact test keyset; waiver characterization повторно оценивается после RCA.
+7. **Implementation.** Implementor выполняет одну атомарную часть плана и не трогает защищённые тесты. После каждого логического изменения запускает assessment-prescribed evidence и все независимые repository gates.
 8. **Independent review.** Reviewer и architecture guardian проверяют готовый diff. Для auth/RBAC/tenant запускай security reviewer; для REST/gRPC/proto/schema/public exports/WebSocket event или reconnect protocol — contract QA.
 9. **Adversarial QA.** QA повторяет исходную репродукцию, error/boundary/concurrency/regression scenarios. Для UI/PWA/realtime browser QA проверяет настоящий браузерный путь и сохраняет только безопасные доказательства.
 10. **Integration.** Оркестратор повторяет ключевые проверки, сверяет protected-test hashes, документацию, consumers и атомарность каждого repository diff.
@@ -107,8 +107,8 @@ Bugfix готов только когда:
 
 - исходный дефект воспроизведён либо доказан failing characterization test по формальному waiver-маршруту; после правки тот же сценарий/test проходит;
 - RCA поддержана evidence, соответствует фактической цепочке исполнения и независимо одобрена root-cause reviewer;
-- регрессионный тест доказывает дефект и защищён от изменения implementor;
-- релевантные tests/typecheck/lint/build/coverage прошли либо точное ограничение зафиксировано как blocker;
+- актуальный `TestAssessment` доказывает выбранный test/evidence contract; `add/update` tests защищены от implementor, `reuse/none` не порождают искусственный test diff;
+- assessment-prescribed evidence и обязательные tests/typecheck/lint/build/coverage/consumer/specialist gates прошли либо точный blocker зафиксирован;
 - reviewer и architecture guardian дали approval для текущей revision;
 - QA дал `pass`; conditional browser/security/contract gates также закрыты;
 - документация, contracts, generated code и consumers синхронизированы;

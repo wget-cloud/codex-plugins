@@ -57,6 +57,8 @@ WGC_AGENT_RESULT: {"role":"<role>","verdict":"<role verdict>","phase":"","input_
 
 Orchestrator самостоятельно проверяет артефакт и evidence. Role files задают допустимые verdicts; `phase` всегда пустой.
 
+Task-creation хранит только provisional test policy в task body/AC по [test-assessment.md](../test-assessment.md). Она не добавляет Project fields и не заменяет финальный Test-maker `assessment_ready` при реализации.
+
 ## Независимость
 
 - Product Manager не утверждает собственную спецификацию.

@@ -6,7 +6,7 @@
 - WorkItem
 - EvidenceReport
 - ArchitecturePlan
-- TestPlan
+- TestAssessment и условный TestPlan
 - ImplementationReport
 - ReviewReport
 - QAReport
@@ -134,10 +134,18 @@ advisories: []
 
 Gate требует `approved`, ноль blocking findings и ноль unresolved decisions, влияющих на реализацию.
 
-## TestPlan
+## TestAssessment и условный TestPlan
+
+Полная schema, decision table, `reuse` proof, `standard + none` exception и flat marker находятся в [test-assessment.md](test-assessment.md). Gate verdict всегда `assessment_ready`; при `add/update` `TestPlan` обязательно содержит exact runnable commands, expected/actual baseline и реально совпавшие protected hashes для exact test keyset.
 
 ```yaml
-verdict: baseline_ready | changes_requested | blocked
+verdict: assessment_ready | changes_requested | blocked
+plan_revision: <revision>
+acceptance_revision: <revision>
+test_criticality: critical | standard | low
+test_disposition: add | update | reuse | none
+scope_fingerprint: <fingerprint>
+assessed_paths: [<exact path>]
 acceptance_mapping:
   AC-1:
     tests: [<test name/path>]
@@ -294,7 +302,7 @@ residual_risks: []
 | --- | --- | --- | --- | --- | --- |
 | Intake | WorkItem v1 | orchestrator | pass | Git audit | yes |
 | Architecture plan | Plan v2 | guardian | approved | report | yes |
-| Tests | TestPlan v1 | test-maker | baseline_ready | hashes | yes |
+| Test policy | TestAssessment v1 | test-maker | assessment_ready | disposition proof/hashes | yes |
 | Implementation | diff X | orchestrator | pass | diff + commands | yes |
 | Code review | diff X | reviewer | approved | ReviewReport | yes |
 | Architecture diff | diff X | guardian | approved | ReviewReport | yes |
@@ -311,10 +319,10 @@ residual_risks: []
 
 | Repository | Минимум для production change | Дополнительно по риску |
 | --- | --- | --- |
-| `frontend` | targeted Vitest с coverage, `npm run type-check`, `npm run lint` | `npm run build`, Playwright/route/PWA/i18n checks |
+| `frontend` | TestAssessment evidence, `npm run type-check`, `npm run lint` | repository suites/build, Playwright/route/PWA/i18n checks |
 | `backend` | service-targeted Jest с coverage изменённых веток | service build, proto generation diff, Prisma validation/generate, wider integration tests |
 | `wget-cloud-front-lib` | `npm run typecheck`, `npm run build`, inspect exports/dist | pack dry-run и build/typecheck обоих consumers |
-| `wget-cloud-site` | guard scripts, targeted tests, lint, type-check | build обоих data modes, BFF/auth/PWA smoke, browser checks |
+| `wget-cloud-site` | guard scripts, assessment evidence, lint, type-check | build обоих data modes, BFF/auth/PWA smoke, browser checks |
 | `k8s` | renderer + `make validate` или актуальные эквиваленты | focused GitOps/resource/telemetry tests, Helm render, environment smoke after rollout |
 
 Правила доказательств:

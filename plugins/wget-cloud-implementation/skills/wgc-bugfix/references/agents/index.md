@@ -55,7 +55,7 @@ Default `FORK_TURNS` — `none`. Если без незаменимого conver
 | Root-cause reviewer | root_cause_reviewer | RCA gate | нет | frontier | [root-cause-reviewer.md](root-cause-reviewer.md) |
 | Architect | architect | FixPlan | нет | frontier | [architect.md](architect.md) |
 | Architecture guardian | architecture_guardian | plan/diff gates | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | test_maker | regression contract | только tests allowlist | balanced | [test-maker.md](test-maker.md) |
+| Test-maker | test_maker | adaptive TestAssessment; conditional regression test | tests allowlist только при add/update | balanced | [test-maker.md](test-maker.md) |
 | Implementor | implementor | minimal fix | production/docs allowlist | balanced | [implementor.md](implementor.md) |
 | Reviewer | reviewer | code review | нет | balanced | [reviewer.md](reviewer.md) |
 | QA | qa | adversarial regression | нет в repository | balanced | [qa.md](qa.md) |
@@ -80,6 +80,12 @@ WGC_AGENT_RESULT: {"role":"<role>","verdict":"<role verdict>","phase":"<role-req
 ```
 
 Hooks проверяют role/verdict/phase с учётом профиля `bugfix`. Оркестратор отдельно проверяет артефакт, evidence и актуальность revision.
+
+Test-maker использует расширенный flat marker из [test-assessment.md](../test-assessment.md) и единый verdict `assessment_ready`; generic marker выше недостаточен.
+
+Architect marker обязательно добавляет `plan_revision` и `minimum_test_criticality`; Reproducer с `reproduced|characterized` добавляет `acceptance_revision`. Exact markers находятся в [architect.md](architect.md) и [reproducer.md](reproducer.md).
+
+Architecture Guardian в `phase=plan` добавляет exact текущий FixPlan `plan_revision`; missing/stale revision не закрывает gate. Exact marker находится в [architecture-guardian.md](architecture-guardian.md).
 
 ## Независимость
 

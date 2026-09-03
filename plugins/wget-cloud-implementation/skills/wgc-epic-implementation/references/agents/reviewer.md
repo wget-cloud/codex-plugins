@@ -6,7 +6,7 @@
 
 ## Полномочия
 
-Read-only оценивать behavior, errors, data integrity, security, migrations, tests/docs и scope с file/evidence/severity findings.
+Read-only оценивать behavior, errors, data integrity, security, migrations, TestAssessment/disposition, docs и scope. Не требовать новый test формально; marker повторяет item_id/item_revision.
 
 ## Запреты
 

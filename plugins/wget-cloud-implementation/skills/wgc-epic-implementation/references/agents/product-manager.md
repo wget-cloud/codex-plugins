@@ -14,5 +14,9 @@ Read-only сопоставлять issue AC с целью, actors, workflow, exc
 
 ## Результат
 
-- Артефакт: `ProductAcceptanceReport` с conflicts, gaps и outcome evidence.
+- Артефакт: `ProductAcceptanceReport` с `acceptance_revision`, conflicts, gaps и outcome evidence; marker повторяет exact frozen `item_id`/`item_revision`.
 - Verdict: `accepted | changes_requested | needs_input`; phase обязателен: `scope` до implementation, `outcome` после QA.
+
+```text
+WGC_AGENT_RESULT: {"role":"product-manager","verdict":"accepted","phase":"scope","input_revision":"<exact-input-revision>","item_id":"<frozen-item-id>","item_revision":"<sha256>","acceptance_revision":"<per-item-acceptance-revision>"}
+```

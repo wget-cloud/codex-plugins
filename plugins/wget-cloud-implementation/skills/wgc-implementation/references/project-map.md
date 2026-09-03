@@ -158,7 +158,7 @@ Gateway — transport boundary без собственной доменной Б
 
 ### Тесты и документация
 
-Backend имеет большую Jest test base и policy покрытия изменённого поведения; общий целевой coverage — свыше 90%, но важнее изменённые critical branches. Service test tsconfig включает тесты, build config их исключает. После каждой production правки сразу проверь существующие tests, error/security/tenant paths и coverage.
+Backend имеет большую Jest test base и сохраняет действующие repository coverage thresholds свыше 90%; для critical-кода важнее максимальное evidence изменённых error/security/tenant branches. Service test tsconfig включает тесты, build config их исключает. Конкретные add/update/reuse/none определяет TestAssessment, не расширение файла.
 
 Прочитай `backend/AGENTS.md`, root docs и README/BUSINESS_LOGIC/ARCHITECTURE каждого затронутого сервиса. Code/proto/Prisma/config/tests — source of truth при расхождении docs.
 
@@ -190,7 +190,7 @@ Backend имеет большую Jest test base и policy покрытия из
 
 ### Проверки
 
-Прочитай `AGENTS.md`, `README.md`, `BUSINESS_LOGIC.md`, `ARCHITECTURE.md`. В проверенной версии не было полноценных local test/lint scripts, поэтому обязательны `npm run typecheck`, `npm run build`, pack/export inspection и проверки обоих consumers. Отсутствие тестов — risk/gap, а не причина объявить изменение проверенным.
+Прочитай `AGENTS.md`, `README.md`, `BUSINESS_LOGIC.md`, `ARCHITECTURE.md`. Публичный export, domain type, site-block или widget runtime protocol всегда `critical`: обязательны `npm run typecheck`, `npm run build`, pack/export inspection и проверки обоих consumers. TestAssessment выбирает add/update/reuse, но `critical + none` запрещён.
 
 ## `wget-cloud-site/`
 

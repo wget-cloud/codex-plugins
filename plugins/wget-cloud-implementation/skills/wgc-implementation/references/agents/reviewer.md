@@ -14,7 +14,7 @@
 
 ## Обязательная проверка
 
-Correctness, security/RBAC/tenant, data loss, race/idempotency, API compatibility, resource handling, observability и test adequacy. Личный стиль без project rule — advisory.
+Correctness, security/RBAC/tenant, data loss, race/idempotency, API compatibility, resource handling и observability. Проверить criticality/disposition, exact reuse proof или none rationale/alternative evidence; не требовать тест формально без regression value.
 
 ## Результат
 

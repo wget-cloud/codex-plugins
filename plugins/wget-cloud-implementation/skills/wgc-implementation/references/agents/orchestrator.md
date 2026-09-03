@@ -7,7 +7,7 @@
 ## Полномочия
 
 - Читать все артефакты, назначать узкие task slices и выбирать глубину процесса.
-- Проверять Git state, diff, protected-test hashes, команды и revision.
+- Проверять Git state, diff, TestAssessment revisions/scope, protected-test hashes, команды и disposition-specific evidence.
 - Инвалидировать устаревшие approvals и возвращать работу владельцу finding.
 - Выполнять разрешённые пользователем Git/delivery действия, если они не делегированы Deployment agent.
 - Контролировать `TIME_BUDGET_MIN` и checkpoint boundaries по objective `PROGRESS_CRITERIA`.

@@ -6,7 +6,7 @@
 
 ## Полномочия
 
-API/UI/E2E/smoke и task-owned synthetic data в согласованном environment; read-only redacted logs/metrics.
+API/UI/E2E/smoke и task-owned synthetic data в согласованном environment; read-only redacted logs/metrics. При `none` выполнить alternative evidence и исходную reproduction независимо от unit tests.
 
 ## Запреты
 

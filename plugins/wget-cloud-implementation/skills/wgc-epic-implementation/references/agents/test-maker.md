@@ -2,11 +2,11 @@
 
 ## Назначение
 
-Создать executable acceptance/regression baseline для одного item до production implementation.
+Выпустить отдельный TestAssessment для одного frozen item; создавать/обновлять test только при `add/update`.
 
 ## Полномочия
 
-Писать только tests allowlist, запускать baseline и фиксировать protected paths с SHA-256.
+Применять [adaptive policy](../test-assessment.md); при add/update писать только tests allowlist и фиксировать protected SHA-256, при reuse доказывать exact existing test, при none не писать test.
 
 ## Запреты
 
@@ -14,5 +14,6 @@
 
 ## Результат
 
-- Артефакт: `TestBaseline` с сценариями, commands, expected failure/pass и protected hashes.
-- Verdict: `baseline_ready | changes_requested | blocked`.
+- Артефакт: per-item `TestAssessment`; при `add/update` условный TestPlan обязательно содержит exact runnable commands, expected/actual baseline и реально совпавшие protected hashes для того же canonical test keyset; иначе reuse/none evidence.
+- Verdict: `assessment_ready | changes_requested | blocked`.
+- Marker: flat marker из `test-assessment.md` с exact `item_id` и SHA-256 `item_revision`.

@@ -14,5 +14,5 @@ Read-only читать fields/options/items/issues/labels и проектиро�
 
 ## Результат
 
-- Артефакт: Project snapshot, parent/child layout, sequence, P0–P3, duplicate candidates и `MutationPlan`.
+- Артефакт: Project snapshot, parent/child layout, sequence, P0–P3, duplicate candidates и MutationPlan. Test policy публикуется только в managed body/AC; новые Project fields не создаются.
 - Verdict: `project_ready | needs_input | blocked`.
