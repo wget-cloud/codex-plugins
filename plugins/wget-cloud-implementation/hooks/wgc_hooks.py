@@ -22,6 +22,61 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
 
+class ServiceTierPolicyError(RuntimeError):
+    """Raised when a WGC workflow cannot prove that Codex Fast mode is off."""
+
+
+FORBIDDEN_SERVICE_TIERS = {"fast", "priority", "ultrafast"}
+
+
+def _codex_policy_values(payload: Dict[str, Any]) -> Tuple[Optional[str], Optional[bool]]:
+    direct = payload.get("service_tier")
+    if isinstance(direct, str) and direct.strip():
+        tier: Optional[str] = direct.strip().lower()
+    else:
+        tier = None
+    fast_mode: Optional[bool] = None
+    codex_home = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
+    config = codex_home / "config.toml"
+    try:
+        lines = config.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lines = []
+    section = ""
+    for raw_line in lines:
+        line = raw_line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1].strip()
+            continue
+        match = re.fullmatch(r"([A-Za-z0-9_.-]+)\s*=\s*(.+)", line)
+        if not match:
+            continue
+        key, raw_value = match.groups()
+        value = raw_value.strip().strip('"\'').lower()
+        if tier is None and section == "" and key == "service_tier":
+            tier = value
+        elif section == "features" and key == "fast_mode":
+            if value in {"true", "false"}:
+                fast_mode = value == "true"
+    return tier, fast_mode
+
+
+def require_standard_service_tier(payload: Dict[str, Any]) -> None:
+    tier, fast_mode = _codex_policy_values(payload)
+    if tier in FORBIDDEN_SERVICE_TIERS or fast_mode is True:
+        raise ServiceTierPolicyError(
+            "WGC_FAST_MODE_FORBIDDEN: WGC skills cannot run in Codex Fast mode; "
+            "use service_tier=default with features.fast_mode=false."
+        )
+    if tier != "default" or fast_mode is not False:
+        raise ServiceTierPolicyError(
+            "WGC_SERVICE_TIER_UNVERIFIABLE: refusing to start because service_tier=default "
+            "and features.fast_mode=false are not both verifiable."
+        )
+
+
 PROJECTS: Dict[str, Dict[str, Any]] = {
     "frontend": {
         "docs": ["AGENTS.md", "README.md", "BUSINESS_LOGIC.md", "ARCHITECTURE.md"],
@@ -2832,6 +2887,10 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
 
 
 def handle_session_start(payload: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    state_path, _ = state_paths(payload, context)
+    if read_state(state_path).get("active"):
+        require_standard_service_tier(payload)
+
     def updater(state: Dict[str, Any]) -> None:
         state["last_start_source"] = payload.get("source")
         state.setdefault("started_at", int(time.time()))
@@ -2849,6 +2908,7 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     selected = workflow_profile(prompt, active_profile)
     if not selected:
         return None
+    require_standard_service_tier(payload)
     profile, activation = selected
     routes = bugfix_routes(prompt) if profile == "bugfix" else {}
     project = project_routes(prompt, profile) if profile in {"task-creation", "epic-implementation"} else {}
@@ -2931,6 +2991,9 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
 
 
 def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    state_path, _ = state_paths(payload, context)
+    if read_state(state_path).get("active"):
+        require_standard_service_tier(payload)
     revision = workspace_identity(context)
     agent_id = str(payload.get("agent_id") or "")
 
@@ -3363,6 +3426,9 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
 
 
 def handle_pre_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    state_path, _ = state_paths(payload, context)
+    if read_state(state_path).get("active"):
+        require_standard_service_tier(payload)
     tool = str(payload.get("tool_name") or "")
     command = tool_command(payload)
     if tool == "Bash":
@@ -3753,6 +3819,9 @@ def main(argv: Sequence[str]) -> int:
             return 0
         emit(HANDLERS[argv[1]](payload, context))
         return 0
+    except ServiceTierPolicyError as error:
+        sys.stderr.write(f"{type(error).__name__}: {error}\n")
+        return 2
     except Exception as error:  # Safety fails closed; advisory bookkeeping fails open.
         if argv[1] == "pre-tool":
             emit(deny_tool(f"WGC safety hook failed internally ({type(error).__name__}); the tool call is blocked until the hook is healthy."))

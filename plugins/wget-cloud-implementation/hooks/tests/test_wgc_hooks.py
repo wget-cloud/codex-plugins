@@ -68,7 +68,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
-        self.assertEqual(version, "6.0.0")
+        self.assertEqual(version, "6.1.0")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -93,6 +93,12 @@ class WgcHooksTest(unittest.TestCase):
         self.root = Path(self.temp.name) / "wgetcloud"
         self.root.mkdir()
         self.data = Path(self.temp.name) / "plugin-data"
+        self.codex_home = Path(self.temp.name) / "codex-home"
+        self.codex_home.mkdir()
+        (self.codex_home / "config.toml").write_text(
+            'service_tier = "default"\n\n[features]\nfast_mode = false\n',
+            encoding="utf-8",
+        )
         self.agent_counter = 0
         self._git_init(self.root)
         (self.root / ".gitmodules").write_text(
@@ -129,11 +135,12 @@ class WgcHooksTest(unittest.TestCase):
         self._run(["git", "add", *files], path)
         self._run(["git", "commit", "-q", "-m", "test fixture"], path)
 
-    def call(self, action, payload, cwd=None):
+    def raw_call(self, action, payload, cwd=None):
         payload = {"session_id": "session-test", "cwd": str(cwd or self.root), **payload}
         env = dict(os.environ)
         env["PLUGIN_DATA"] = str(self.data)
-        result = subprocess.run(
+        env["CODEX_HOME"] = str(self.codex_home)
+        return subprocess.run(
             [sys.executable, str(SCRIPT), action],
             input=json.dumps(payload),
             cwd=str(cwd or self.root),
@@ -143,8 +150,34 @@ class WgcHooksTest(unittest.TestCase):
             text=True,
             check=False,
         )
+
+    def call(self, action, payload, cwd=None):
+        result = self.raw_call(action, payload, cwd)
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout) if result.stdout else None
+
+    def test_fast_and_unverifiable_service_tiers_refuse_skill_activation(self):
+        prompt = {"hook_event_name": "UserPromptSubmit", "turn_id": "tier-test", "prompt": "$wgc-implementation do it"}
+        for tier in ("fast", "priority", "ultrafast"):
+            with self.subTest(tier=tier):
+                result = self.raw_call("prompt-submit", {**prompt, "service_tier": tier})
+                self.assertEqual(2, result.returncode)
+                self.assertIn("WGC_FAST_MODE_FORBIDDEN", result.stderr)
+
+        for config in (
+            '[features]\nfast_mode = false\n',
+            'service_tier = "auto"\n\n[features]\nfast_mode = false\n',
+            'service_tier = "default"\n',
+            'not valid toml',
+        ):
+            with self.subTest(config=config):
+                (self.codex_home / "config.toml").write_text(config, encoding="utf-8")
+                result = self.raw_call("prompt-submit", prompt)
+                self.assertEqual(2, result.returncode)
+                self.assertIn("WGC_SERVICE_TIER_UNVERIFIABLE", result.stderr)
+        (self.codex_home / "config.toml").write_text(
+            'service_tier = "default"\n\n[features]\nfast_mode = false\n', encoding="utf-8"
+        )
 
     def _bootstrap_fixture(self):
         k8s = self.projects["k8s"]
