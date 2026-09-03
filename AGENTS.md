@@ -20,6 +20,12 @@
 - Не объединяй роли с конфликтом независимости и не создавай общий shared role file за пределами skill: skill должен оставаться переносимым.
 - Не добавляй README/CHANGELOG/installation guides внутрь skill folder.
 
+## Wget Cloud Plugin Maintainer
+
+`wget-cloud-plugin-maintainer` — отдельный maintenance bundle. Он активируется только при явном `$wgc-plugin-maintenance`; до Gate 1 разрешены только аудит и проектирование. Не смешивай role contracts с hook implementation: роль, phase или verdict меняются одновременно в role file, hook contract и tests, а изменения implementation/hook scripts выполняются отдельным approved slice.
+
+Никогда не сохраняй raw prompts, command output, production logs, cookies, tokens, credentials или customer data. Commit, push, install, tag и release требуют отдельного Gate 2 approval.
+
 ## Обязательные проверки
 
 ```bash

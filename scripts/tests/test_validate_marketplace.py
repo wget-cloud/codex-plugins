@@ -10,13 +10,15 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
-VALIDATOR_PATH = REPOSITORY_ROOT / "scripts" / "validate_marketplace.py"
+VALIDATOR_PATH = Path(os.environ.get("WGC_MARKETPLACE_TARGET_ROOT", str(REPOSITORY_ROOT))) / "scripts" / "validate_marketplace.py"
 ASSIGNMENT_FIELDS = (
     "TASK_NAME",
     "MODEL_ROUTE",
@@ -341,6 +343,33 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
             "role contract link escapes role directory",
             "linked role contract does not exist",
         )
+
+
+class WorkflowAndBytecodeContracts(unittest.TestCase):
+    def setUp(self):
+        self.validator=load_validator(); self.temp=tempfile.TemporaryDirectory(); self.root=Path(self.temp.name); self.validator.ROOT=self.root
+    def tearDown(self): self.temp.cleanup()
+    def workflow_errors(self, body):
+        path=self.root/"validate.yml"; path.write_text(body, encoding="utf-8"); errors=[]
+        self.validator.validate_workflow_actions(path,errors); return errors
+    def test_actions_require_full_sha_and_release_comment(self):
+        for ref in ("actions/checkout@v4","actions/checkout@main","actions/checkout@11d5960", "actions/checkout@11d5960a326750d5838078e36cf38b85af677262"):
+            errors=self.workflow_errors(f"steps:\n  - uses: {ref}\n")
+            with self.subTest(ref=ref): self.assertTrue(errors, "every third-party action must use a full SHA plus release comment")
+        valid="steps:\n  - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4\n"
+        self.assertEqual([],self.workflow_errors(valid))
+    def test_local_and_docker_actions_are_allowed(self):
+        self.assertEqual([],self.workflow_errors("steps:\n  - uses: ./local-action\n  - uses: docker://alpine:3.20\n"))
+    def test_make_validation_commands_disable_bytecode_and_fixture_stays_clean(self):
+        makefile=self.root/"Makefile"; source=self.root/"probe.py"; source.write_text("x=1\n")
+        makefile.write_text("validate:\n\tPYTHONDONTWRITEBYTECODE=1 python3 -B -c \"compile(open('probe.py').read(), 'probe.py', 'exec')\"\n",encoding="utf-8")
+        errors=[]; self.validator.validate_makefile_bytecode(makefile,errors); self.assertEqual([],errors)
+        subprocess.run(["make","-f",str(makefile),"validate"],cwd=self.root,check=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True)
+        self.assertEqual([],list(self.root.rglob("__pycache__"))); self.assertEqual([],list(self.root.rglob("*.pyc")))
+        makefile.write_text("validate:\n\tpython3 -m py_compile probe.py\n",encoding="utf-8"); errors=[]; self.validator.validate_makefile_bytecode(makefile,errors)
+        self.assertTrue(errors, "make validate/compile must explicitly disable bytecode output")
+        makefile.write_text("validate:\n\tpython3 -c \"print('compile')\"\n",encoding="utf-8"); errors=[]; self.validator.validate_makefile_bytecode(makefile,errors)
+        self.assertTrue(errors, "all Makefile Python validation commands must be bytecode-safe, not only py_compile")
 
 
 if __name__ == "__main__":

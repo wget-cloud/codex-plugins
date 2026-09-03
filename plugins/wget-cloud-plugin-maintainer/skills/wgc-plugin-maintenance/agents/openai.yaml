@@ -1,0 +1,6 @@
+interface:
+  display_name: "WGC Plugin Maintenance"
+  short_description: "Audit and improve Wget Cloud Codex plugins"
+  default_prompt: "Use $wgc-plugin-maintenance to audit this Codex plugin repository and propose approval-gated improvements."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,10 @@
+{
+  "source": "openai/codex",
+  "commit": "f53c91be2c1393ad5fd69b4d2a95445812598087",
+  "license_provenance": "Upstream OpenAI Codex sample validator assets; retrieve only from the pinned raw.githubusercontent.com commit URL.",
+  "validators": {
+    "quick_validate.py": {"url": "https://raw.githubusercontent.com/openai/codex/f53c91be2c1393ad5fd69b4d2a95445812598087/codex-rs/skills/src/assets/samples/skill-creator/scripts/quick_validate.py", "sha256": "ee6dba90f44d37171c5a6edb8095979c54919ff6822c1a907afca2e78c48738c"},
+    "validate_plugin.py": {"url": "https://raw.githubusercontent.com/openai/codex/f53c91be2c1393ad5fd69b4d2a95445812598087/codex-rs/skills/src/assets/samples/plugin-creator/scripts/validate_plugin.py", "sha256": "f4eeadb733b28b0c3e714de263a76d6542866a672f3e99bdffcf4dbcdf85e944"},
+    "identifier_validation.py": {"url": "https://raw.githubusercontent.com/openai/codex/f53c91be2c1393ad5fd69b4d2a95445812598087/codex-rs/skills/src/assets/samples/plugin-creator/scripts/identifier_validation.py", "sha256": "a6d51ce4a9a7e8f85626ff5808a467a67574e7f8cdf1167ffb467c5f67e57223"}
+  }
+}

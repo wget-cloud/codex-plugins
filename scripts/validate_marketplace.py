@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import re
 import sys
@@ -368,6 +369,47 @@ def validate_hooks(path: Path, errors: List[str]) -> None:
                     )
 
 
+def validate_workflow_actions(path: Path, errors: List[str]) -> None:
+    """Third-party actions require a reviewed full SHA; local/docker uses do not."""
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.match(r"^\s*-\s*uses:\s*(\S+)(?:\s+(#.*))?\s*$", line)
+        if not match:
+            continue
+        action, comment = match.group(1), match.group(2) or ""
+        if action.startswith("./") or action.startswith("docker://"):
+            continue
+        if "@" not in action:
+            errors.append(f"{path.relative_to(ROOT)}: immutable action ref is required")
+            continue
+        _, revision = action.rsplit("@", 1)
+        if not re.fullmatch(r"[0-9a-f]{40}", revision) or not re.search(r"#\s*v\d", comment, re.IGNORECASE):
+            errors.append(f"{path.relative_to(ROOT)}: immutable action ref must be a full 40-hex reviewed commit with a human release comment")
+
+
+def validate_makefile_bytecode(path: Path, errors: List[str]) -> None:
+    text = path.read_text(encoding="utf-8")
+    reusable_guard = bool(re.search(r"^PYTHON_NO_BYTECODE\s*[?:+]?=\s*PYTHONDONTWRITEBYTECODE=1\s+", text, re.MULTILINE))
+    for line in text.splitlines():
+        if re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*[?:+]?=", line):
+            continue
+        if not re.search(r"\b(?:python|python3|\$\(PYTHON(?:_NO_BYTECODE)?\))\b", line):
+            continue
+        safe = "PYTHONDONTWRITEBYTECODE=1" in line or ("$(PYTHON_NO_BYTECODE)" in line and reusable_guard)
+        if not safe:
+            errors.append(f"{path.relative_to(ROOT)}: Python validation commands must explicitly disable bytecode artifacts")
+        if re.search(r"\bpy_compile\b", line) and "-B" not in line:
+            errors.append(f"{path.relative_to(ROOT)}: bytecode artifact creation via py_compile is forbidden")
+
+
+def validate_tooling_pins(root: Path, errors: List[str]) -> None:
+    workflow = root / ".github" / "workflows" / "validate.yml"
+    if workflow.is_file():
+        validate_workflow_actions(workflow, errors)
+    makefile = root / "Makefile"
+    if makefile.is_file():
+        validate_makefile_bytecode(makefile, errors)
+
+
 def validate_plugin(plugin: Path, errors: List[str]) -> Tuple[int, int]:
     manifest_path = plugin / ".codex-plugin" / "plugin.json"
     if not manifest_path.is_file():
@@ -402,54 +444,74 @@ def validate_plugin(plugin: Path, errors: List[str]) -> Tuple[int, int]:
     return len(skills), roles
 
 
-def validate_repository(root: Path = ROOT) -> Tuple[List[str], Dict[str, int]]:
-    del root  # The checked layout is intentionally anchored to this script's repository.
+def validate_maintainer_contracts(root: Path) -> List[str]:
+    """Run the bundle's live semantic validator when the maintainer is present."""
+    script = root / "plugins" / "wget-cloud-plugin-maintainer" / "scripts" / "validate_maintainer_contracts.py"
+    if not script.is_file():
+        return []
+    try:
+        spec = importlib.util.spec_from_file_location("wgc_maintainer_contracts", script)
+        if spec is None or spec.loader is None:
+            return ["maintainer semantic validator cannot be loaded"]
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        result = module.validate(root)
+        return result if isinstance(result, list) and all(isinstance(item, str) for item in result) else ["maintainer semantic validator returned an invalid result"]
+    except (ImportError, OSError, AttributeError):
+        return ["maintainer semantic validator failed to execute"]
+
+
+def validate_repository(root: Path | None = None) -> Tuple[List[str], Dict[str, int]]:
+    root = ROOT if root is None else root
+    marketplace_path = root / ".agents" / "plugins" / "marketplace.json"
     errors: List[str] = []
     counts = {"plugins": 0, "skills": 0, "roles": 0}
-    for required in (ROOT / "README.md", ROOT / "AGENTS.md", MARKETPLACE):
+    for required in (root / "README.md", root / "AGENTS.md", marketplace_path):
         if not required.is_file():
             errors.append(f"missing required file: {required.relative_to(ROOT)}")
-    if not MARKETPLACE.is_file():
+    if not marketplace_path.is_file():
         return errors, counts
     try:
-        marketplace = load_json(MARKETPLACE)
+        marketplace = load_json(marketplace_path)
     except ValidationError as error:
         errors.append(str(error))
         return errors, counts
     entries = marketplace.get("plugins")
     if not isinstance(entries, list):
-        errors.append(f"{MARKETPLACE.relative_to(ROOT)}: plugins must be an array")
+        errors.append(f"{marketplace_path.relative_to(ROOT)}: plugins must be an array")
         return errors, counts
     seen = set()
     for entry in entries:
         if not isinstance(entry, dict):
-            errors.append(f"{MARKETPLACE.relative_to(ROOT)}: each plugin entry must be an object")
+            errors.append(f"{marketplace_path.relative_to(ROOT)}: each plugin entry must be an object")
             continue
         name = str(entry.get("name") or "")
         if not name or name in seen:
-            errors.append(f"{MARKETPLACE.relative_to(ROOT)}: plugin names must be unique and non-empty")
+            errors.append(f"{marketplace_path.relative_to(ROOT)}: plugin names must be unique and non-empty")
             continue
         seen.add(name)
         source = entry.get("source") if isinstance(entry.get("source"), dict) else {}
         expected_path = f"./plugins/{name}"
         if source.get("source") != "local" or source.get("path") != expected_path:
-            errors.append(f"{MARKETPLACE.relative_to(ROOT)}: {name} source must be {expected_path}")
+            errors.append(f"{marketplace_path.relative_to(ROOT)}: {name} source must be {expected_path}")
         policy = entry.get("policy") if isinstance(entry.get("policy"), dict) else {}
         if policy.get("installation") not in {"NOT_AVAILABLE", "AVAILABLE", "INSTALLED_BY_DEFAULT"}:
-            errors.append(f"{MARKETPLACE.relative_to(ROOT)}: {name} has invalid installation policy")
+            errors.append(f"{marketplace_path.relative_to(ROOT)}: {name} has invalid installation policy")
         if policy.get("authentication") not in {"ON_INSTALL", "ON_USE"}:
-            errors.append(f"{MARKETPLACE.relative_to(ROOT)}: {name} has invalid authentication policy")
+            errors.append(f"{marketplace_path.relative_to(ROOT)}: {name} has invalid authentication policy")
         if not entry.get("category"):
-            errors.append(f"{MARKETPLACE.relative_to(ROOT)}: {name} category is required")
-        plugin = ROOT / "plugins" / name
+            errors.append(f"{marketplace_path.relative_to(ROOT)}: {name} category is required")
+        plugin = root / "plugins" / name
         skills, roles = validate_plugin(plugin, errors)
         counts["plugins"] += 1
         counts["skills"] += skills
         counts["roles"] += roles
-    plugin_dirs = {path.name for path in (ROOT / "plugins").iterdir() if path.is_dir()}
+    plugin_dirs = {path.name for path in (root / "plugins").iterdir() if path.is_dir()}
     for orphan in sorted(plugin_dirs - seen):
         errors.append(f"plugins/{orphan}: plugin is not registered in marketplace")
-    validate_links([ROOT / "README.md", ROOT / "AGENTS.md"], errors)
+    validate_links([root / "README.md", root / "AGENTS.md"], errors)
+    validate_tooling_pins(root, errors)
+    errors.extend(validate_maintainer_contracts(root))
     return errors, counts
 
 
