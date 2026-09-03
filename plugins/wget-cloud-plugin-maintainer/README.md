@@ -2,6 +2,8 @@
 
 Отдельный maintenance bundle для репозитория `wget-cloud/codex-plugins`. Он остаётся работоспособным независимо от `wget-cloud-implementation`, поэтому может диагностировать и исправлять целевой plugin, его hooks, skills, role contracts, validators и marketplace metadata.
 
+Версия `0.3.0` запускается только при `service_tier = "default"` и `[features].fast_mode = false`; Fast/priority/ultrafast и непроверяемая конфигурация завершаются fail-closed исключением. Внутренняя lane `economy` использует Luna/low, не Codex Fast mode. Одновременно допускается максимум три субагента.
+
 ## Компоненты
 
 | Компонент | Ответственность |
@@ -28,9 +30,5 @@ Approval действует только в текущей session, не пер�
 ```bash
 make validate
 ```
-
-По умолчанию эта команда при необходимости загружает только checksum-pinned
-official validators. Для строгой offline-проверки используйте
-`make validate OFFICIAL_VALIDATOR_ARGS=--offline`.
 
 После публикации plugin переустанавливается через `codex plugin add wget-cloud-plugin-maintainer@wget-cloud`. Новая версия проверяется только в новой задаче.

@@ -1,6 +1,6 @@
 {
   "name": "wget-cloud-plugin-maintainer",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Approval-gated auditing, repair, and capability evolution for the Wget Cloud Codex plugin marketplace.",
   "author": {
     "name": "Wget Cloud",

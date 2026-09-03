@@ -7,6 +7,10 @@ description: Audit, repair, and evolve the wget-cloud/codex-plugins marketplace 
 
 Maintain only the `wget-cloud/codex-plugins` repository. Initial activation is explicit-only: require `$wgc-plugin-maintenance`; an ordinary request about plugins, hooks, skills, or maintenance does not activate this workflow. A later implicit-routing promotion requires separate approval, shadow evaluation, and a passing new-task smoke.
 
+## Mandatory preflight — first operation
+
+Before reading repository files, calling MCP tools, or spawning subagents, verify `service_tier = "default"` and `[features].fast_mode = false`. Refuse `fast`, `priority`, or `ultrafast` with `WGC_FAST_MODE_FORBIDDEN`; refuse missing or ambiguous configuration with `WGC_SERVICE_TIER_UNVERIFIABLE`. The internal `economy` model lane (Luna/low) is allowed and is unrelated to Codex Fast mode.
+
 ## Load context
 
 1. Read repository `AGENTS.md`, root `README.md`, and the manifest/README/SKILL.md of every affected bundle and skill.

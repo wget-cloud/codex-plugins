@@ -16,7 +16,7 @@ INPUT_ARTIFACTS: <findings, proposal, tests, diff или evidence>
 LOCAL_INSTRUCTIONS: <AGENTS.md, README и component docs>
 EXPECTED_COMMANDS: <read-only inspection или проверки>
 OUTPUT_CONTRACT: <artifact и verdict enum>
-MODEL_ROUTE: <fast|balanced|frontier|main-only>
+MODEL_ROUTE: <economy|balanced|frontier|main-only>
 MODEL: <selected advertised model или inherit>
 REASONING_EFFORT: <selected effort или inherit>
 ROUTING_BASIS: <lane, risk и benchmark evidence>
@@ -33,12 +33,12 @@ PROGRESS_CRITERIA: <objective evidence at checkpoints and completion>
 
 ## Model routing policy
 
-- `fast`: `gpt-5.6-luna/low`, затем `gpt-5.6-terra/low`, затем advertised equivalent или inherit.
+- `economy`: `gpt-5.6-luna/low`, затем `gpt-5.6-terra/low`, затем advertised equivalent или inherit. Это не Codex Fast mode.
 - `balanced`: `gpt-5.6-terra/medium`, затем `gpt-5.6-sol/medium`, затем inherit.
 - `frontier`: `gpt-5.6-sol/high`, затем `gpt-5.6-terra/high`; неизвестный inherit не заменяет frontier для approval/security архитектуры.
 - `main-only`: только Orchestrator.
 
-Default `FORK_TURNS` — `none`; используй минимальный положительный fork только при незаменимом conversational context. Model-route изменения самого plugin проходят benchmark из evaluation contract.
+Не более трёх субагентов одновременно. Default `FORK_TURNS` — `none`; используй минимальный положительный fork только при незаменимом conversational context. Model-route изменения самого plugin проходят benchmark из evaluation contract.
 
 ## Роли
 

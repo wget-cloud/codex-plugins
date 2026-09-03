@@ -44,6 +44,12 @@ If a PostToolUse event is lost, the hook may reconcile only a pending approved `
 
 ## Delivery restrictions
 
+## Bash command policy
+
+Bash never receives general repository-write authority, before or after Gate 1. The hook accepts only one direct command at a time and rejects command chaining, pipes, redirects, heredocs, substitutions, interpreter/wrapper forms, variable expansion, and unknown commands. The documented profile is limited to read-only repository audit (`git status|diff|log|show|branch|rev-parse|remote|ls-files|ls-tree|diff-index|check-ignore`, `rg`, `find`, `ls`, `sed -n '<numeric range>p'`, checksums, and simple file display) plus focused validation (`make validate` and `PYTHONDONTWRITEBYTECODE=1 python[3] -m unittest ...`).
+
+All ordinary file edits must use the scoped editing tools checked against Gate 1 paths and protected-test hashes. The only Bash mutation exception is an exact, separately validated Gate 2 delivery command (`git add`, commit, push, tag, plugin reinstall, or release creation) in its required delivery order. A denied Bash command must be rewritten as a direct documented audit/validation command or a scoped editing-tool operation.
+
 - stage only approved paths and inspect the cached diff before each commit;
 - use ordinary commits and `git push origin main`; never force;
 - stop if local `origin/main` no longer equals the approved remote baseline;

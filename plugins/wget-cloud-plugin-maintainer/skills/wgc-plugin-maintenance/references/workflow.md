@@ -16,8 +16,6 @@ Unrelated findings remain report-only until selected in Gate 1. Missing GitHub o
 
 Auditor and Architect run before Gate 1. Test-maker and Implementor run after approval and never share write ownership. Reviewer and QA run after implementation and are read-only. Blocking findings return to their author; every changed diff invalidates previous Reviewer and QA verdicts.
 
-The required independent sequence is `auditor → architect → test-maker → implementor → reviewer → QA`; a role result is valid only after its bound start event, assigned revision, identity, and predecessor verdict.
-
 Use the exact assignment envelope and model lanes from the [agent registry](agents/index.md). Two write roles never run concurrently. The Orchestrator independently verifies revision, diff, commands, protected-test hashes, role output, and user authority.
 
 ## Dirty state

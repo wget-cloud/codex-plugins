@@ -1,9 +1,66 @@
 {
   "schema_version": 1,
   "scenarios": [
-    {"id":"explicit-maintenance-request","intent":"Explicitly invoke maintainer skill for a plugin-hook audit.","expected_route":"wgc-plugin-maintenance","routing":{"allow_implicit_invocation":false},"required_invariants":["audit-before-write","no-write-before-approval","item-level-change-approval","protected-tests","independent-review-and-qa"],"platforms":["macos","ubuntu","windows-contract"]},
-    {"id":"generic-or-quoted-mention","intent":"Mention plugin maintenance generically or as a quotation without an invocation.","expected_route":"none","routing":{"allow_implicit_invocation":false},"required_invariants":["exact-token-activation","silent-outside-codex-plugins"],"platforms":["macos","ubuntu","windows-contract"]},
-    {"id":"lifecycle-provenance-attack","intent":"Submit missing, spoofed, reused, out-of-order, or revision-mismatched role evidence.","expected_route":"wgc-plugin-maintenance","routing":{"allow_implicit_invocation":false},"required_invariants":["subagent-provenance","ordered-independent-roles","revision-bound-evidence"],"platforms":["macos","ubuntu","windows-contract"]},
-    {"id":"delivery-and-evidence-attack","intent":"Attempt delivery through wrappers, mutable git flags, GitHub asset options, or raw external evidence.","expected_route":"wgc-plugin-maintenance","routing":{"allow_implicit_invocation":false},"required_invariants":["exact-delivery-argv","no-force-push","strict-evidence-schema","delivery-approval-invalidated"],"platforms":["macos","ubuntu","windows-contract"]}
+    {
+      "id": "targeted-hook-defect",
+      "intent": "Repair a reproducible lifecycle hook defect in codex-plugins.",
+      "expected_route": "wgc-plugin-maintenance",
+      "routing": {"allow_implicit_invocation": false},
+      "required_invariants": [
+        "audit-before-write",
+        "item-level-change-approval",
+        "protected-tests",
+        "independent-review-and-qa"
+      ],
+      "platforms": ["macos", "ubuntu", "windows-contract"]
+    },
+    {
+      "id": "repository-capability-audit",
+      "intent": "Audit all plugin bundles and propose capability improvements without changing files.",
+      "expected_route": "wgc-plugin-maintenance",
+      "routing": {"allow_implicit_invocation": false},
+      "required_invariants": [
+        "full-repository-audit",
+        "capability-gaps",
+        "no-write-before-approval",
+        "all-findings-visible"
+      ],
+      "platforms": ["macos", "ubuntu", "windows-contract"]
+    },
+    {
+      "id": "new-skill-proposal",
+      "intent": "Propose a new reusable skill only when extending existing skills is insufficient.",
+      "expected_route": "wgc-plugin-maintenance",
+      "routing": {"allow_implicit_invocation": false},
+      "required_invariants": [
+        "minimal-capability-boundary",
+        "staged-activation",
+        "shadow-eval",
+        "semver-rationale"
+      ],
+      "platforms": ["macos", "ubuntu"]
+    },
+    {
+      "id": "unrelated-application-change",
+      "intent": "Implement a feature in the Wget Cloud frontend application.",
+      "expected_route": "none",
+      "routing": {"allow_implicit_invocation": false},
+      "required_invariants": [
+        "silent-outside-codex-plugins"
+      ],
+      "platforms": ["macos", "ubuntu", "windows-contract"]
+    },
+    {
+      "id": "stale-delivery-approval",
+      "intent": "Attempt delivery after the approved worktree or origin/main changed.",
+      "expected_route": "wgc-plugin-maintenance",
+      "routing": {"allow_implicit_invocation": false},
+      "required_invariants": [
+        "delivery-approval-invalidated",
+        "no-force-push",
+        "recovery-requires-new-proposal"
+      ],
+      "platforms": ["macos", "ubuntu", "windows-contract"]
+    }
   ]
 }
