@@ -1,0 +1,38 @@
+{
+  "name": "wget-cloud-plugin-maintainer",
+  "version": "0.2.0",
+  "description": "Approval-gated auditing, repair, and capability evolution for the Wget Cloud Codex plugin marketplace.",
+  "author": {
+    "name": "Wget Cloud",
+    "url": "https://github.com/wget-cloud"
+  },
+  "homepage": "https://github.com/wget-cloud/codex-plugins/tree/main/plugins/wget-cloud-plugin-maintainer",
+  "repository": "https://github.com/wget-cloud/codex-plugins",
+  "keywords": [
+    "wget-cloud",
+    "plugin-maintenance",
+    "skills",
+    "multi-agent",
+    "approval-gates",
+    "hooks",
+    "evaluation",
+    "release"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Wget Cloud Plugin Maintainer",
+    "shortDescription": "Approval-gated maintenance for Wget Cloud plugins.",
+    "longDescription": "Audits the Wget Cloud Codex plugin repository, proposes evidence-backed fixes and capability changes, and performs only user-approved edits and delivery through independent test, review, QA, runtime, and release gates.",
+    "developerName": "Wget Cloud",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/wget-cloud/codex-plugins",
+    "defaultPrompt": [
+      "Use $wgc-plugin-maintenance to audit this Codex plugin repository and propose safe improvements.",
+      "Use $wgc-plugin-maintenance to repair this plugin defect after showing an approval-scoped proposal."
+    ]
+  }
+}

@@ -16,6 +16,10 @@ plugins/
       wgc-bugfix/                         # evidence-driven defect workflow
       wgc-task-creation/                  # product backlog and GitHub Project workflow
       wgc-epic-implementation/            # ordered Project task-pool delivery workflow
+  wget-cloud-plugin-maintainer/
+    .codex-plugin/plugin.json             # approval-gated maintenance bundle
+    hooks/                                 # lifecycle approval and scope contracts
+    skills/wgc-plugin-maintenance/         # explicit-only plugin-maintenance workflow
 scripts/validate_marketplace.py           # structural validation всего каталога
 ```
 
@@ -34,6 +38,7 @@ scripts/validate_marketplace.py           # structural validation всего к�
 - `$wgc-epic-implementation` — массовая реализация выбранного эпика или пула Project items с dependency waves и синхронизацией статусов.
 - `$wgc-implementation` — новая функциональность, refactor, contract или плановое cross-repo/GitOps изменение.
 - `$wgc-bugfix` — пользовательский дефект, regression, crash, incident или неверное observable behavior, которое нужно воспроизвести и исправить.
+- `$wgc-plugin-maintenance` — explicit-only аудит, repair и capability evolution самого `wget-cloud/codex-plugins` с item-level approvals.
 
 ## Проверка
 
@@ -42,6 +47,10 @@ scripts/validate_marketplace.py           # structural validation всего к�
 ```bash
 make validate
 ```
+
+`make validate` obtains only checksum-pinned official validators when they are
+not already cached. For a network-free check, pass
+`OFFICIAL_VALIDATOR_ARGS=--offline`; that mode never downloads a validator.
 
 Дополнительно перед публикацией запусти официальные `quick_validate.py` для каждого скилла и `validate_plugin.py` для bundle. При изменении plugin bundle повысь `version` в manifest как обычный SemVer (`0.4.0` → `0.4.1` или prerelease вроде `0.5.0-rc.1`) без `+` build metadata. Cachebuster helper для этого marketplace не используется, а entry в `marketplace.json` ради переустановки не меняется.
 
@@ -54,6 +63,8 @@ codex plugin add wget-cloud-implementation@wget-cloud
 Проверяй новую версию в новой задаче: активная задача продолжает использовать загруженный при старте plugin cache. В smoke-проверке убедись, что версия manifest ожидаемая, hooks запускаются без warning об unsupported `async`, а `SessionStart`, `PostToolUse` и `Stop` завершаются без ошибок. Не удаляй cache-каталог, пока на него ссылается активная задача.
 
 GitHub Actions выполняет тот же `make validate` для pull request и push в `main`.
+
+`wget-cloud-plugin-maintainer` не получает implicit routing. Его workflow разделяет Auditor, Architect, Test-maker, Implementor, Reviewer и QA; запись начинается только после Gate 1, а commit/push/install/release требуют отдельный Gate 2.
 
 ## Правила развития
 
