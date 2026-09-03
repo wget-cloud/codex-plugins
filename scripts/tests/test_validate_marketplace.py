@@ -56,7 +56,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         *,
         rows: tuple[tuple[str, str, str], ...] = (
             ("Orchestrator", "main-only", "n/a"),
-            ("Implementor", "fast", "implementor"),
+            ("Implementor", "economy", "implementor"),
         ),
         role_files: tuple[str, ...] = ("orchestrator", "implementor"),
         assignment_fields: tuple[str, ...] = ASSIGNMENT_FIELDS,
@@ -165,7 +165,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             raw_rows=(
                 "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | fast | [implementor](implementor.md) |",
+                "| Implementor | economy | [implementor](implementor.md) |",
             )
         )
         role_dir = (
@@ -190,7 +190,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             rows=(
                 ("Orchestrator", "main-only", "n/a"),
-                ("Implementor", "fast", "reviewer"),
+                ("Implementor", "economy", "reviewer"),
             )
         )
         self.assert_error("task prefix must equal implementor")
@@ -199,7 +199,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             rows=(
                 ("Orchestrator", "main-only", "n/a"),
-                ("Implementor", "fast", "implementor_fixture"),
+                ("Implementor", "economy", "implementor_fixture"),
             )
         )
         self.assert_error("task prefix must equal implementor")
@@ -208,7 +208,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             rows=(
                 ("Orchestrator", "main-only", "n/a"),
-                ("Implementor", "fast", "n/a"),
+                ("Implementor", "economy", "n/a"),
             )
         )
         self.assert_error("task prefix must equal implementor")
@@ -217,7 +217,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             rows=(
                 ("Orchestrator", "main-only", "n/a"),
-                ("Test-maker", "fast", "test_maker"),
+                ("Test-maker", "economy", "test_maker"),
             ),
             role_files=("orchestrator", "test-maker"),
         )
@@ -227,7 +227,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             rows=(
                 ("Orchestrator", "main-only", "orchestrator"),
-                ("Implementor", "fast", "implementor"),
+                ("Implementor", "economy", "implementor"),
             )
         )
         self.assert_error("orchestrator task prefix must be n/a")
@@ -240,7 +240,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             rows=(
                 ("Orchestrator", "main-only", "n/a"),
-                ("Implementor", "fast", "implementor"),
+                ("Implementor", "economy", "implementor"),
                 ("Implementor", "balanced", "implementor"),
             )
         )
@@ -248,13 +248,13 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
 
     def test_unknown_model_lane_fails(self) -> None:
         self.build_fixture(
-            rows=(("Orchestrator", "main-only", "n/a"), ("Implementor", "economy", "implementor"))
+            rows=(("Orchestrator", "main-only", "n/a"), ("Implementor", "fast", "implementor"))
         )
         self.assert_error("unknown model lane")
 
     def test_orchestrator_must_use_main_only_lane(self) -> None:
         self.build_fixture(
-            rows=(("Orchestrator", "frontier", "n/a"), ("Implementor", "fast", "implementor"))
+            rows=(("Orchestrator", "frontier", "n/a"), ("Implementor", "economy", "implementor"))
         )
         self.assert_error("orchestrator must use main-only")
 
@@ -283,7 +283,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             raw_rows=(
                 "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | implementor | fast | [implementor](implementor.md) | unexpected |",
+                "| Implementor | implementor | economy | [implementor](implementor.md) | unexpected |",
             )
         )
         self.assert_error("malformed model routing table row")
@@ -292,7 +292,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             raw_rows=(
                 "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | implementor | fast | |",
+                "| Implementor | implementor | economy | |",
             )
         )
         self.assert_error("missing role contract link")
@@ -301,7 +301,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             raw_rows=(
                 "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | implementor | fast | [implementor](implementor.md) [duplicate](orchestrator.md) |",
+                "| Implementor | implementor | economy | [implementor](implementor.md) [duplicate](orchestrator.md) |",
             )
         )
         self.assert_error("exactly one role contract link")
@@ -310,7 +310,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             raw_rows=(
                 "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | implementor | fast | [missing](missing.md) |",
+                "| Implementor | implementor | economy | [missing](missing.md) |",
             )
         )
         self.assert_error("linked role contract does not exist")
@@ -332,7 +332,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self.build_fixture(
             raw_rows=(
                 "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
-                "| Implementor | implementor | fast | [outside](../../../../outside.md) |",
+                "| Implementor | implementor | economy | [outside](../../../../outside.md) |",
             )
         )
         outside = self.root / "plugins" / "routing-fixture" / "outside.md"

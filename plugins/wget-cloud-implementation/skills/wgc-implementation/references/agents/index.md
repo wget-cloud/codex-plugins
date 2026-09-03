@@ -16,7 +16,7 @@ INPUT_ARTIFACTS: <план, findings, acceptance criteria>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <проверки>
 OUTPUT_CONTRACT: <артефакт и verdict enum>
-MODEL_ROUTE: <fast|balanced|frontier|main-only>
+MODEL_ROUTE: <economy|balanced|frontier|main-only>
 MODEL: <selected advertised model или inherit>
 REASONING_EFFORT: <selected effort или inherit>
 ROUTING_BASIS: <role lane, risk signals и fallback>
@@ -37,7 +37,7 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 
 Model lane из registry — default для роли; перед launch оркестратор выбирает только model, advertised активным spawn tool, и записывает итог во все routing-поля envelope. `main-only` означает работу оркестратора в главном агенте: не spawn.
 
-- `fast`: предпочитай `gpt-5.6-luna`/`low`; fallback `gpt-5.6-terra`/`low`, затем `gpt-5.6-sol`/`low`, затем `inherit`.
+- `economy`: предпочитай `gpt-5.6-luna`/`low`; fallback `gpt-5.6-terra`/`low`, затем `gpt-5.6-sol`/`low`, затем `inherit`. Это не Codex Fast mode.
 - `balanced`: предпочитай `gpt-5.6-terra`/`medium`; fallback `gpt-5.6-sol`/`medium`, затем `inherit`.
 - `frontier`: предпочитай `gpt-5.6-sol`/`high`; fallback `gpt-5.6-terra`/`high` с пометкой degraded availability, затем `inherit`. `xhigh` допустим только для critical architecture, security, tenant/data-loss риска или конфликтующих evidence. Для любой critical задачи, требующей frontier capability (например, architecture, security, tenant/data-loss, production или deployment), если не осталось известной advertised frontier-capable model и доступен только неизвестный `inherit`, верни `needs_input`, а не понижай маршрут или не наследуй его; для noncritical работы normal fallback `inherit` сохраняется.
 
@@ -45,10 +45,12 @@ Default `FORK_TURNS` — `none`. Если без незаменимого conver
 
 ## Роли
 
+Не держи более трёх активных субагентов одновременно.
+
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
 | Orchestrator | n/a | всегда | координационные действия | main-only | [orchestrator.md](orchestrator.md) |
-| Explorer | explorer | reconnaissance | нет | fast | [explorer.md](explorer.md) |
+| Explorer | explorer | reconnaissance | нет | economy | [explorer.md](explorer.md) |
 | Architect | architect | design и DAG | нет | frontier | [architect.md](architect.md) |
 | Architecture guardian | architecture_guardian | plan/diff architecture gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
 | Test-maker | test_maker | adaptive TestAssessment; conditional tests | только tests allowlist при add/update | balanced | [test-maker.md](test-maker.md) |

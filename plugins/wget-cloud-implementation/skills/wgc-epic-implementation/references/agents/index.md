@@ -18,7 +18,7 @@ INPUT_ARTIFACTS: <upstream plans/reports/findings>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <targeted checks>
 OUTPUT_CONTRACT: <артефакт и verdict enum>
-MODEL_ROUTE: <fast|balanced|frontier|main-only>
+MODEL_ROUTE: <economy|balanced|frontier|main-only>
 MODEL: <selected advertised model или inherit>
 REASONING_EFFORT: <selected effort или inherit>
 ROUTING_BASIS: <role lane, risk signals и fallback>
@@ -34,7 +34,7 @@ INPUT_REVISION: <exact current workflow revision>
 
 ## Model routing policy
 
-`fast` — deterministic discovery на fast/low; `balanced` — bounded implementation/review/operator work на balanced/medium; `frontier` — product/architecture/security/GitOps/deployment judgement на frontier/high; `main-only` — главный агент. Используй только advertised model, по умолчанию `FORK_TURNS: none`, записывай fallback. Critical capability нельзя молча downgrade до неизвестной model.
+`economy` — deterministic discovery на `gpt-5.6-luna/low` (не Codex Fast mode); `balanced` — bounded work на `gpt-5.6-terra/medium`; `frontier` — judgement на `gpt-5.6-sol/high`; `main-only` — главный агент. Используй только advertised model, `FORK_TURNS: none` и не более трёх активных субагентов. Critical capability нельзя молча downgrade.
 
 ## Роли
 
@@ -43,7 +43,7 @@ INPUT_REVISION: <exact current workflow revision>
 | Orchestrator | n/a | всегда | coordination | main-only | [orchestrator.md](orchestrator.md) |
 | Product Manager | product_manager | intent и acceptance | нет | frontier | [product-manager.md](product-manager.md) |
 | Project Manager | project_manager | scope/reconcile | нет | balanced | [project-manager.md](project-manager.md) |
-| Explorer | explorer | repository mapping | нет | fast | [explorer.md](explorer.md) |
+| Explorer | explorer | repository mapping | нет | economy | [explorer.md](explorer.md) |
 | Architect | architect | ImplementationDAG | нет | frontier | [architect.md](architect.md) |
 | Architecture Guardian | architecture_guardian | plan/diff gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
 | Test-maker | test_maker | per-item adaptive TestAssessment | tests allowlist при add/update | balanced | [test-maker.md](test-maker.md) |

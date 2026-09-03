@@ -5,76 +5,40 @@ description: Create or refine product-quality Wget Cloud tasks, epics, bug/refac
 
 # WGC Task Creation
 
-Преобразуй вводные пользователя и фактическое состояние системы в проверенный backlog, а не в список общих пожеланий. Главный агент остаётся оркестратором и проверяет результаты субагентов. Product Manager отвечает за ценность и бизнес-логику, Project Manager — за исполнимую очередь, а GitHub Project Operator — за строго ограниченную публикацию по утверждённому `MutationPlan`.
+Создавай evidence-backed исполнимый backlog, а не список пожеланий.
 
-## Определить GitHub Project
+## Preflight — первая операция
 
-Проект можно передать URL вида `https://github.com/orgs/<owner>/projects/<number>`, owner/number или естественным языком. Если проект не указан:
+До чтения файлов, MCP и субагентов проверь `service_tier = "default"` и `[features].fast_mode = false`. `fast|priority|ultrafast` → `WGC_FAST_MODE_FORBIDDEN`; неизвестная конфигурация → `WGC_SERVICE_TIER_UNVERIFIABLE`. Lane `economy` (Luna/low) разрешена.
 
-1. Определи owner из Git remotes и локального контекста.
-2. Найди доступные Projects read-only.
-3. Используй проект только если выбор однозначен; иначе задай один короткий вопрос до внешних записей.
+## Контекст
 
-GitHub Project обязателен для массового создания. Если доступ к Projects отсутствует, не оставляй частично опубликованный backlog без явного отчёта: запроси нужный scope/авторизацию, сохрани подготовленный `BacklogPlan` и продолжи после подтверждения.
+Прочитай root/затронутые `AGENTS.md` и обязательные project docs, затем [workflow](references/workflow.md), [provisional test policy](references/test-assessment.md), [GitHub contract](references/github-projects.md), [gates](references/artifacts-and-gates.md), [hooks](references/hooks.md) и [registry](references/agents/index.md). Проверь remotes/status, execution paths, contracts, tests, docs и существующие issues/items. Mock/dormant code не считается готовой функцией.
 
-## Сначала загрузить контекст
+Project может быть URL или owner/number. Если не указан, найди read-only и продолжай только при однозначном match. Массовая публикация требует Project; при недоступном write scope сохрани `BacklogPlan` без частичной mutation.
 
-1. Полностью прочитай корневой `AGENTS.md`, затем инструкции и обязательную документацию затронутых репозиториев.
-2. Прочитай [workflow.md](references/workflow.md), [provisional test policy](references/test-assessment.md), [GitHub Project contract](references/github-projects.md), [artifacts-and-gates.md](references/artifacts-and-gates.md), [lifecycle hooks](references/hooks.md) и [agent registry](references/agents/index.md).
-3. Проверь фактические remotes, ветки/status, source execution path, contracts/schema, тесты, docs и уже существующие GitHub issues/items. Mock, placeholder, dormant или неподключённый код не считай готовой функцией.
-4. Не полагайся на название страницы или README как единственное доказательство реализации.
+## Инварианты
 
-## Неподвижные правила
+- До записи ищи дубли по stable ID, title, parent, URL и Project items.
+- Epic принадлежит coordination repo, child task — owner repo. Одна task = одна проверяемая причина изменения.
+- Bugs/refactors входят в общий DAG; dependency order и priority — разные поля.
+- Не выдумывай product decisions о деньгах, lifecycle, ownership, compliance, migration или UX.
+- GitHub mutation разрешена только при явном запросе создать/обновить backlog и выполняется exact `MutationPlan`.
+- Test policy остаётся provisional в body/AC; не создавай для неё Project field.
+- Этот skill не реализует код и не выполняет commit/push/PR/release/deployment.
 
-- Не создавай дубли. Перед записью ищи по stable work item ID, нормализованному заголовку, parent issue, URL и существующим Project items.
-- Эпики размещай в координационном repository, а исполнимые дочерние задачи — в repository-владельце изменения. Cross-repo работу дели по contract/delivery boundaries.
-- Каждая задача описывает одну проверяемую причину изменения. Не смешивай независимые feature, bugfix, refactor, infra и cleanup.
-- Баги и рефакторинги включай в общий DAG: блокирующие/data-loss/security/financial риски раньше функций, cleanup без влияния — после rollout.
-- Приоритет и порядок — разные измерения. P0 может стоять поздно в DAG как release gate; dependency sequence всё равно должен быть явным.
-- Пользовательские продуктовые решения не заменяй техническими предположениями. Если выбор меняет деньги, lifecycle, ownership, compliance, migration или UX, спроси пользователя.
-- Создание/редактирование issues и Project items допустимо только когда пользователь попросил создать/добавить/обновить backlog. Анализ без такого запроса остаётся read-only.
-- Test policy остаётся provisional и хранится только в managed task body/AC; не создавай ради неё Project fields и не подменяй финальное решение Test-maker реализации.
-- Не выполнять implementation, commit, push, PR, merge, release или deployment в этом skill.
+## Pipeline
 
-## Выполнить workflow
+1. Нормализуй `TaskRequest`: goal, actors, flow, outcomes, exclusions, Project, repos и open decisions.
+2. Project Manager читает schema/options/views/items/labels и write scope.
+3. Auditor строит evidence-backed gap matrix; Product Manager задаёт target flow и cases.
+4. Architect определяет ownership/contracts/migration и dependency DAG; Project Manager — sequence/P0–P3/status.
+5. Backlog Reviewer независимо проверяет completeness, duplicates, AC, architecture и field mapping.
+6. Operator по allowlist идемпотентно создаёт/обновляет issues, sub-issues/items/fields и ordering.
+7. Перечитай Project и проверь count, duplicates, fields, hierarchy, labels, owner repos и order.
 
-1. **Intake.** Нормализуй `TaskRequest`: цель, actors, workflow, expected outcomes, exclusions, указанный/разрешённый Project, repositories и неизвестные продуктовые решения.
-2. **Project discovery.** Project Manager read-only проверяет поля, Status/Priority options, views, existing items, issue repositories, labels и write scope.
-3. **Implementation audit.** Implementation Auditor исследует фактическую готовность по независимым repository/domain slices и возвращает evidence-backed gap matrix.
-4. **Product specification.** Product Manager формирует целевой business flow, normal/error/boundary cases и вопросы, которые нельзя безопасно вывести из контекста. Оркестратор задаёт пользователю только материальные вопросы и обновляет revision требований.
-5. **Architecture decomposition.** Architect определяет ownership, contract boundaries, migration/compatibility, dependency DAG и минимальные атомарные задачи.
-6. **Delivery planning.** Project Manager присваивает sequence, P0–P3, parent/child hierarchy, repository/label, readiness и рекомендуемый status.
-7. **Backlog gate.** Backlog Reviewer независимо проверяет полноту, отсутствие дублей, PM-качество, архитектурную исполнимость, dependencies и соответствие полям Project. При `changes_requested` верни замечания авторам и повтори gate.
-8. **GitHub mutation.** GitHub Project Operator получает exact allowlist и создаёт/обновляет issues идемпотентно, добавляет native sub-issues и Project items, выставляет точные Status/Priority/labels и явно позиционирует items в dependency order. Главный агент независимо перепроверяет результат.
-9. **Verification.** Перечитай Project после записи: count, missing fields, ordering, hierarchy, labels, owner repos, duplicate titles/URLs и тела выборочных задач. Верни `BacklogReport` со ссылками и нерешёнными вопросами.
+Каждая task содержит measurable outcome, evidence, ownership/business rules, applicable normal/error/boundary/auth/concurrency cases, provisional test policy, contracts/migration/observability/docs, verifiable AC, dependencies, exclusions, repo/label/priority/parent.
 
-## Качество задачи
+Используй [registry](references/agents/index.md), `FORK_TURNS: none` и максимум три активных субагента. Независимые audits можно параллелить; PM/Architect не утверждают собственную работу.
 
-Каждая исполнимая задача обязана содержать:
-
-- цель и измеримый бизнес-результат;
-- текущую проблему/evidence, если это bug или refactor;
-- бизнес-логику и ownership boundary;
-- normal, error, boundary, authorization/tenant, concurrency/retry cases по применимости;
-- предварительный `test_policy` в task body/AC: criticality signals, candidate invariants, existing-test leads и likely disposition; окончательное решение остаётся Test-maker implementation-профиля;
-- требования к contracts, migration, observability, repository/CI gates и docs;
-- критерии приёмки, проверяемые без чтения намерений автора;
-- зависимости, exclusions, repository, label, priority и parent epic.
-
-Используй [GitHub Project contract](references/github-projects.md) для mutation и [artifacts-and-gates.md](references/artifacts-and-gates.md) для формата результатов.
-
-## Управлять субагентами
-
-Перед каждым запуском выбери роль из [agent registry](references/agents/index.md), прочитай её файл и передай полный assignment envelope. Независимые repository audits можно выполнять параллельно. Product Manager не утверждает собственную спецификацию, Architect не является Backlog Reviewer, а Project Manager не подменяет продуктовые решения.
-
-## Условие готовности
-
-Skill завершён только когда:
-
-- Project однозначно определён и доступ проверен;
-- product decisions закрыты либо явно помечены `needs_input` до публикации зависимых задач;
-- аудит связан с конкретными source/contract/test evidence;
-- backlog reviewer дал `approved` для текущей revision;
-- GitHub mutation была идемпотентной и верифицирована чтением Project;
-- все созданные items имеют owner repository, требуемые labels, Status, Priority, parent и правильную позицию;
-- финальный отчёт даёт ссылку на Project/roadmap, количество эпиков/задач, priority distribution и известные пробелы.
+Готово после однозначного Project, закрытых product decisions, evidence-linked audit, approved backlog review и read-after-write verification. `BacklogReport` содержит Project URL, counts, hierarchy/priority и unresolved gaps.

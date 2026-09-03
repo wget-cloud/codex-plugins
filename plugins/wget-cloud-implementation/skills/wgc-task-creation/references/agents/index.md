@@ -17,7 +17,7 @@ PROJECT_SCOPE: <exact URL/owner/number и mutation allowlist>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <read-only или verification checks>
 OUTPUT_CONTRACT: <артефакт и verdict enum>
-MODEL_ROUTE: <fast|balanced|frontier|main-only>
+MODEL_ROUTE: <economy|balanced|frontier|main-only>
 MODEL: <selected advertised model или inherit>
 REASONING_EFFORT: <selected effort или inherit>
 ROUTING_BASIS: <role lane, risk signals и fallback>
@@ -33,7 +33,7 @@ INPUT_REVISION: <exact current workflow revision>
 
 ## Model routing policy
 
-`fast` — deterministic discovery на доступной fast model/low; `balanced` — bounded audit/planning/operator work на balanced model/medium; `frontier` — product/architecture/independent gate на frontier/high; `main-only` — главный агент. Выбирай только advertised model, фиксируй fallback в `ROUTING_BASIS`, по умолчанию используй `FORK_TURNS: none`. Critical money/security/tenant/architecture capability нельзя молча downgrade до неизвестной модели: верни `needs_input`.
+`economy` — deterministic discovery на `gpt-5.6-luna/low` (не Codex Fast mode); `balanced` — bounded work на `gpt-5.6-terra/medium`; `frontier` — product/architecture/gate на `gpt-5.6-sol/high`; `main-only` — главный агент. Используй только advertised model, `FORK_TURNS: none` и не более трёх активных субагентов. Critical capability нельзя молча downgrade.
 
 ## Роли
 
@@ -42,7 +42,7 @@ INPUT_REVISION: <exact current workflow revision>
 | Orchestrator | n/a | всегда | coordination | main-only | [orchestrator.md](orchestrator.md) |
 | Product Manager | product_manager | business workflow и acceptance | нет | frontier | [product-manager.md](product-manager.md) |
 | Project Manager | project_manager | schema, priority, sequence | нет | balanced | [project-manager.md](project-manager.md) |
-| Implementation Auditor | implementation_auditor | current-state evidence | нет | balanced | [implementation-auditor.md](implementation-auditor.md) |
+| Implementation Auditor | implementation_auditor | current-state evidence | нет | economy | [implementation-auditor.md](implementation-auditor.md) |
 | Architect | architect | ownership/contracts/decomposition | нет | frontier | [architect.md](architect.md) |
 | Backlog Reviewer | backlog_reviewer | независимый quality gate | нет | frontier | [backlog-reviewer.md](backlog-reviewer.md) |
 | GitHub Project Operator | github_project_operator | идемпотентная publication | exact GitHub allowlist | balanced | [github-project-operator.md](github-project-operator.md) |

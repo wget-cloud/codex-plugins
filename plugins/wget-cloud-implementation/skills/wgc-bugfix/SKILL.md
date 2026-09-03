@@ -5,115 +5,53 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 
 # WGC Bugfix
 
-Исправляй дефект как доказуемую цепочку «наблюдение → воспроизведение → первопричина → TestAssessment → минимальная правка → независимая проверка». Главный агент остаётся оркестратором: он управляет состоянием, назначает роли, перепроверяет факты и единолично переводит задачу между gate. Субагенты возвращают артефакты и verdict, но не объявляют задачу завершённой и не разрешают deployment.
+Доказывай цепочку «наблюдение → воспроизведение → RCA → TestAssessment → минимальная правка → независимая проверка». Оркестратор один управляет transitions.
 
-## Сначала загрузить контекст
+## Preflight — первая операция
 
-1. Полностью прочитай корневой `AGENTS.md`, затем `AGENTS.md` каждого затронутого проекта. Вложенные инструкции имеют приоритет.
-2. Прочитай README и обязательную архитектурную/бизнес-документацию затронутых проектов до изменения кода.
-3. Прочитай [project-routing.md](references/project-routing.md), [workflow.md](references/workflow.md), [adaptive test policy](references/test-assessment.md), [agent registry](references/agents/index.md) и [artifacts-and-gates.md](references/artifacts-and-gates.md). Файл роли открывай непосредственно перед её назначением; downstream-роли не загружай заранее, а conditional-роли подключай только при активном route signal.
-4. Для логов, трассировки, воспроизведения и работы с чувствительными данными прочитай [evidence-and-reproduction.md](references/evidence-and-reproduction.md).
-5. Для UI, API, realtime, PWA, RBAC, tenant isolation или контрактов прочитай [ui-api-security-testing.md](references/ui-api-security-testing.md).
-6. Если затронуты `k8s`, CI/CD, release или rollout, полностью прочитай [gitops-and-deployment.md](references/gitops-and-deployment.md).
-7. При блокировке lifecycle hook или диагностике прочитай [hooks.md](references/hooks.md).
+До чтения файлов, MCP и субагентов проверь `service_tier = "default"` и `[features].fast_mode = false`. `fast|priority|ultrafast` → `WGC_FAST_MODE_FORBIDDEN`; отсутствующее или неоднозначное значение → `WGC_SERVICE_TIER_UNVERIFIABLE`. Lane `economy` (Luna/low) не является Codex Fast mode.
 
-Не полагайся на сохранённую карту проекта: проверь Git status, текущую ветку, manifests, execution path, contracts/schema, тесты, CI и фактическое состояние среды.
+## Контекст по требованию
 
-## Неподвижные правила
+1. Прочитай root и затронутые `AGENTS.md`, затем обязательные project docs.
+2. Прочитай [routing](references/project-routing.md), [workflow](references/workflow.md), [test policy](references/test-assessment.md), [registry](references/agents/index.md) и [gates](references/artifacts-and-gates.md).
+3. Для runtime evidence прочитай [evidence](references/evidence-and-reproduction.md); для UI/API/realtime/PWA/RBAC/contracts — [specialist testing](references/ui-api-security-testing.md); для CI/k8s/release — [GitOps](references/gitops-and-deployment.md). [Hooks](references/hooks.md) читай при диагностике.
+4. Role files открывай непосредственно перед spawn; conditional specialists — только по route signal.
 
-- Не меняй production-код до `reproduced`; исключение — только `characterized` с достаточными runtime-доказательствами, failing characterization test и явным human `reproduction_waiver`.
-- Не называй гипотезу root cause. `RootCauseAnalysis` обязан связывать наблюдение с конкретным execution path и объяснять, почему отвергнуты основные альтернативы.
-- Сбор логов, traces, metrics, network payloads и browser state выполняй read-only, с минимальным time range и scope. Не сохраняй токены, cookies, персональные данные, полные дампы и сырые production-логи в Git или артефактах.
-- Рассматривай корень и пять submodules как отдельные Git-репозитории. Не смешивай их commits, ветки или историю.
-- Сохраняй пользовательские изменения. Не делай reset, checkout, rebase, merge, cleanup, pull или массовое переключение веток без отдельного основания и разрешения.
-- Не создавай commit, push, PR, merge, release или deployment, если пользователь явно этого не разрешил. Разрешение на bugfix не означает разрешение на публикацию.
-- Test-maker всегда владеет TestAssessment, а при `add/update` — regression tests и их SHA-256. Implementor не изменяет защищённые тесты; изменение возвращается test-maker и инвалидирует downstream gates.
-- Architecture guardian, reviewer, security reviewer, contract QA и infrastructure reviewer ничего не пишут. QA и browser QA не исправляют найденные дефекты.
-- Любое исправление должно быть минимальным относительно доказанной первопричины. Сопутствующий refactor выноси из bugfix, если без него можно безопасно устранить дефект.
-- Kubernetes изменяется строго GitOps. Одноразовый clean-cluster bootstrap Argo CD допускается только по точному контракту из [gitops-and-deployment.md](references/gitops-and-deployment.md); это не разрешение исправлять incident или drift вручную. Deployment agent не пишет код или манифесты и работает только после явного deployment-запроса либо отдельного человеческого approval, привязанного к commit, environment и image digest/tag.
+## Инварианты
 
-## Сформировать BugCase и выбрать маршрут
+- Production-код не меняется до `reproduced`. `characterized` допустим только с runtime evidence, failing characterization test и явным `reproduction_waiver`.
+- Гипотеза не является RCA: покажи конкретный execution path и отвергнутые альтернативы.
+- Runtime inspection read-only, узкий по времени/сервису и privacy-safe; raw logs, prompts, tokens, cookies и PII не сохраняются.
+- Корень/submodules — отдельные repositories. Сохраняй dirty work; commit/push/PR/release/deployment требуют явного разрешения.
+- Test-maker владеет assessment и `add/update` tests/hashes; Implementor их не меняет. Review/guardian/security/contract/infrastructure read-only; QA не чинит findings.
+- Fix минимален относительно RCA. Kubernetes — только GitOps; deployment agent не пишет source.
 
-До запуска агентов нормализуй пользовательский комментарий в `BugCase`:
+## BugCase и routes
 
-- наблюдаемое и ожидаемое поведение;
-- environment, release/commit/image, tenant и роль пользователя, если известны;
-- время, URL/endpoint, частота, предусловия и минимальные шаги;
-- severity и business impact без преувеличения;
-- actor tenant/role, resource-owner tenant и data classification для security/tenant кейса;
-- доступные evidence handles: request/trace/correlation ID, screenshot, console error, log query;
-- exclusions и требуется ли deployment.
+Зафиксируй observed/expected, environment/release, time/location/frequency, actor/tenant/role, severity/impact, steps и redacted evidence handles. Неизвестное пометь `unknown`. `deployment_requested` не равно `deployment_authorized`.
 
-Храни `deployment_requested` отдельно от `deployment_authorized`; intent в исходном комментарии не является разрешением на будущую неизвестную revision.
+Основной route: `local|ui|cross-repo|incident|deployment`; усилители: `browser|security|contract|gitops`.
 
-Не блокируйся из-за неизвестных полей, если их можно безопасно установить read-only исследованием. Помечай неизвестное как `unknown`, не выдумывай значение.
+## Pipeline
 
-Выбери один основной маршрут и любые применимые усилители:
+1. Triage определяет blast radius и безопасный порядок исследования.
+2. Investigator собирает минимальное evidence; Reproducer фиксирует стабильный baseline.
+3. Investigator выпускает RCA; независимый root-cause reviewer требует `root_cause_supported`.
+4. Architect проектирует minimal fix/rollback; Guardian одобряет plan revision.
+5. Test-maker выпускает `assessment_ready`. Critical defect не допускает `none`; protected hashes должны совпадать.
+6. Implementor выполняет один атомарный slice; оркестратор проверяет diff против RCA и hashes.
+7. Reviewer/Guardian и применимые security/contract specialists проверяют current revision.
+8. QA повторяет исходную репродукцию и boundary/error/concurrency/regression cases; browser QA — реальный UI path.
+9. Оркестратор повторяет critical evidence/checks, сверяет consumers/docs и delivery boundaries.
+10. Без approval верни `BugfixReport`; с approval следуй GitOps rollout/smoke/observation.
 
-- `local` — локально воспроизводимый дефект в одном проекте;
-- `ui` — браузер, forms, navigation, realtime, offline/PWA, accessibility;
-- `cross-repo` — общий контракт, proto/schema, front-lib или несколько приложений;
-- `incident` — production/staging degradation, 5xx, timeout, crash, failed rollout;
-- `deployment` — исправление требует GitOps-подготовки и раскатки.
+Полные invalidation/rework rules — в [workflow](references/workflow.md).
 
-Усилители: `browser`, `security`, `contract`, `gitops`. Правила выбора агентов и gates описаны в [workflow.md](references/workflow.md).
+## Субагенты и готовность
 
-## Выполнить workflow
+Используй route из [registry](references/agents/index.md), `FORK_TURNS: none` и максимум три активных субагента. Assignment содержит exact scope, facts, artifacts, permissions, source of truth и output contract. Не объединяй investigator/RCA reviewer, implementor/test-maker/reviewer/guardian, DevOps/infrastructure reviewer.
 
-1. **Triage.** Bug-triage проверяет полноту кейса, blast radius, severity, вероятные boundaries и выбирает безопасный порядок исследования.
-2. **Evidence.** Bug-investigator строит временную линию, собирает минимальные логи/traces/metrics и формулирует проверяемые гипотезы без изменения внешнего состояния.
-3. **Reproduction.** Reproducer получает стабильный сценарий и baseline. Если дефект не воспроизводится, не переходи к случайной правке: запроси недостающий сигнал или создай согласованную characterization strategy.
-4. **Root cause.** Bug-investigator связывает дефект с конкретным execution path, данными, контрактом или rollout delta. Gate требует `root_cause_supported`; независимый root-cause reviewer проверяет доказательность до проектирования fix.
-5. **Fix design.** Architect выдаёт минимальный `FixPlan`, rollback boundary, test strategy и порядок cross-repo изменений. Architecture guardian независимо одобряет план. Если до RCA использовался waiver-маршрут, ранние `CharacterizationPlan/Test` не закрывают эти финальные gates — architect, guardian и test-maker повторяют их уже против одобренной RCA.
-6. **Test assessment.** Test-maker выпускает `TestAssessment` и `assessment_ready`: выбирает `add/update/reuse/none`; critical defect не допускает `none`. При `add/update` regression `TestPlan` содержит exact runnable commands, expected/actual baseline и реально совпавшие protected hashes для exact test keyset; waiver characterization повторно оценивается после RCA.
-7. **Implementation.** Implementor выполняет одну атомарную часть плана и не трогает защищённые тесты. После каждого логического изменения запускает assessment-prescribed evidence и все независимые repository gates.
-8. **Independent review.** Reviewer и architecture guardian проверяют готовый diff. Для auth/RBAC/tenant запускай security reviewer; для REST/gRPC/proto/schema/public exports/WebSocket event или reconnect protocol — contract QA.
-9. **Adversarial QA.** QA повторяет исходную репродукцию, error/boundary/concurrency/regression scenarios. Для UI/PWA/realtime browser QA проверяет настоящий браузерный путь и сохраняет только безопасные доказательства.
-10. **Integration.** Оркестратор повторяет ключевые проверки, сверяет protected-test hashes, документацию, consumers и атомарность каждого repository diff.
-11. **Delivery.** Без deployment заверши `BugfixReport`. При разрешённом deployment выполни отдельный GitOps-конвейер, smoke и observation window.
+Оркестратор лично проверяет Git state, evidence links, current diff/revision, protected hashes и исходную репродукцию. Готово, когда reproduction до/после доказана, RCA независимо approved, TestAssessment актуален, required checks и specialist gates закрыты, QA pass, docs/contracts/consumers синхронизированы, diff минимален и delivery status честен.
 
-Полные переходы, invalidation rules и rework loops находятся в [workflow.md](references/workflow.md).
-
-## Управлять агентами
-
-Перед запуском субагента оркестратор обязан выбрать его model route в локальном [agent registry](references/agents/index.md), сверить его с возможностями активного spawn tool и включить в assignment envelope все routing- и supervision-поля.
-
-Перед запуском каждого агента передай ему:
-
-- `TASK_NAME` из assignment envelope без изменений в `spawn_agent.task_name`;
-- роль, task slice и разрешённые repositories/paths;
-- входные артефакты и подтверждённые факты;
-- source-of-truth документы и environment ограничения;
-- разрешённые инструменты, границы task-owned test data и явные запреты;
-- требуемый verdict и формат результата из [artifacts-and-gates.md](references/artifacts-and-gates.md).
-
-Не объединяй роли, которым нужна независимость: investigator не утверждает собственную RCA, implementor не является test-maker/reviewer/guardian, DevOps не является infrastructure reviewer, deployment agent не является автором rollout manifests. Параллельные write-агенты допустимы только в непересекающихся репозиториях и после утверждённого DAG.
-
-Supervision всегда bounded: на каждом checkpoint требуй objective evidence относительно `PROGRESS_CRITERIA`. Extension допускается только до `MAX_EXTENSIONS`; запиши reason, evidence и новую boundary. При первом stall выполни correction/rescope. При повторном stall либо scope drift выполни interrupt, inspect partial work, затем restart/split. Hooks не являются таймерами.
-
-Оркестратор обязан сам:
-
-- проверить status/branch/upstream/remote каждого затронутого репозитория;
-- проверить ключевые evidence links и не принимать текст агента за доказательство;
-- сопоставить diff с root cause и утверждённым scope;
-- проверить protected-test hashes до и после implementor;
-- повторить критичные команды и исходную репродукцию;
-- вести gate ledger по revision и инвалидировать устаревшие approvals после изменения diff;
-- сообщать пользователю о недоступной среде, неполной репродукции, чувствительных данных и действиях, требующих разрешения.
-
-## Условие готовности
-
-Bugfix готов только когда:
-
-- исходный дефект воспроизведён либо доказан failing characterization test по формальному waiver-маршруту; после правки тот же сценарий/test проходит;
-- RCA поддержана evidence, соответствует фактической цепочке исполнения и независимо одобрена root-cause reviewer;
-- актуальный `TestAssessment` доказывает выбранный test/evidence contract; `add/update` tests защищены от implementor, `reuse/none` не порождают искусственный test diff;
-- assessment-prescribed evidence и обязательные tests/typecheck/lint/build/coverage/consumer/specialist gates прошли либо точный blocker зафиксирован;
-- reviewer и architecture guardian дали approval для текущей revision;
-- QA дал `pass`; conditional browser/security/contract gates также закрыты;
-- документация, contracts, generated code и consumers синхронизированы;
-- diff минимален, атомарен и не захватывает пользовательские изменения;
-- при инфраструктуре DevOps и infrastructure reviewer закрыли GitOps gates;
-- при deployment зафиксированы release identity, health, smoke и observation window либо честный `failed/blocked/rolled_back`.
-
-В финальном `BugfixReport` перечисли симптом, root cause, исправление, regression proof, изменённые repositories/files, проверки и gates, Git/deployment status, известные риски и действия, требующие человека.
+`BugfixReport`: symptom, RCA, fix, regression proof, repositories/files, checks/verdicts, Git/deployment status, risks и human actions.

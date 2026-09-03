@@ -5,65 +5,38 @@ description: Implement a Wget Cloud epic or ordered pool of GitHub Project tasks
 
 # WGC Epic Implementation
 
-Реализуй epic/task pool как серию атомарных delivery units, где GitHub Project является источником scope, порядка, статусов и progress evidence. Главный агент остаётся оркестратором: он выбирает ready wave, применяет Project status transitions, проверяет repository diffs и не позволяет суммарному прогрессу скрыть незавершённую задачу.
+Исполняй Project pool атомарными delivery units; Project хранит scope/order/status, оркестратор — gate truth.
 
-## Определить Project и scope
+## Preflight — первая операция
 
-Project можно передать URL, owner/number или естественным языком. Epic/pool задаётся parent issue, item IDs, work item codes, priority/status filter или явно перечисленными задачами.
+До чтения файлов, MCP и субагентов проверь `service_tier = "default"` и `[features].fast_mode = false`. `fast|priority|ultrafast` → `WGC_FAST_MODE_FORBIDDEN`; неизвестная конфигурация → `WGC_SERVICE_TIER_UNVERIFIABLE`. Lane `economy` (Luna/low) разрешена.
 
-Если Project не указан, определи owner из remotes и найди Projects read-only. Используй только однозначный match; иначе спроси пользователя. Если pool не указан, не выбирай весь backlog автоматически: попроси epic/filter или предложи минимальную ready wave без начала записи/implementation.
+## Контекст
 
-## Сначала загрузить контекст
+Прочитай root/затронутые `AGENTS.md` и обязательные docs, затем [workflow](references/workflow.md), [test policy](references/test-assessment.md), [GitHub contract](references/github-projects.md), [batch execution](references/batch-execution.md), [gates](references/artifacts-and-gates.md), [hooks](references/hooks.md) и [registry](references/agents/index.md). Для delivery прочитай [GitOps](references/gitops-and-deployment.md). Перечитай Project/items и Git state перед планированием.
 
-1. Полностью прочитай корневой и вложенные `AGENTS.md`, README и обязательную architecture/business документацию затронутых repositories.
-2. Прочитай [workflow.md](references/workflow.md), [adaptive test policy](references/test-assessment.md), [GitHub Project contract](references/github-projects.md), [batch-execution.md](references/batch-execution.md), [artifacts-and-gates.md](references/artifacts-and-gates.md), [lifecycle hooks](references/hooks.md) и [agent registry](references/agents/index.md).
-3. Для k8s/release/deployment прочитай [gitops-and-deployment.md](references/gitops-and-deployment.md).
-4. Перечитай выбранные issues и Project fields непосредственно перед планированием; не работай по сохранённой копии backlog.
-5. Проверь status/branch/upstream/remote/dirty state каждого repository и сохрани пользовательские изменения.
+Project/pool должны быть однозначны. Не выбирай весь backlog автоматически; без exact epic/filter/item set не начинай mutation или implementation.
 
-## Неподвижные правила
+## Инварианты
 
-- Project item и его issue body являются scope contract, но не отменяют более новые явные вводные пользователя. Конфликт возвращается Product Manager и пользователю.
-- Не реализуй item, если обязательные dependencies не доставлены, AC непроверяемы, owner repository неизвестен или product decision открыт.
-- Один Implementor получает один атомарный item/slice. Два write-агента не работают одновременно в одном repository или общем contract boundary.
-- Product Manager, Project Manager, Architecture Guardian, Reviewer, QA и Infrastructure Reviewer read-only относительно repository. Exact Project mutations выполняет GitHub Project Operator по утверждённому sync plan; главный агент независимо проверяет результат.
-- Каждый frozen item получает отдельный TestAssessment. При `add/update` Test-maker владеет только tests и фиксирует exact runnable commands, expected/actual baseline и реально совпавшие protected hashes для exact test keyset; Implementor не меняет protected paths/hashes. `reuse/none` не создают искусственный test diff.
-- Не создавай commit, push, PR, merge, release или deployment без явного разрешения. Project-backed implementation разрешает обновлять status выбранных items, но не означает право доставить код.
-- Kubernetes меняется только через GitOps source. Deployment требует отдельного approval, привязанного к exact repo/commit/environment/image/rendered diff.
-- Не помечай item `Done`, пока его фактический delivery outcome не соответствует договорённому scope. Локально реализованная, но не опубликованная задача остаётся на подходящем pre-delivery status.
-- Переводи item только в реально существующий exact status option. Если нужного semantic status нет, оставь последний правдивый существующий status, отрази gate в отчёте и не меняй Project schema без отдельного разрешения.
-- При обнаружении неизвестного дефекта переключи конкретный item на evidence-driven bugfix workflow; не маскируй RCA внутри feature batch.
+- Не реализуй item с незакрытыми dependencies, непроверяемыми AC, неизвестным owner repo или open product decision.
+- Один Implementor — один atomic slice; writers не пересекают repo/contract boundary.
+- PMs/Guardian/Reviewer/QA/Infrastructure Reviewer repository read-only; Operator меняет только approved Project fields.
+- Каждый frozen item имеет собственный TestAssessment и protected-test contract.
+- Commit/push/PR/release/deployment требуют явного разрешения. Status никогда не опережает фактический delivery.
+- Kubernetes — только GitOps. Неизвестный defect переключается в bugfix/RCA workflow.
 
-## Выполнить workflow
+## Pipeline
 
-1. **Project snapshot.** Project Manager читает fields/options/views/items, parent/sub-issues, status, priority, dependencies, linked PRs и формирует immutable `ProjectSnapshot` revision.
-2. **Scope selection.** Project Manager marker замораживает максимум 100 `selected_items[{item_id,item_revision=sha256,plan_revision,acceptance_revision,minimum_test_criticality}]`. Три revision/floor поля можно дополнить только matching per-item Architect/Product markers до TestAssessment; global значения не подменяют item contract. Оркестратор фиксирует EpicRun, exclusions, authority, environment, concurrency cap и stop conditions.
-3. **Readiness/product gate.** Product Manager в phase `scope` проверяет intent и AC каждого selected item. Project Manager отделяет ready, blocked и ambiguous; blocked items не переводятся в In Progress.
-4. **Architecture DAG.** Explorer-агенты исследуют независимые repositories. Architect строит contract-first DAG и waves; Architecture Guardian одобряет plan revision.
-5. **Wave execution.** Для каждого ready item GitHub Project Operator применяет status → In Progress; Test-maker возвращает per-item `assessment_ready` с `add/update/reuse/none`; Implementor выполняет slice; оркестратор проверяет diff/evidence/docs и protected hashes.
-6. **Independent gates.** После реализации item переводится в существующий эквивалент code review. Reviewer и Architecture Guardian проверяют current revision. Затем status → существующий эквивалент in testing, QA выполняет behavioral/error/security/concurrency checks, а Product Manager в phase `outcome` принимает наблюдаемый бизнес-результат.
-7. **Rework.** Любой blocking finding возвращает item в In Progress, инвалидирует downstream approvals и запускает минимальный rework loop. Соседние независимые items могут продолжать работу.
-8. **Integration.** После wave оркестратор запускает cross-repo/contract checks, проверяет migration order, root gitlinks и отсутствие scope drift. Project Manager обновляет dependency readiness следующей wave.
-9. **Delivery.** Без публикации item остаётся `code review`, `in testing` или `ready for deploy` по фактическому gate. При явно разрешённой доставке выполни Git/PR/release/GitOps границы; только подтверждённо доставленный item получает Done.
-10. **Final reconciliation.** Перечитай Project и repositories: selected count, statuses, priority, unresolved blockers, linked changes, gate evidence и next ready wave. Верни `EpicRunReport`.
+1. Project Manager создаёт immutable snapshot schema/items/dependencies/statuses/PRs.
+2. Заморозь максимум 100 selected items с item/plan/acceptance revisions и minimum criticality; зафиксируй exclusions, authority, concurrency и stop conditions.
+3. Product/Project gates отделяют ready/blocked/ambiguous. Architect строит contract-first DAG; Guardian одобряет revision.
+4. Для каждой ready wave Operator ставит truthful status; Test-maker выпускает per-item assessment; Implementor делает slice; оркестратор проверяет diff/docs/hashes.
+5. Reviewer/Guardian, QA и Product outcome gate проверяют current item revision. Blocking finding возвращает item в rework и инвалидирует downstream approvals.
+6. После wave проверь cross-repo contracts/migrations/gitlinks; пересчитай readiness следующей wave.
+7. Без delivery authority оставь truthful pre-delivery status. `Done` — только для реально доставленного outcome.
+8. Перечитай Project и верни `EpicRunReport`.
 
-Точный status mapping и правила mutation находятся в [GitHub Project contract](references/github-projects.md); wave/concurrency — в [batch-execution.md](references/batch-execution.md).
+Используй role contracts из [registry](references/agents/index.md), `FORK_TURNS: none` и максимум три активных субагента. Assignment повторяет exact item ID/revision, snapshot, scope, dependencies, tests и verdict contract. Не объединяй независимые gates.
 
-## Управлять субагентами
-
-Перед каждым запуском выбери роль из [agent registry](references/agents/index.md), прочитай её contract и передай assignment envelope с item URL/code, ProjectSnapshot revision, repository/path allowlist, dependency evidence, protected tests и ожидаемым verdict.
-
-Минимальный состав для epic/pool: Product Manager, Project Manager, Architect, Architecture Guardian, Test-maker, Implementor, Reviewer, QA и GitHub Project Operator. Explorer используется для reconnaissance; DevOps/Infrastructure Reviewer/Deployment Agent — только для GitOps/delivery. Не создавай роли ради формальности, но не объединяй независимые gates.
-
-## Условие готовности
-
-EpicRun готов только когда:
-
-- каждый selected item имеет финальный фактический статус и evidence; нет карточек, оставленных In Progress без владельца/blocker;
-- Product Manager подтвердил acceptance semantics, Project Manager — dependency/status reconciliation;
-- plan и каждый изменённый diff прошли независимые architecture gates;
-- каждый item имеет актуальный TestAssessment и собственные implementation/reviewer/architecture/QA/product-outcome gates; assessment evidence и repository checks соответствуют риску;
-- cross-repo contracts, migrations, docs и delivery order согласованы;
-- Project перечитан после mutation, а статусы не опережают реальность;
-- deployment либо доказан health/smoke/observation evidence, либо честно отмечен blocked/failed/rolled back;
-- финальный отчёт содержит completed/ready/blocked/deferred items, repository diffs, checks, gates, Git/PR/release/deployment status и следующий ready slice.
+Готово, когда каждый selected item имеет truthful status/evidence, product/project reconciliation, approved architecture/current diff, актуальный assessment, reviewer/QA/outcome gates, согласованные contracts/docs/order и честный deployment result. Отчёт перечисляет completed/ready/blocked/deferred items, diffs/checks и next slice.
