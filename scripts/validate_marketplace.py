@@ -35,7 +35,7 @@ REQUIRED_ASSIGNMENT_FIELDS = (
     "MAX_EXTENSIONS",
     "PROGRESS_CRITERIA",
 )
-MODEL_LANES = {"economy", "balanced", "frontier", "main-only"}
+MODEL_LANES = {"economy", "balanced", "frontier", "main-only", "inherit"}
 
 
 class ValidationError(Exception):

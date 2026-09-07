@@ -185,130 +185,11 @@ SOURCE_SUFFIXES = {
     ".tsx",
     ".vue",
 }
-PROFILE_ROLE_VERDICTS: Dict[str, Dict[str, Set[str]]] = {
-    "implementation": {
-        "explorer": {"mapped", "needs_input"},
-        "architect": {"proposed", "needs_input"},
-        "architecture-guardian": {"approved", "changes_requested", "needs_input"},
-        "test-maker": {"assessment_ready", "changes_requested", "blocked"},
-        "implementor": {"implemented", "needs_input", "blocked"},
-        "reviewer": {"approved", "changes_requested", "needs_input"},
-        "qa": {"pass", "defects_found", "blocked"},
-        "devops": {"prepared", "needs_input", "blocked"},
-        "infrastructure-reviewer": {"approved", "changes_requested", "needs_input"},
-        "deployment-agent": {"deployed_healthy", "failed", "blocked", "approval_invalid"},
-    },
-    "bugfix": {
-        "bug-triage": {"triaged", "needs_input", "blocked"},
-        "bug-investigator": {"evidence_ready", "root_cause_supported", "needs_more_evidence", "blocked"},
-        "reproducer": {"reproduced", "characterized", "not_reproduced", "blocked"},
-        "root-cause-reviewer": {"approved", "changes_requested", "needs_input", "blocked"},
-        "architect": {"planned", "needs_input", "blocked"},
-        "architecture-guardian": {"approved", "changes_requested", "blocked"},
-        "test-maker": {"assessment_ready", "needs_input", "blocked"},
-        "implementor": {"implemented", "needs_input", "blocked"},
-        "reviewer": {"approved", "changes_requested", "blocked"},
-        "qa": {"pass", "defects_found", "blocked"},
-        "browser-qa": {"pass", "defects_found", "blocked"},
-        "security-reviewer": {"approved", "changes_requested", "needs_input"},
-        "contract-qa": {"pass", "defects_found", "blocked"},
-        "devops": {"prepared", "needs_input", "blocked"},
-        "infrastructure-reviewer": {"approved", "changes_requested", "blocked"},
-        "deployment-agent": {"deployed_healthy", "failed", "rolled_back", "blocked"},
-    },
-    "task-creation": {
-        "product-manager": {"specified", "needs_input"},
-        "project-manager": {"project_ready", "needs_input", "blocked"},
-        "implementation-auditor": {"audited", "needs_input"},
-        "architect": {"proposed", "needs_input"},
-        "backlog-reviewer": {"approved", "changes_requested", "needs_input"},
-        "github-project-operator": {
-            "published", "partially_published", "no_changes", "authorization_required", "blocked"
-        },
-    },
-    "epic-implementation": {
-        "product-manager": {"accepted", "changes_requested", "needs_input"},
-        "project-manager": {"planned", "progress_updated", "blocked", "needs_input"},
-        "explorer": {"mapped", "needs_input"},
-        "architect": {"proposed", "needs_input"},
-        "architecture-guardian": {"approved", "changes_requested", "needs_input"},
-        "test-maker": {"assessment_ready", "changes_requested", "blocked"},
-        "implementor": {"implemented", "needs_input", "blocked"},
-        "reviewer": {"approved", "changes_requested", "needs_input"},
-        "qa": {"pass", "defects_found", "blocked"},
-        "github-project-operator": {
-            "synced", "partially_synced", "no_changes", "authorization_required", "blocked"
-        },
-        "devops": {"prepared", "needs_input", "blocked"},
-        "infrastructure-reviewer": {"approved", "changes_requested", "needs_input"},
-        "deployment-agent": {"deployed_healthy", "failed", "blocked", "approval_invalid"},
-    },
-}
-
-STATE_VERSION = 3
-TEST_CRITICALITIES = {"critical", "standard", "low"}
-TEST_CRITICALITY_RANK = {"low": 0, "standard": 1, "critical": 2}
-TEST_DISPOSITIONS = {"add", "update", "reuse", "none"}
-ADAPTIVE_LEDGER_LIMIT = 100
-RESULT_LEDGER_LIMIT = 1000
-ADAPTIVE_TEXT_LIMIT = 500
-COVERAGE_MODES = {
-    "none",
-    "targeted",
-    "changed-lines",
-    "branch",
-    "critical-branches",
-    "existing-suite",
-    "full",
-    "repository",
-}
-TEST_ASSESSMENT_FIELDS = {
-    "plan_revision",
-    "acceptance_revision",
-    "test_criticality",
-    "test_disposition",
-    "scope_fingerprint",
-    "assessed_paths",
-    "tested_invariants",
-    "existing_tests",
-    "coverage_mode",
-    "alternative_evidence",
-    "residual_risks",
-    "disproportionate_cost",
-    "stronger_alternative_evidence",
-    "rationale",
-    "follow_up",
-    "reuse_proof",
-    "test_plan",
-    "item_id",
-    "item_revision",
-}
-TEST_DOWNSTREAM_ROLES = {
-    "test-maker",
-    "implementor",
-    "reviewer",
-    "qa",
-    "browser-qa",
-    "security-reviewer",
-    "contract-qa",
-    "deployment-agent",
-    "github-project-operator",
-}
-EPIC_ITEM_GATES = {"test-maker", "implementor", "reviewer", "architecture", "qa", "product-outcome"}
-
-PROFILE_ROLE_PHASES: Dict[str, Dict[str, Set[str]]] = {
-    "implementation": {"architecture-guardian": {"plan", "diff"}},
-    "bugfix": {
-        "architecture-guardian": {"plan", "diff"},
-        "bug-investigator": {"evidence", "rca"},
-    },
-    "task-creation": {},
-    "epic-implementation": {
-        "architecture-guardian": {"plan", "diff"},
-        "project-manager": {"scope", "reconcile"},
-        "product-manager": {"scope", "outcome"},
-    },
-}
+# Keep the public hook entry point stable, including importlib-based validators.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from runtime.contracts import *
+from runtime import teams, evidence
+from runtime.state import migrate_state_v4
 
 
 def bugfix_routes(prompt: str) -> Dict[str, bool]:
@@ -578,66 +459,8 @@ def read_state(path: Path) -> Dict[str, Any]:
         }
 
 
-def migrate_state_v3(state: Dict[str, Any]) -> Dict[str, Any]:
-    """Migrate privacy-safe state while invalidating incompatible v2 gates."""
-    previous = state.get("version")
-    if previous == STATE_VERSION:
-        assessments = state.get("test_assessments", [])
-        selected = state.get("selected_items", [])
-        results = state.get("subagent_results", [])
-        if (
-            not isinstance(assessments, list)
-            or len(assessments) > ADAPTIVE_LEDGER_LIMIT
-            or not isinstance(selected, list)
-            or len(selected) > ADAPTIVE_LEDGER_LIMIT
-            or not isinstance(results, list)
-            or len(results) > RESULT_LEDGER_LIMIT
-            or any(not isinstance(result, dict) for result in results)
-        ):
-            state["state_health"] = "malformed"
-            state["repository_reaudit_required"] = True
-        return state
-    if previous == 2:
-        retained: List[Dict[str, Any]] = []
-        legacy_results = state.get("subagent_results", [])
-        if not isinstance(legacy_results, list):
-            state["state_health"] = "malformed"
-            state["repository_reaudit_required"] = True
-            legacy_results = []
-        for result in legacy_results:
-            if not isinstance(result, dict):
-                continue
-            role = result.get("role")
-            if role in TEST_DOWNSTREAM_ROLES:
-                continue
-            if role == "architecture-guardian" and result.get("phase") == "diff":
-                continue
-            if role == "product-manager" and result.get("phase") == "outcome":
-                continue
-            if role == "project-manager" and result.get("phase") == "reconcile":
-                continue
-            retained.append(result)
-        state["subagent_results"] = retained
-        if len(retained) > RESULT_LEDGER_LIMIT:
-            state["state_health"] = "malformed"
-            state["repository_reaudit_required"] = True
-        verification = state.get("verification")
-        if isinstance(verification, dict):
-            verification.pop("test", None)
-            verification.pop("coverage", None)
-        state["migration"] = {
-            "from": 2,
-            "to": STATE_VERSION,
-            "at": int(time.time()),
-            "invalidated": "legacy test/coverage evidence and test/review/qa role gates",
-        }
-    elif previous not in (None, STATE_VERSION):
-        state["state_health"] = "unsupported_version"
-        state["repository_reaudit_required"] = True
-    state["version"] = STATE_VERSION
-    state["test_assessments"] = []
-    state["selected_items"] = []
-    return state
+# Compatibility name for external callers; migration now establishes v4.
+migrate_state_v3 = migrate_state_v4
 
 
 def update_state(
@@ -656,7 +479,7 @@ def update_state(
                 "state_health": "malformed",
                 "repository_reaudit_required": True,
             }
-        state = migrate_state_v3(state)
+        state = migrate_state_v4(state)
         state["version"] = STATE_VERSION
         state.setdefault("active", False)
         state.setdefault("activation", "none")
@@ -756,10 +579,12 @@ def snapshot_since_baseline(
 ) -> Dict[str, Dict[str, str]]:
     baseline_map = baseline if isinstance(baseline, dict) else {}
     result: Dict[str, Dict[str, str]] = {}
-    for project, paths in current.items():
+    for project in set(current) | set(baseline_map):
+        paths = current.get(project, {})
         previous = baseline_map.get(project, {})
         previous = previous if isinstance(previous, dict) else {}
         changed = {path: status for path, status in paths.items() if previous.get(path) != status}
+        changed.update({path: 'removed' for path in previous if path not in paths})
         if changed:
             result[project] = changed
     return result
@@ -2371,6 +2196,9 @@ def normalize_test_assessment(
             f"TestAssessment cannot lower architect minimum criticality {minimum}; "
             "new evidence, a new plan revision, and Architecture Guardian approval are required"
         )
+    task = teams.active(state, normalized.get('item_id'))
+    if task and rank[criticality] < rank[task['risk']]:
+        return None, 'TestAssessment cannot lower TaskAssessment risk'
     return normalized, None
 
 
@@ -2436,13 +2264,14 @@ def required_checks_for_state(classification: Dict[str, Any], state: Dict[str, A
         for value in state.get("test_assessments", [])
         if isinstance(value, dict)
     ]
+    task_checks = {check for task in state.get('task_assessments', []) for check in task['checks']}
     if not assessments:
-        return required_checks(classification)
+        return required_checks(classification) | task_checks
     if any(value.get("test_disposition") != "none" for value in assessments):
         chosen = next(value for value in assessments if value.get("test_disposition") != "none")
     else:
         chosen = assessments[-1]
-    required = required_checks(classification, chosen)
+    required = required_checks(classification, chosen) | task_checks
     if any(value.get("test_criticality") == "critical" for value in assessments) and classification.get("production"):
         required.add("coverage")
     return required
@@ -2482,10 +2311,12 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, A
     if not revision:
         return None, "WGC_AGENT_RESULT requires input_revision from SubagentStart"
     if role == "test-maker" and verdict == "assessment_ready":
-        allowed = {"role", "verdict", "phase", "input_revision", "revision", "assessment"} | TEST_ASSESSMENT_FIELDS
+        allowed = {"role", "verdict", "phase", "input_revision", "revision", "assessment", "assessment_revision"} | TEST_ASSESSMENT_FIELDS
         unknown = sorted(set(value) - allowed)
         if unknown:
             return None, "TestAssessment marker contains unknown fields: " + ", ".join(unknown)
+    if role == 'task-assessor' and set(value) - {'role', 'verdict', 'phase', 'input_revision', 'task_assessment', 'assessment'}:
+        return None, 'Task Assessor marker contains unknown fields'
     result: Dict[str, Any] = {
         "role": role,
         "verdict": verdict,
@@ -2493,6 +2324,8 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, A
         "input_revision": revision[:200],
     }
     for key in (
+        "task_assessment",
+        "assessment_revision",
         "assessment",
         "plan_revision",
         "acceptance_revision",
@@ -2628,7 +2461,13 @@ def epic_item_gaps(state: Dict[str, Any]) -> List[str]:
         if not isinstance(item, dict):
             gaps.append("malformed selected item")
             continue
-        missing = sorted(EPIC_ITEM_GATES - set(item.get("gates", [])))
+        task = teams.active(state, item.get('item_id'))
+        item_state = {**state, 'profile': 'epic-implementation', 'subagent_results': [r for r in state.get('subagent_results', []) if r.get('item_id') == item['item_id']]}
+        required = teams.required_gates('epic-implementation', task)
+        if task and active_test_assessment(state, item['item_id']) is None:
+            required.add('test-assessment')
+        observed = approved_agent_gates(item_state, str(state.get('current_revision', '')))
+        missing = sorted(required - observed)
         if missing:
             gaps.append(f"{item.get('item_id', '<unknown>')}@{item.get('item_revision', '<unknown>')}:" + ",".join(missing))
     return gaps
@@ -2752,6 +2591,7 @@ def reconcile_selected_items(state: Dict[str, Any], normalized: List[Dict[str, A
                 item["plan_guardian_required"] = True
         merged.append(item)
     if affected_ids:
+        state['task_assessments'] = [a for a in state.get('task_assessments', []) if a.get('item_id') not in affected_ids]
         invalidate_epic_items(
             state,
             affected_ids,
@@ -2770,6 +2610,21 @@ def reconcile_selected_items(state: Dict[str, Any], normalized: List[Dict[str, A
         ]
 
 
+def task_scope_revision(task: Dict[str, Any], context: Dict[str, Any]) -> str:
+    files = {}
+    for name in task['assessed_paths']:
+        path = assessment_test_file(name, context)
+        files[name] = file_sha256(path) if path and path.is_file() else 'missing'
+    return hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
+
+
+def result_is_current(result: Dict[str, Any], state: Dict[str, Any], revision: str) -> bool:
+    task = teams.active(state, result.get('item_id'))
+    if result.get('item_id') and task and result.get('scope_revision') and state.get('context'):
+        return result['scope_revision'] == task_scope_revision(task, state['context'])
+    return result.get('input_revision') == revision
+
+
 def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[str]:
     gates: Set[str] = set()
     profile = str(state.get("profile") or "implementation")
@@ -2786,7 +2641,14 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
         role = result.get("role")
         verdict = result.get("verdict")
         phase = result.get("phase")
-        if role == "product-manager" and verdict == "specified" and profile == "task-creation":
+        task = teams.active(state, result.get('item_id'))
+        if task and role != 'task-assessor' and result.get('assessment_revision') != task['assessment_revision']:
+            continue
+        if role == 'task-assessor' and verdict == 'assessed' and task and result.get('task_assessment') == task:
+            gates.add('task-assessor')
+        elif role in {'data-migration-reviewer', 'reliability-reviewer'} and verdict == 'approved' and result_is_current(result, state, current_revision):
+            gates.add('data' if role == 'data-migration-reviewer' else 'reliability')
+        elif role == "product-manager" and verdict == "specified" and profile == "task-creation":
             gates.add("product")
         elif role == "product-manager" and verdict == "accepted" and profile == "epic-implementation" and phase == "scope":
             gates.add("product-scope")
@@ -2806,14 +2668,14 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
             role == "github-project-operator"
             and verdict in {"published", "no_changes"}
             and profile == "task-creation"
-            and result.get("input_revision") == current_revision
+            and result_is_current(result, state, current_revision)
         ):
             gates.add("project-publish")
         elif (
             role == "github-project-operator"
             and verdict in {"synced", "no_changes"}
             and profile == "epic-implementation"
-            and result.get("input_revision") == current_revision
+            and result_is_current(result, state, current_revision)
         ):
             gates.add("project-sync")
         elif role == "bug-triage" and verdict == "triaged":
@@ -2848,39 +2710,39 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
             gates.add("test-maker")
         elif role == "implementor" and verdict == "implemented":
             gates.add("implementor")
-        elif role == "reviewer" and verdict == "approved" and result.get("input_revision") == current_revision:
+        elif role == "reviewer" and verdict == "approved" and result_is_current(result, state, current_revision):
             gates.add("reviewer")
         elif (
             role == "architecture-guardian"
             and verdict == "approved"
             and phase == "diff"
-            and result.get("input_revision") == current_revision
+            and result_is_current(result, state, current_revision)
         ):
             gates.add("architecture")
-        elif role == "qa" and verdict == "pass" and result.get("input_revision") == current_revision:
+        elif role == "qa" and verdict == "pass" and result_is_current(result, state, current_revision):
             gates.add("qa")
-        elif role == "browser-qa" and verdict == "pass" and result.get("input_revision") == current_revision:
+        elif role == "browser-qa" and verdict == "pass" and result_is_current(result, state, current_revision):
             gates.add("browser")
         elif (
             role == "security-reviewer"
             and verdict == "approved"
-            and result.get("input_revision") == current_revision
+            and result_is_current(result, state, current_revision)
         ):
             gates.add("security")
-        elif role == "contract-qa" and verdict == "pass" and result.get("input_revision") == current_revision:
+        elif role == "contract-qa" and verdict == "pass" and result_is_current(result, state, current_revision):
             gates.add("contract")
         elif role == "devops" and verdict == "prepared":
             gates.add("devops")
         elif (
             role == "infrastructure-reviewer"
             and verdict == "approved"
-            and result.get("input_revision") == current_revision
+            and result_is_current(result, state, current_revision)
         ):
             gates.add("infrastructure")
         elif (
             role == "deployment-agent"
             and verdict == "deployed_healthy"
-            and result.get("input_revision") == current_revision
+            and result_is_current(result, state, current_revision)
         ):
             gates.add("deployment")
     return gates
@@ -2925,6 +2787,8 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         state["active"] = True
         state["activation"] = activation
         state["profile"] = profile
+        state["task_assessments"] = []
+        state["task_reassessment_required"] = True
         state["last_prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
         if profile == "bugfix":
             previous_routes = state.get("bugfix_routes", {}) if already_active and not profile_changed else {}
@@ -2971,22 +2835,22 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         enabled = ", ".join(name for name, value in routes.items() if value) or "local"
         return additional_context(
             "UserPromptSubmit",
-            f"WGC bugfix workflow activated {mode}; routes={enabled}. Build a redacted BugCase, reproduce before patching, support the root cause with scoped evidence, protect regression tests, then use independent architecture/review/QA gates. Runtime inspection is read-only and deployment still requires explicit human approval.",
+            f"WGC bugfix workflow activated {mode}; routes={enabled}. Build a redacted BugCase, reproduce before patching, support the root cause with scoped evidence, protect regression tests, then use TaskAssessment to select applicable independent gates. Runtime inspection is read-only and deployment still requires explicit human approval.",
         )
     if profile == "task-creation":
         mutation = "publish only through an exact MutationPlan" if project.get("mutation_requested") else "remain read-only until publication is requested"
         return additional_context(
             "UserPromptSubmit",
-            f"WGC task-creation workflow activated {mode}. Resolve an unambiguous GitHub Project, audit the implementation, obtain product/project/architecture/backlog-review artifacts, and {mutation}. Do not persist raw prompts or guess missing product semantics.",
+            f"WGC task-creation workflow activated {mode}. Resolve an unambiguous GitHub Project, audit the implementation, obtain TaskAssessment and its applicable backlog artifacts, and {mutation}. Do not persist raw prompts or guess missing product semantics.",
         )
     if profile == "epic-implementation":
         return additional_context(
             "UserPromptSubmit",
-            f"WGC epic-implementation workflow activated {mode}. Freeze selected Project item IDs, build dependency waves, require product/project/architecture/test/review/QA gates per item, and synchronize statuses only after evidence.",
+            f"WGC epic-implementation workflow activated {mode}. Freeze selected Project item IDs, build dependency waves, require per-item TaskAssessment and its applicable gates, and synchronize statuses only after evidence.",
         )
     return additional_context(
         "UserPromptSubmit",
-        f"WGC implementation workflow activated {mode}. Build a WorkItem, preserve baseline dirty paths, and use the architecture → tests → implementation → independent review → QA gates.",
+        f"WGC implementation workflow activated {mode}. Build a WorkItem, preserve baseline dirty paths, and launch Task Assessor first, then only the selected Light/Standard/Full roles.",
     )
 
 
@@ -3047,7 +2911,36 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> D
                 else ""
             )
         )
+    message += ' In v7 inherit the chat model and reasoning effort; never substitute another model. Task Assessor returns task_assessment; every assigned downstream result repeats its assessment_revision. Load only assigned role/domain references. Priority-only availability is a blocker.'
     return additional_context("SubagentStart", message)
+
+
+
+def bind_task_plan(state, task):
+    target = state
+    if task.get('item_id'):
+        target = next(i for i in state['selected_items'] if i['item_id'] == task['item_id'])
+    for field in ('plan_revision', 'acceptance_revision'):
+        target[field] = task[field]
+    target['minimum_test_criticality'] = task['risk']
+    target['plan_guardian_required'] = False
+
+
+def valid_orchestrator_result(payload, task, profile, revision):
+    message = str(payload.get('last_assistant_message') or '')
+    marker = 'WGC_ORCHESTRATOR_RESULT:'
+    lines = [line.split(marker, 1)[1].strip() for line in message.splitlines() if line.startswith(marker)]
+    if len(lines) != 1:
+        return False
+    try:
+        value = json.loads(lines[0])
+        fields = {'assessment_revision', 'input_revision', 'acceptance_verified', 'evidence_refs', 'reproduced_before', 'reproduced_after', 'root_cause_reviewed'}
+        if not isinstance(value, dict) or set(value) - fields:
+            return False
+        _, error = bounded_text_list(value.get('evidence_refs'), 'evidence_refs')
+        return not error and value.get('assessment_revision') == task['assessment_revision'] and value.get('input_revision') == revision and value.get('acceptance_verified') is True and (profile != 'bugfix' or all(value.get(k) is True for k in ('reproduced_before', 'reproduced_after', 'root_cause_reviewed')))
+    except (TypeError, ValueError):
+        return False
 
 
 def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -3063,6 +2956,60 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     if not error and expected and result and result.get("input_revision") != expected:
         error = "input_revision does not match the revision assigned at SubagentStart"
     profile = str(state.get("profile") or "implementation")
+    normalized_task = None
+    assessor_test = None
+    if not error and result and result['role'] == 'task-assessor' and result['verdict'] == 'assessed':
+        try:
+            normalized_task = teams.normalize(result.get('task_assessment'))
+            if not expected or result['input_revision'] != workspace_identity(context):
+                raise ValueError('Task Assessor requires a registered, unchanged input revision')
+            paths, path_error = normalize_exact_paths(normalized_task['assessed_paths'], 'assessed_paths', context)
+            if path_error:
+                raise ValueError(path_error)
+            if paths != normalized_task['assessed_paths']:
+                raise ValueError('TaskAssessment paths must be canonical')
+            for field in ('rationale', 'plan_revision', 'acceptance_revision'):
+                _, field_error = bounded_text(normalized_task[field], field)
+                if field_error:
+                    raise ValueError(field_error)
+            _, field_error = bounded_text_list(normalized_task['evidence_refs'], 'evidence_refs')
+            if field_error:
+                raise ValueError(field_error)
+            if profile == 'epic-implementation':
+                item = next((i for i in state.get('selected_items', []) if i['item_id'] == normalized_task.get('item_id') and i['item_revision'] == normalized_task.get('item_revision')), None)
+                if item is None:
+                    raise ValueError('TaskAssessment requires a frozen epic item')
+                for field in ('plan_revision', 'acceptance_revision'):
+                    if item.get(field) and item[field] != normalized_task[field]:
+                        raise ValueError('TaskAssessment disagrees with frozen ' + field)
+            elif normalized_task.get('item_id'):
+                raise ValueError('item identity is only valid for epic work')
+            # Evidence-producing assessor may reuse tests, but never author them.
+            if profile != 'task-creation' and normalized_task['mode'] != 'full' and normalized_task['test_disposition'] in {'none', 'reuse'}:
+                test_state = json.loads(json.dumps(state))
+                bind_task_plan(test_state, normalized_task)
+                assessor_test, test_error = normalize_test_assessment(result.get('assessment'), test_state, profile, context)
+                if test_error:
+                    raise ValueError(test_error)
+                if assessor_test['test_disposition'] != normalized_task['test_disposition'] or assessor_test['test_criticality'] != normalized_task['risk'] or assessor_test['assessed_paths'] != normalized_task['assessed_paths']:
+                    raise ValueError('TaskAssessment and TestAssessment disagree')
+            elif result.get('assessment') is not None:
+                raise ValueError('this route requires a separate Test-maker or no execution tests')
+            result = {k: result[k] for k in ('role', 'verdict', 'phase', 'input_revision')}
+            result['task_assessment'] = normalized_task
+            if normalized_task.get('item_id'):
+                result.update(item_id=normalized_task['item_id'], item_revision=normalized_task['item_revision'])
+        except (ValueError, TypeError, KeyError) as problem:
+            error = str(problem)
+    if not error and result and result['role'] != 'task-assessor':
+        task = teams.active(state, result.get('item_id'))
+        if task and result.get('assessment_revision') != task['assessment_revision']:
+            error = 'role result requires the current assessment_revision'
+        if task and any(result.get(field) is not None and result[field] != task[field] for field in ('plan_revision', 'acceptance_revision')):
+            error = 'changed plan/acceptance requires a new TaskAssessment'
+        independent = {'reviewer', 'architecture-guardian', 'qa', 'browser-qa', 'security-reviewer', 'contract-qa', 'data-migration-reviewer', 'reliability-reviewer', 'test-maker', 'infrastructure-reviewer'}
+        if task and result['role'] in independent and any(r.get('agent_id') == agent_id and r.get('role') in {'implementor', 'devops'} for r in state.get('subagent_results', [])):
+            error = 'independent review/test roles cannot reuse the implementation agent'
     normalized_items: Optional[List[Dict[str, Any]]] = None
     normalized_assessment: Optional[Dict[str, Any]] = None
     if (
@@ -3172,6 +3119,7 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
                 "phase": result["phase"],
                 "input_revision": result["input_revision"],
                 "assessment": normalized_assessment,
+                **({"assessment_revision": result["assessment_revision"]} if result.get("assessment_revision") else {}),
                 **(
                     {
                         "item_id": normalized_assessment["item_id"],
@@ -3276,6 +3224,19 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     )
 
     def updater(value: Dict[str, Any]) -> None:
+        if normalized_task is not None:
+            tasks = value.setdefault('task_assessments', [])
+            tasks[:] = [t for t in tasks if t.get('item_id') != normalized_task.get('item_id')]
+            tasks.append(normalized_task)
+            value['task_reassessment_required'] = False
+            # Old approvals cannot transfer into a new assessment, even at the same git revision.
+            value['subagent_results'] = [r for r in value.get('subagent_results', []) if r.get('item_id') != normalized_task.get('item_id')]
+            if normalized_task['mode'] != 'full':
+                bind_task_plan(value, normalized_task)
+            if assessor_test is not None:
+                assessments = value.setdefault('test_assessments', [])
+                assessments[:] = [a for a in assessments if a.get('item_id') != normalized_task.get('item_id')]
+                assessments.append({**assessor_test, 'input_revision': result['input_revision']})
         results = value.setdefault("subagent_results", [])
         recorded = {
             **result,
@@ -3283,6 +3244,9 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
             "agent_type": str(payload.get("agent_type") or "")[:200],
             "at": int(time.time()),
         }
+        recorded_task = teams.active(value, recorded.get('item_id'))
+        if recorded_task and recorded.get('item_id'):
+            recorded['scope_revision'] = task_scope_revision(recorded_task, context)
         result_key = agent_result_ledger_key(recorded)
         matching = [
             index for index, prior in enumerate(results)
@@ -3466,6 +3430,7 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
     snapshot = workspace_snapshot(context)
     exit_code = nested_exit_code(payload.get("tool_response"))
     tags = verification_tags(command) if tool == "Bash" else set()
+    current_revision = workspace_identity(context)
 
     def updater(state: Dict[str, Any]) -> None:
         known = set(state.get("touched_paths", []))
@@ -3476,6 +3441,11 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
         incremental_classification = classify_paths(incremental, touched)
         if incremental_classification["paths"]:
             changed_paths = set(incremental_classification["paths"])
+            teams.invalidate(state, changed_paths)
+            evidence.invalidate(state.setdefault('verification', {}), changed_paths)
+            all_task_scope = {p for a in state.get('task_assessments', []) for p in a['assessed_paths']}
+            if changed_paths - all_task_scope or any(re.search(r'(?:lock|package\.json|config|AGENTS\.md)', p, re.I) for p in changed_paths):
+                state['verification'] = {}
             production_paths = {
                 path
                 for path in changed_paths
@@ -3496,6 +3466,10 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                     str(item.get("item_id")) for item in state.get("selected_items", [])
                     if isinstance(item, dict) and item.get("item_id")
                 }
+                task_owners = {a['item_id'] for a in state.get('task_assessments', []) if a.get('item_id') and changed_paths & set(a['assessed_paths'])}
+                covered = {p for a in state.get('task_assessments', []) for p in a['assessed_paths']}
+                if task_owners and changed_paths <= covered:
+                    all_items = task_owners
                 # An ordinary docs/YAML/GitOps write has no trustworthy per-item owner.
                 # Preserve current assessments, but conservatively clear every item gate
                 # downstream of implementation so sibling evidence cannot transfer.
@@ -3514,7 +3488,7 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
 
                 def owners_for(path: str) -> Set[str]:
                     owners: Set[str] = set()
-                    for assessment in assessments:
+                    for assessment in assessments + state.get('task_assessments', []):
                         scoped = set(assessment.get("assessed_paths", []))
                         proof = assessment.get("reuse_proof")
                         proof_path = proof.get("test_path") if isinstance(proof, dict) else None
@@ -3571,6 +3545,8 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                     "browser-qa",
                     "security-reviewer",
                     "contract-qa",
+                    "data-migration-reviewer",
+                    "reliability-reviewer",
                     "deployment-agent",
                     "github-project-operator",
                 }
@@ -3602,6 +3578,7 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                     and result.get("role") not in {"devops", "infrastructure-reviewer"}
                 ]
         state["current_dirty"] = snapshot
+        state["current_revision"] = current_revision
         if tool == "Bash" and command.strip():
             commands = state.setdefault("commands", [])
             commands.append(
@@ -3616,7 +3593,11 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
             if exit_code == 0:
                 verification = state.setdefault("verification", {})
                 for tag in tags:
-                    verification[tag] = {"at": int(time.time()), **command_record(command)}
+                    scoped = {p for a in state.get('task_assessments', []) for p in a['assessed_paths']}
+                    verification[tag] = {'at': int(time.time()), **evidence.record(command_record(command), current_revision, evidence.environment_key(context), scoped, str(payload.get('agent_id') or 'orchestrator'))}
+            else:
+                for tag in tags:
+                    state.setdefault('verification', {}).pop(tag, None)
 
     state = update_state(payload, context, updater)
     relevant_snapshot = snapshot_since_baseline(snapshot, state.get("baseline_dirty"))
@@ -3643,7 +3624,10 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
     if classification["k8s"]:
         notes.append("GitOps files changed; run the renderer and validators, then require independent infrastructure review before any deployment approval.")
     if notes:
-        return additional_context("PostToolUse", " ".join(notes))
+        digest = hashlib.sha256(' '.join(notes).encode()).hexdigest()
+        if state.get('last_advisory_sha256') != digest:
+            update_state(payload, context, lambda value: value.update(last_advisory_sha256=digest))
+            return additional_context("PostToolUse", " ".join(notes))
     return None
 
 
@@ -3659,11 +3643,15 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
             "decision": "block",
             "reason": (
                 "WGC hook state is malformed or unsupported. Completion is blocked until a fresh "
-                "repository audit and workflow reactivation establish state v3."
+                "repository audit and workflow reactivation establish state v4."
             ),
         }
 
     snapshot = workspace_snapshot(context)
+    if snapshot_since_baseline(snapshot, state.get('current_dirty', state.get('baseline_dirty'))):
+        # Catch edits performed outside hooked tools before considering old evidence.
+        handle_post_tool({**payload, 'tool_name': '', 'tool_input': {}}, context)
+        state = update_state(payload, context, lambda value: None)
     relevant_snapshot = snapshot_since_baseline(snapshot, state.get("baseline_dirty"))
     classification = classify_paths(relevant_snapshot, state.get("touched_paths", []))
     if (
@@ -3740,7 +3728,28 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
         required_gates = {"architect", "test-maker", "reviewer", "architecture", "qa"}
         if classification["k8s"]:
             required_gates.add("infrastructure")
+    task = teams.active(state)
+    if profile == 'epic-implementation':
+        required_gates = {'project-scope', 'project-reconcile'}
+        if project.get('mutation_requested'):
+            required_gates.add('project-sync')
+    elif task:
+        required_gates = teams.required_gates(profile, task)
+        if profile == 'task-creation' and project.get('mutation_requested'):
+            required_gates.add('project-publish')
+        if profile == 'bugfix':
+            for route, gate in (('security', 'security'), ('contract', 'contract'), ('deployment', 'deployment')):
+                if routes.get(route):
+                    required_gates.add(gate)
+    else:
+        required_gates.add('task-assessor')
+    if task and profile != 'task-creation' and active_test_assessment(state) is None:
+        required_gates.add('test-assessment')
     current_revision = workspace_identity(context)
+    state['current_revision'] = current_revision
+    if task and (task['mode'] == 'light' or profile == 'bugfix' and task['mode'] != 'full'):
+        if not valid_orchestrator_result(payload, task, profile, current_revision):
+            required_gates.add('orchestrator-verification')
     observed_gates = approved_agent_gates(state, current_revision)
     gate_missing = sorted(required_gates - observed_gates)
     if profile == "epic-implementation":
@@ -3760,7 +3769,7 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
         def incomplete(value: Dict[str, Any]) -> None:
             value["active"] = False
             value["completed_at"] = int(time.time())
-            value["completion"] = "continued_once_with_gaps"
+            value["completion"] = "incomplete"
             value["remaining_gaps"] = {"verification": missing, "gates": gate_missing}
 
         update_state(payload, context, incomplete)

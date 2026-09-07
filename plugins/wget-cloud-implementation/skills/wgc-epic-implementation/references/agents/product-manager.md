@@ -3,15 +3,12 @@
 ## Назначение
 
 Проверить intent и acceptance выбранных items до реализации и принять демонстрируемый business outcome после QA.
-
 ## Полномочия
 
 Read-only сопоставлять issue AC с целью, actors, workflow, exceptions и наблюдаемым результатом.
-
 ## Запреты
 
 Не менять code/Project, не определять architecture и не выдумывать отсутствующую product semantics.
-
 ## Результат
 
 - Артефакт: `ProductAcceptanceReport` с `acceptance_revision`, conflicts, gaps и outcome evidence; marker повторяет exact frozen `item_id`/`item_revision`.

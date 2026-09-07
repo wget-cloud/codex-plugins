@@ -1,0 +1,857 @@
+{
+  "version": 1,
+  "skills": {
+    "wgc-implementation": [
+      {
+        "target": "SKILL.md",
+        "sources": [
+          "workflows/implementation/SKILL.md"
+        ]
+      },
+      {
+        "target": "agents/openai.yaml",
+        "sources": [
+          "workflows/implementation/agents/openai.yaml"
+        ]
+      },
+      {
+        "target": "references/agents/architect.md",
+        "sources": [
+          "roles/architect.md",
+          "workflows/implementation/roles/architect.md"
+        ]
+      },
+      {
+        "target": "references/agents/architecture-guardian.md",
+        "sources": [
+          "roles/architecture-guardian.md",
+          "workflows/implementation/roles/architecture-guardian.md"
+        ]
+      },
+      {
+        "target": "references/agents/browser-qa.md",
+        "sources": [
+          "roles/browser-qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/contract-qa.md",
+        "sources": [
+          "roles/contract-qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/data-migration-reviewer.md",
+        "sources": [
+          "roles/data-migration-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/deployment-agent.md",
+        "sources": [
+          "roles/deployment-agent.md",
+          "workflows/implementation/roles/deployment-agent.md"
+        ]
+      },
+      {
+        "target": "references/agents/devops.md",
+        "sources": [
+          "roles/devops.md",
+          "workflows/implementation/roles/devops.md"
+        ]
+      },
+      {
+        "target": "references/agents/explorer.md",
+        "sources": [
+          "roles/explorer.md",
+          "workflows/implementation/roles/explorer.md"
+        ]
+      },
+      {
+        "target": "references/agents/implementor.md",
+        "sources": [
+          "roles/implementor.md",
+          "workflows/implementation/roles/implementor.md"
+        ]
+      },
+      {
+        "target": "references/agents/index.md",
+        "sources": [
+          "workflows/implementation/references/agents/index.md"
+        ]
+      },
+      {
+        "target": "references/agents/infrastructure-reviewer.md",
+        "sources": [
+          "roles/infrastructure-reviewer.md",
+          "workflows/implementation/roles/infrastructure-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/orchestrator.md",
+        "sources": [
+          "roles/orchestrator.md",
+          "workflows/implementation/roles/orchestrator.md"
+        ]
+      },
+      {
+        "target": "references/agents/qa.md",
+        "sources": [
+          "roles/qa.md",
+          "workflows/implementation/roles/qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/reliability-reviewer.md",
+        "sources": [
+          "roles/reliability-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/reviewer.md",
+        "sources": [
+          "roles/reviewer.md",
+          "workflows/implementation/roles/reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/security-reviewer.md",
+        "sources": [
+          "roles/security-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/task-assessor.md",
+        "sources": [
+          "roles/task-assessor.md"
+        ]
+      },
+      {
+        "target": "references/agents/test-maker.md",
+        "sources": [
+          "roles/test-maker.md",
+          "workflows/implementation/roles/test-maker.md"
+        ]
+      },
+      {
+        "target": "references/artifacts-and-gates.md",
+        "sources": [
+          "workflows/implementation/references/artifacts-and-gates.md"
+        ]
+      },
+      {
+        "target": "references/domains/backend.md",
+        "sources": [
+          "domains/backend.md"
+        ]
+      },
+      {
+        "target": "references/domains/front-lib.md",
+        "sources": [
+          "domains/front-lib.md"
+        ]
+      },
+      {
+        "target": "references/domains/frontend.md",
+        "sources": [
+          "domains/frontend.md"
+        ]
+      },
+      {
+        "target": "references/domains/gitops.md",
+        "sources": [
+          "domains/gitops.md"
+        ]
+      },
+      {
+        "target": "references/domains/site.md",
+        "sources": [
+          "domains/site.md"
+        ]
+      },
+      {
+        "target": "references/gitops-and-deployment.md",
+        "sources": [
+          "workflows/implementation/references/gitops-and-deployment.md"
+        ]
+      },
+      {
+        "target": "references/hooks.md",
+        "sources": [
+          "workflows/implementation/references/hooks.md"
+        ]
+      },
+      {
+        "target": "references/model-routing.md",
+        "sources": [
+          "policies/model-routing.md"
+        ]
+      },
+      {
+        "target": "references/task-assessment.md",
+        "sources": [
+          "policies/task-assessment.md"
+        ]
+      },
+      {
+        "target": "references/test-assessment.md",
+        "sources": [
+          "workflows/implementation/references/test-assessment.md"
+        ]
+      },
+      {
+        "target": "references/verification.md",
+        "sources": [
+          "policies/verification.md"
+        ]
+      },
+      {
+        "target": "references/workflow.md",
+        "sources": [
+          "workflows/implementation/references/workflow.md"
+        ]
+      }
+    ],
+    "wgc-bugfix": [
+      {
+        "target": "SKILL.md",
+        "sources": [
+          "workflows/bugfix/SKILL.md"
+        ]
+      },
+      {
+        "target": "agents/openai.yaml",
+        "sources": [
+          "workflows/bugfix/agents/openai.yaml"
+        ]
+      },
+      {
+        "target": "references/agents/architect.md",
+        "sources": [
+          "roles/architect.md",
+          "workflows/bugfix/roles/architect.md"
+        ]
+      },
+      {
+        "target": "references/agents/architecture-guardian.md",
+        "sources": [
+          "roles/architecture-guardian.md",
+          "workflows/bugfix/roles/architecture-guardian.md"
+        ]
+      },
+      {
+        "target": "references/agents/browser-qa.md",
+        "sources": [
+          "roles/browser-qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/bug-investigator.md",
+        "sources": [
+          "roles/bug-investigator.md"
+        ]
+      },
+      {
+        "target": "references/agents/bug-triage.md",
+        "sources": [
+          "roles/bug-triage.md"
+        ]
+      },
+      {
+        "target": "references/agents/contract-qa.md",
+        "sources": [
+          "roles/contract-qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/data-migration-reviewer.md",
+        "sources": [
+          "roles/data-migration-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/deployment-agent.md",
+        "sources": [
+          "roles/deployment-agent.md",
+          "workflows/bugfix/roles/deployment-agent.md"
+        ]
+      },
+      {
+        "target": "references/agents/devops.md",
+        "sources": [
+          "roles/devops.md",
+          "workflows/bugfix/roles/devops.md"
+        ]
+      },
+      {
+        "target": "references/agents/implementor.md",
+        "sources": [
+          "roles/implementor.md",
+          "workflows/bugfix/roles/implementor.md"
+        ]
+      },
+      {
+        "target": "references/agents/index.md",
+        "sources": [
+          "workflows/bugfix/references/agents/index.md"
+        ]
+      },
+      {
+        "target": "references/agents/infrastructure-reviewer.md",
+        "sources": [
+          "roles/infrastructure-reviewer.md",
+          "workflows/bugfix/roles/infrastructure-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/orchestrator.md",
+        "sources": [
+          "roles/orchestrator.md",
+          "workflows/bugfix/roles/orchestrator.md"
+        ]
+      },
+      {
+        "target": "references/agents/qa.md",
+        "sources": [
+          "roles/qa.md",
+          "workflows/bugfix/roles/qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/reliability-reviewer.md",
+        "sources": [
+          "roles/reliability-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/reproducer.md",
+        "sources": [
+          "roles/reproducer.md"
+        ]
+      },
+      {
+        "target": "references/agents/reviewer.md",
+        "sources": [
+          "roles/reviewer.md",
+          "workflows/bugfix/roles/reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/root-cause-reviewer.md",
+        "sources": [
+          "roles/root-cause-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/security-reviewer.md",
+        "sources": [
+          "roles/security-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/task-assessor.md",
+        "sources": [
+          "roles/task-assessor.md"
+        ]
+      },
+      {
+        "target": "references/agents/test-maker.md",
+        "sources": [
+          "roles/test-maker.md",
+          "workflows/bugfix/roles/test-maker.md"
+        ]
+      },
+      {
+        "target": "references/artifacts-and-gates.md",
+        "sources": [
+          "workflows/bugfix/references/artifacts-and-gates.md"
+        ]
+      },
+      {
+        "target": "references/domains/backend.md",
+        "sources": [
+          "domains/backend.md"
+        ]
+      },
+      {
+        "target": "references/domains/front-lib.md",
+        "sources": [
+          "domains/front-lib.md"
+        ]
+      },
+      {
+        "target": "references/domains/frontend.md",
+        "sources": [
+          "domains/frontend.md"
+        ]
+      },
+      {
+        "target": "references/domains/gitops.md",
+        "sources": [
+          "domains/gitops.md"
+        ]
+      },
+      {
+        "target": "references/domains/site.md",
+        "sources": [
+          "domains/site.md"
+        ]
+      },
+      {
+        "target": "references/evidence-and-reproduction.md",
+        "sources": [
+          "workflows/bugfix/references/evidence-and-reproduction.md"
+        ]
+      },
+      {
+        "target": "references/gitops-and-deployment.md",
+        "sources": [
+          "workflows/bugfix/references/gitops-and-deployment.md"
+        ]
+      },
+      {
+        "target": "references/hooks.md",
+        "sources": [
+          "workflows/bugfix/references/hooks.md"
+        ]
+      },
+      {
+        "target": "references/model-routing.md",
+        "sources": [
+          "policies/model-routing.md"
+        ]
+      },
+      {
+        "target": "references/project-routing.md",
+        "sources": [
+          "workflows/bugfix/references/project-routing.md"
+        ]
+      },
+      {
+        "target": "references/task-assessment.md",
+        "sources": [
+          "policies/task-assessment.md"
+        ]
+      },
+      {
+        "target": "references/test-assessment.md",
+        "sources": [
+          "workflows/bugfix/references/test-assessment.md"
+        ]
+      },
+      {
+        "target": "references/ui-api-security-testing.md",
+        "sources": [
+          "workflows/bugfix/references/ui-api-security-testing.md"
+        ]
+      },
+      {
+        "target": "references/verification.md",
+        "sources": [
+          "policies/verification.md"
+        ]
+      },
+      {
+        "target": "references/workflow.md",
+        "sources": [
+          "workflows/bugfix/references/workflow.md"
+        ]
+      }
+    ],
+    "wgc-task-creation": [
+      {
+        "target": "SKILL.md",
+        "sources": [
+          "workflows/task-creation/SKILL.md"
+        ]
+      },
+      {
+        "target": "agents/openai.yaml",
+        "sources": [
+          "workflows/task-creation/agents/openai.yaml"
+        ]
+      },
+      {
+        "target": "references/agents/architect.md",
+        "sources": [
+          "roles/architect.md",
+          "workflows/task-creation/roles/architect.md"
+        ]
+      },
+      {
+        "target": "references/agents/backlog-reviewer.md",
+        "sources": [
+          "roles/backlog-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/github-project-operator.md",
+        "sources": [
+          "roles/github-project-operator.md",
+          "workflows/task-creation/roles/github-project-operator.md"
+        ]
+      },
+      {
+        "target": "references/agents/implementation-auditor.md",
+        "sources": [
+          "roles/implementation-auditor.md"
+        ]
+      },
+      {
+        "target": "references/agents/index.md",
+        "sources": [
+          "workflows/task-creation/references/agents/index.md"
+        ]
+      },
+      {
+        "target": "references/agents/orchestrator.md",
+        "sources": [
+          "roles/orchestrator.md",
+          "workflows/task-creation/roles/orchestrator.md"
+        ]
+      },
+      {
+        "target": "references/agents/product-manager.md",
+        "sources": [
+          "roles/product-manager.md",
+          "workflows/task-creation/roles/product-manager.md"
+        ]
+      },
+      {
+        "target": "references/agents/project-manager.md",
+        "sources": [
+          "roles/project-manager.md",
+          "workflows/task-creation/roles/project-manager.md"
+        ]
+      },
+      {
+        "target": "references/agents/task-assessor.md",
+        "sources": [
+          "roles/task-assessor.md"
+        ]
+      },
+      {
+        "target": "references/artifacts-and-gates.md",
+        "sources": [
+          "workflows/task-creation/references/artifacts-and-gates.md"
+        ]
+      },
+      {
+        "target": "references/domains/backend.md",
+        "sources": [
+          "domains/backend.md"
+        ]
+      },
+      {
+        "target": "references/domains/front-lib.md",
+        "sources": [
+          "domains/front-lib.md"
+        ]
+      },
+      {
+        "target": "references/domains/frontend.md",
+        "sources": [
+          "domains/frontend.md"
+        ]
+      },
+      {
+        "target": "references/domains/gitops.md",
+        "sources": [
+          "domains/gitops.md"
+        ]
+      },
+      {
+        "target": "references/domains/site.md",
+        "sources": [
+          "domains/site.md"
+        ]
+      },
+      {
+        "target": "references/github-projects.md",
+        "sources": [
+          "workflows/task-creation/references/github-projects.md"
+        ]
+      },
+      {
+        "target": "references/hooks.md",
+        "sources": [
+          "workflows/task-creation/references/hooks.md"
+        ]
+      },
+      {
+        "target": "references/model-routing.md",
+        "sources": [
+          "policies/model-routing.md"
+        ]
+      },
+      {
+        "target": "references/task-assessment.md",
+        "sources": [
+          "policies/task-assessment.md"
+        ]
+      },
+      {
+        "target": "references/test-assessment.md",
+        "sources": [
+          "workflows/task-creation/references/test-assessment.md"
+        ]
+      },
+      {
+        "target": "references/verification.md",
+        "sources": [
+          "policies/verification.md"
+        ]
+      },
+      {
+        "target": "references/workflow.md",
+        "sources": [
+          "workflows/task-creation/references/workflow.md"
+        ]
+      }
+    ],
+    "wgc-epic-implementation": [
+      {
+        "target": "SKILL.md",
+        "sources": [
+          "workflows/epic-implementation/SKILL.md"
+        ]
+      },
+      {
+        "target": "agents/openai.yaml",
+        "sources": [
+          "workflows/epic-implementation/agents/openai.yaml"
+        ]
+      },
+      {
+        "target": "references/agents/architect.md",
+        "sources": [
+          "roles/architect.md",
+          "workflows/epic-implementation/roles/architect.md"
+        ]
+      },
+      {
+        "target": "references/agents/architecture-guardian.md",
+        "sources": [
+          "roles/architecture-guardian.md",
+          "workflows/epic-implementation/roles/architecture-guardian.md"
+        ]
+      },
+      {
+        "target": "references/agents/browser-qa.md",
+        "sources": [
+          "roles/browser-qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/contract-qa.md",
+        "sources": [
+          "roles/contract-qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/data-migration-reviewer.md",
+        "sources": [
+          "roles/data-migration-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/deployment-agent.md",
+        "sources": [
+          "roles/deployment-agent.md",
+          "workflows/epic-implementation/roles/deployment-agent.md"
+        ]
+      },
+      {
+        "target": "references/agents/devops.md",
+        "sources": [
+          "roles/devops.md",
+          "workflows/epic-implementation/roles/devops.md"
+        ]
+      },
+      {
+        "target": "references/agents/explorer.md",
+        "sources": [
+          "roles/explorer.md",
+          "workflows/epic-implementation/roles/explorer.md"
+        ]
+      },
+      {
+        "target": "references/agents/github-project-operator.md",
+        "sources": [
+          "roles/github-project-operator.md",
+          "workflows/epic-implementation/roles/github-project-operator.md"
+        ]
+      },
+      {
+        "target": "references/agents/implementor.md",
+        "sources": [
+          "roles/implementor.md",
+          "workflows/epic-implementation/roles/implementor.md"
+        ]
+      },
+      {
+        "target": "references/agents/index.md",
+        "sources": [
+          "workflows/epic-implementation/references/agents/index.md"
+        ]
+      },
+      {
+        "target": "references/agents/infrastructure-reviewer.md",
+        "sources": [
+          "roles/infrastructure-reviewer.md",
+          "workflows/epic-implementation/roles/infrastructure-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/orchestrator.md",
+        "sources": [
+          "roles/orchestrator.md",
+          "workflows/epic-implementation/roles/orchestrator.md"
+        ]
+      },
+      {
+        "target": "references/agents/product-manager.md",
+        "sources": [
+          "roles/product-manager.md",
+          "workflows/epic-implementation/roles/product-manager.md"
+        ]
+      },
+      {
+        "target": "references/agents/project-manager.md",
+        "sources": [
+          "roles/project-manager.md",
+          "workflows/epic-implementation/roles/project-manager.md"
+        ]
+      },
+      {
+        "target": "references/agents/qa.md",
+        "sources": [
+          "roles/qa.md",
+          "workflows/epic-implementation/roles/qa.md"
+        ]
+      },
+      {
+        "target": "references/agents/reliability-reviewer.md",
+        "sources": [
+          "roles/reliability-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/reviewer.md",
+        "sources": [
+          "roles/reviewer.md",
+          "workflows/epic-implementation/roles/reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/security-reviewer.md",
+        "sources": [
+          "roles/security-reviewer.md"
+        ]
+      },
+      {
+        "target": "references/agents/task-assessor.md",
+        "sources": [
+          "roles/task-assessor.md"
+        ]
+      },
+      {
+        "target": "references/agents/test-maker.md",
+        "sources": [
+          "roles/test-maker.md",
+          "workflows/epic-implementation/roles/test-maker.md"
+        ]
+      },
+      {
+        "target": "references/artifacts-and-gates.md",
+        "sources": [
+          "workflows/epic-implementation/references/artifacts-and-gates.md"
+        ]
+      },
+      {
+        "target": "references/batch-execution.md",
+        "sources": [
+          "workflows/epic-implementation/references/batch-execution.md"
+        ]
+      },
+      {
+        "target": "references/domains/backend.md",
+        "sources": [
+          "domains/backend.md"
+        ]
+      },
+      {
+        "target": "references/domains/front-lib.md",
+        "sources": [
+          "domains/front-lib.md"
+        ]
+      },
+      {
+        "target": "references/domains/frontend.md",
+        "sources": [
+          "domains/frontend.md"
+        ]
+      },
+      {
+        "target": "references/domains/gitops.md",
+        "sources": [
+          "domains/gitops.md"
+        ]
+      },
+      {
+        "target": "references/domains/site.md",
+        "sources": [
+          "domains/site.md"
+        ]
+      },
+      {
+        "target": "references/github-projects.md",
+        "sources": [
+          "workflows/epic-implementation/references/github-projects.md"
+        ]
+      },
+      {
+        "target": "references/gitops-and-deployment.md",
+        "sources": [
+          "workflows/epic-implementation/references/gitops-and-deployment.md"
+        ]
+      },
+      {
+        "target": "references/hooks.md",
+        "sources": [
+          "workflows/epic-implementation/references/hooks.md"
+        ]
+      },
+      {
+        "target": "references/model-routing.md",
+        "sources": [
+          "policies/model-routing.md"
+        ]
+      },
+      {
+        "target": "references/task-assessment.md",
+        "sources": [
+          "policies/task-assessment.md"
+        ]
+      },
+      {
+        "target": "references/test-assessment.md",
+        "sources": [
+          "workflows/epic-implementation/references/test-assessment.md"
+        ]
+      },
+      {
+        "target": "references/verification.md",
+        "sources": [
+          "policies/verification.md"
+        ]
+      },
+      {
+        "target": "references/workflow.md",
+        "sources": [
+          "workflows/epic-implementation/references/workflow.md"
+        ]
+      }
+    ]
+  }
+}

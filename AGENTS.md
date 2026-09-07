@@ -17,7 +17,7 @@
 - При изменении plugin bundle повышай manifest `version` как plain SemVer без `+` build metadata; cachebuster helper не используй и marketplace entry ради версии не редактируй.
 - При добавлении plugin/skill применяй штатные scaffold scripts; не оставляй TODO placeholders.
 - Изменение role verdict/phase обязано синхронно обновить role file, hook profile contract и tests.
-- Не объединяй роли с конфликтом независимости и не создавай общий shared role file за пределами skill: skill должен оставаться переносимым.
+- Не объединяй роли с конфликтом независимости. Общие исходники engineering-ролей допустимы в `plugin-src/wget-cloud-implementation`; детерминированная сборка выпускает автономные role files внутри каждого skill без внешних runtime-ссылок. Редактируй исходники и запускай `scripts/build_wgc_skills.py`; `--check` проверяет отсутствие расхождений. Maintenance bundle остаётся независимым.
 - Не добавляй README/CHANGELOG/installation guides внутрь skill folder.
 
 ## Wget Cloud Plugin Maintainer

@@ -1,0 +1,4 @@
+interface:
+  display_name: "WGC Task Creation"
+  short_description: "Product-managed tasks and GitHub Project backlogs"
+  default_prompt: "Use $wgc-task-creation to analyze this request and create an ordered task backlog in the selected GitHub Project."

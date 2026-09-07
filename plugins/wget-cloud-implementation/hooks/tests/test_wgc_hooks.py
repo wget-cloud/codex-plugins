@@ -68,7 +68,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
-        self.assertEqual(version, "6.1.0")
+        self.assertEqual(version, "7.0.0")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -356,6 +356,26 @@ contexts:
             cwd,
         )
 
+    def record_task(self, cwd, task=None, assessment=None, epic=False):
+        task = dict(task or {
+            'plan_revision': 'test-plan-r1', 'acceptance_revision': 'test-ac-r1',
+            'mode': 'full', 'complexity': 'medium', 'risk': 'low',
+            'domains': ['backend'], 'risk_signals': [], 'checks': [],
+            'test_disposition': 'add', 'rationale': 'full route lifecycle fixture',
+            'assessed_paths': [cwd.name + ':src/app.ts', cwd.name + ':src/price.ts', cwd.name + ':tests/app.test.ts'],
+            'evidence_refs': ['synthetic-fixture'],
+        })
+        if epic:
+            task.update(item_id='EPIC-1', item_revision='a' * 64)
+        task.pop('assessment_revision', None)
+        task['assessment_revision'] = hashlib.sha256(json.dumps(task, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        extra = {'task_assessment': task}
+        if assessment is not None:
+            extra['assessment'] = assessment
+        result = self.record_agent(cwd, 'task-assessor', 'assessed', auto_defaults=False, **extra)
+        self.assertIsNone(result, result)
+        return task
+
     def record_agent(self, cwd, role, verdict, phase="", auto_defaults=True, **extra):
         if role == "test-maker" and verdict == "assessment_ready" and auto_defaults and "assessment" not in extra:
             test_file = cwd / "tests" / "app.test.ts"
@@ -416,6 +436,13 @@ contexts:
                     "test_plan": {"action": "add", "tests": ["tests/app.test.ts"], "protected_hashes": {"tests/app.test.ts": test_hash}, "commands": ["npm test -- tests/app.test.ts"], "expected_baseline": "red", "actual_baseline": "red"},
                 }
             )
+        if auto_defaults and state.get('profile') == 'epic-implementation' and state.get('task_assessments') and role == 'architect':
+            marker_value.setdefault('item_id', 'EPIC-1')
+            marker_value.setdefault('item_revision', 'a' * 64)
+        if role != 'task-assessor':
+            task = next((t for t in state.get('task_assessments', []) if t.get('item_id') == marker_value.get('item_id')), None)
+            if task:
+                marker_value.setdefault('assessment_revision', task['assessment_revision'])
         marker = json.dumps(marker_value, separators=(",", ":"))
         return self.call(
             "subagent-stop",
@@ -517,25 +544,25 @@ contexts:
         reuse = next(case for case in cases if case["id"] == "reuse-proof")["reuse_proof"]
         self.assertEqual(reuse["file_sha256"], hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
 
-    def test_state_v3_requires_empty_adaptive_assessment_ledger(self):
+    def test_state_v4_requires_empty_adaptive_assessment_ledger(self):
         self.activate()
         state = self.adaptive_state()
-        self.assertEqual(state["version"], 3)
+        self.assertEqual(state["version"], 4)
         self.assertEqual(state["test_assessments"], [])
         self.assertEqual(state["selected_items"], [])
 
-    def test_v2_migration_preserves_verification_and_resets_legacy_downstream_gates(self):
+    def test_v2_migration_resets_legacy_verification_and_role_gates(self):
         cwd = self.projects["backend"]
         self.activate()
         path = next((self.data / "hook-state").glob("*.json"))
         path.write_text(json.dumps({"version": 2, "active": True, "verification": {"test": {"at": 1}, "coverage": {"at": 1}, "typecheck": {"at": 1}}, "subagent_results": [{"role": "architect", "verdict": "proposed", "phase": ""}, {"role": "test-maker", "verdict": "baseline_ready", "phase": ""}, {"role": "qa", "verdict": "pass", "phase": ""}]}), encoding="utf-8")
         self.call("session-start", {"hook_event_name": "SessionStart", "source": "resume"}, cwd)
         state = self.adaptive_state()
-        self.assertEqual(state["version"], 3)
+        self.assertEqual(state["version"], 4)
         self.assertNotIn("test", state["verification"])
         self.assertNotIn("coverage", state["verification"])
-        self.assertIn("typecheck", state["verification"])
-        self.assertEqual([result["role"] for result in state["subagent_results"]], ["architect"])
+        self.assertNotIn("typecheck", state["verification"])
+        self.assertEqual(state["subagent_results"], [])
         self.assertEqual(state["test_assessments"], [])
 
     def test_malformed_state_blocks_completion_fail_closed(self):
@@ -581,7 +608,7 @@ contexts:
         verification = self.adaptive_state()["verification"]
         self.assertNotIn("test", verification)
         self.assertNotIn("coverage", verification)
-        self.assertIn("typecheck", verification)
+        self.assertNotIn("typecheck", verification)
 
     def test_unknown_or_unbounded_assessment_data_is_rejected_and_never_persisted(self):
         cwd = self.projects["backend"]
@@ -1029,7 +1056,7 @@ contexts:
         state_path = next((self.data / "hook-state").glob("*.json"))
         raw = state_path.read_text(encoding="utf-8")
         state = json.loads(raw)
-        self.assertEqual(state["version"], 3)
+        self.assertEqual(state["version"], 4)
         self.assertEqual(state["profile"], "bugfix")
         self.assertTrue(state["bugfix_routes"]["ui"])
         self.assertTrue(state["bugfix_routes"]["security"])
@@ -1125,6 +1152,8 @@ contexts:
             ("project-manager", "progress_updated", "reconcile"),
         ):
             self.record_agent(cwd, role, verdict, phase)
+            if role == "project-manager" and phase == "scope":
+                self.record_task(cwd, epic=True)
         completed = self.call(
             "stop",
             {
@@ -2338,9 +2367,12 @@ metadata:
             },
             cwd,
         )
+        self.record_task(cwd)
         self.record_agent(cwd, "architect", "proposed")
+        self.record_agent(cwd, "architecture-guardian", "approved", "plan")
         self.record_agent(cwd, "test-maker", "assessment_ready")
         self.call("post-tool", {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "npm test -- --coverage"}, "tool_response": {"exit_code": 0}}, cwd)
+        self.record_agent(cwd, "implementor", "implemented")
         self.record_agent(cwd, "reviewer", "approved")
         self.record_agent(cwd, "architecture-guardian", "approved", "diff")
         self.record_agent(cwd, "qa", "pass")
@@ -2430,6 +2462,7 @@ metadata:
         self.assertEqual(blocked["decision"], "block")
         self.assertIn("product", blocked["reason"])
         self.assertIn("project-publish", blocked["reason"])
+        self.record_task(cwd)
         for role, verdict in (
             ("product-manager", "specified"),
             ("project-manager", "project_ready"),
@@ -2457,6 +2490,7 @@ metadata:
             "task-creation",
             prompt="Use $wgc-task-creation to analyze the backlog without publishing anything",
         )
+        self.record_task(cwd)
         for role, verdict in (
             ("product-manager", "specified"),
             ("project-manager", "project_ready"),
@@ -2504,6 +2538,8 @@ metadata:
             ("github-project-operator", "synced", ""),
         ):
             self.record_agent(cwd, role, verdict, phase)
+            if role == "project-manager" and phase == "scope":
+                self.record_task(cwd, epic=True)
         completed = self.call(
             "stop",
             {
@@ -2542,6 +2578,7 @@ metadata:
             },
             cwd,
         )
+        self.record_task(cwd)
         for role, verdict, phase in (
             ("bug-triage", "triaged", ""),
             ("bug-investigator", "evidence_ready", "evidence"),
