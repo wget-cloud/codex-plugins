@@ -1,6 +1,6 @@
 # Реестр агентов task-creation
 
-Перед запуском роли прочитай её contract. Все роли read-only относительно GitHub и repository, кроме GitHub Project Operator с exact mutation allowlist.
+Перед запуском роли прочитай её contract. Все роли read-only относительно YouTrack и repository, кроме YouTrack Operator с exact mutation allowlist.
 
 ## Общий assignment envelope
 
@@ -13,7 +13,7 @@ REPOSITORIES: <разрешённые repositories>
 ALLOW_PATHS: <разрешённые paths или read-only>
 DENY_PATHS: <запрещённые paths>
 INPUT_ARTIFACTS: <TaskRequest, evidence и upstream artifacts>
-PROJECT_SCOPE: <exact URL/owner/number и mutation allowlist>
+PROJECT_SCOPE: <exact instance URL/project key/issue IDs и mutation allowlist>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <read-only или verification checks>
 ASSESSMENT_REVISION: <current TaskAssessment revision; n/a only during assessment/intake>
@@ -31,7 +31,7 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 INPUT_REVISION: <exact current workflow revision>
 ```
 
-`TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator не spawn. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет GitHub scope и не объявляет весь backlog готовым.
+`TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator не spawn. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет YouTrack scope и не объявляет весь backlog готовым.
 
 ## Model routing policy
 
@@ -47,7 +47,7 @@ INPUT_REVISION: <exact current workflow revision>
 | Implementation Auditor | implementation_auditor | current-state evidence | нет | inherit | [implementation-auditor.md](implementation-auditor.md) |
 | Architect | architect | ownership/contracts/decomposition | нет | inherit | [architect.md](architect.md) |
 | Backlog Reviewer | backlog_reviewer | независимый quality gate | нет | inherit | [backlog-reviewer.md](backlog-reviewer.md) |
-| GitHub Project Operator | github_project_operator | идемпотентная publication | exact GitHub allowlist | inherit | [github-project-operator.md](github-project-operator.md) |
+| YouTrack Operator | youtrack_operator | идемпотентная publication | exact YouTrack MCP allowlist | inherit | [youtrack-operator.md](youtrack-operator.md) |
 
 ## Машинный результат
 
@@ -66,7 +66,7 @@ Task-creation хранит только provisional test policy в task body/AC 
 - Product Manager не утверждает собственную спецификацию.
 - Architect не является Backlog Reviewer.
 - Project Manager не подменяет product decisions.
-- GitHub Project Operator не определяет scope и не считается независимой проверкой своих mutations.
+- YouTrack Operator не определяет scope и не считается независимой проверкой своих mutations.
 
 ## Дополнительные роли v7
 
@@ -77,3 +77,13 @@ Task-creation хранит только provisional test policy в task body/AC 
 ## Выбор команды
 
 [TaskAssessment](../task-assessment.md) определяет применимость ролей; таблица — каталог, не требование запускать всех. Каждый downstream marker повторяет `assessment_revision`. Skills не передают control друг другу: Orchestrator сохраняет единый WorkItem и выбирает процесс/профили.
+
+## YouTrack и продуктовая проработка
+
+Все роли читают [product discovery](../product-discovery.md) перед постановкой/планом. Только YouTrack Operator меняет карточки; Orchestrator проверяет результат независимо.
+
+| Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
+|---|---|---|---|---|---|
+| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | inherit | [effort-estimator.md](effort-estimator.md) |
+
+Assignment дополнительно содержит TRACKER=youtrack, ISSUE_SCOPE (exact project keys/IDs), PLAN_REVISION, DECISION_REFS, ESTIMATE_REFS и MUTATION_ALLOWLIST; секреты не передаются. Registry задаёт существующие marker fields; `phase` новых ролей пустой. Effort Estimator не совмещается с автором оцениваемой постановки/плана.

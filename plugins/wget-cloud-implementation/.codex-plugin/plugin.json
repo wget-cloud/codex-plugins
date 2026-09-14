@@ -1,7 +1,7 @@
 {
   "name": "wget-cloud-implementation",
-  "version": "7.0.0",
-  "description": "Product-managed backlog creation, epic delivery, architecture-safe implementation, and evidence-driven bugfix workflows for Wget Cloud.",
+  "version": "8.0.0",
+  "description": "YouTrack MCP product discovery, story-point estimation, task and epic delivery, and evidence-driven bugfix for Wget Cloud.",
   "author": {
     "name": "Wget Cloud",
     "url": "https://github.com/wget-cloud"
@@ -15,18 +15,20 @@
     "bugfix",
     "product-management",
     "project-management",
-    "github-projects",
     "backlog",
     "epic",
     "diagnostics",
     "architecture",
-    "gitops"
+    "gitops",
+    "youtrack",
+    "mcp",
+    "story-points"
   ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Wget Cloud Engineering",
-    "shortDescription": "GitHub Project planning and multi-agent delivery.",
-    "longDescription": "Creates product-quality GitHub Project backlogs, executes epics and ordered task pools, coordinates planned implementation, and runs evidence-first bug repair with independent architecture, review, QA, GitOps, and approval gates across Wget Cloud repositories.",
+    "shortDescription": "YouTrack planning, story points and agent delivery.",
+    "longDescription": "Researches projects, interviews users, compares alternatives and estimates story points before creating YouTrack tasks and epics. Implements tasks through independent review and QA, dev/epic branches, squash commits and evidence-based Stage transitions using YouTrack MCP.",
     "developerName": "Wget Cloud",
     "category": "Developer Tools",
     "capabilities": [
@@ -35,9 +37,10 @@
     ],
     "websiteURL": "https://github.com/wget-cloud/codex-plugins",
     "defaultPrompt": [
-      "Use $wgc-task-creation to create a product-quality backlog in a selected GitHub Project.",
-      "Use $wgc-epic-implementation to deliver an epic or task pool from GitHub Project in dependency order.",
-      "Use $wgc-implementation for one planned task or $wgc-bugfix for an evidence-driven defect."
+      "Use $wgc-task-creation to research and create a YouTrack task or epic with story points.",
+      "Use $wgc-epic-implementation to plan every task of a YouTrack epic and deliver it in dependency order.",
+      "Use $wgc-implementation for a YouTrack task or $wgc-bugfix for a defect."
     ]
-  }
+  },
+  "mcpServers": "./.mcp.json"
 }

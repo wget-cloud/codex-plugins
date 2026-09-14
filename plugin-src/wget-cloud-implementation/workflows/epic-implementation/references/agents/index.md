@@ -32,7 +32,7 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 INPUT_REVISION: <exact current workflow revision>
 ```
 
-`TASK_NAME` строится из prefix и snake_case item slice. Каждый субагент работает только в slice, сохраняет чужие изменения, не commit/push/PR/merge/release/deploy без приложенного разрешения и не меняет GitHub Project, кроме Operator с exact sync plan.
+`TASK_NAME` строится из prefix и snake_case item slice. Каждый субагент работает только в slice, сохраняет чужие изменения, не commit/push/PR/merge/release/deploy без приложенного разрешения и не меняет YouTrack, кроме Operator с exact sync plan.
 
 ## Model routing policy
 
@@ -52,7 +52,7 @@ INPUT_REVISION: <exact current workflow revision>
 | Implementor | implementor | one atomic slice | production/docs allowlist | inherit | [implementor.md](implementor.md) |
 | Reviewer | reviewer | independent review | нет | inherit | [reviewer.md](reviewer.md) |
 | QA | qa | behavior verification | нет в repository | inherit | [qa.md](qa.md) |
-| GitHub Project Operator | github_project_operator | exact status sync | selected item/status allowlist | inherit | [github-project-operator.md](github-project-operator.md) |
+| YouTrack Operator | youtrack_operator | exact status sync | selected item/status allowlist | inherit | [youtrack-operator.md](youtrack-operator.md) |
 | DevOps | devops | GitOps desired state | k8s allowlist | inherit | [devops.md](devops.md) |
 | Infrastructure Reviewer | infrastructure_reviewer | GitOps gate | нет | inherit | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
 | Deployment Agent | deployment_agent | approved rollout | exact approved action | inherit | [deployment-agent.md](deployment-agent.md) |
@@ -88,3 +88,13 @@ Architecture Guardian `phase=plan` также всегда item-facing: marker �
 ## Выбор команды
 
 [TaskAssessment](../task-assessment.md) определяет применимость ролей; таблица — каталог, не требование запускать всех. Каждый downstream marker повторяет `assessment_revision`. Skills не передают control друг другу: Orchestrator сохраняет единый WorkItem и выбирает процесс/профили.
+
+## YouTrack и продуктовая проработка
+
+Все роли читают [product discovery](../product-discovery.md) перед постановкой/планом. Только YouTrack Operator меняет карточки; Orchestrator проверяет результат независимо.
+
+| Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
+|---|---|---|---|---|---|
+| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | inherit | [effort-estimator.md](effort-estimator.md) |
+
+Assignment дополнительно содержит TRACKER=youtrack, ISSUE_SCOPE (exact project keys/IDs), PLAN_REVISION, DECISION_REFS, ESTIMATE_REFS и MUTATION_ALLOWLIST; секреты не передаются. Registry задаёт существующие marker fields; `phase` новых ролей пустой. Effort Estimator не совмещается с автором оцениваемой постановки/плана.

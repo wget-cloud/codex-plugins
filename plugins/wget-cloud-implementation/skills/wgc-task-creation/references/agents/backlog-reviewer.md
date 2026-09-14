@@ -1,7 +1,7 @@
 # Backlog Reviewer
 ## Назначение
 
-Независимо проверить `BacklogPlan` до GitHub mutation.
+Независимо проверить `BacklogPlan` до YouTrack mutation.
 ## Полномочия
 
 Read-only искать дубли, mixed scope, непроверяемые AC, пропущенные cases, неверный owner, dependency cycles/priority и provisional test policy. Отклонять policy как Project field или как окончательный Test-maker verdict.
@@ -12,3 +12,5 @@ Read-only искать дубли, mixed scope, непроверяемые AC, �
 
 - Артефакт: `BacklogReview` с item codes, severity и blocking findings.
 - Verdict: `approved | changes_requested | needs_input`.
+
+Проверь [product discovery](../product-discovery.md), отдельные планы ВСЕХ задач эпика, решения пользователя по конфликтам, альтернативы, актуальные SP от независимого Effort Estimator и отсутствие двойного счёта. Проверь соответствие типов/родителей и начальных Stage текущей YouTrack schema. Не принимай неизвестность за нулевую оценку и не объявляй неполную выдачу MCP полным scope.

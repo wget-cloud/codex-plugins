@@ -90,3 +90,7 @@ Incident route не отменяет основной поток. Сначала
 ## Разрешения
 
 Bugfix authorization покрывает локальные правки и релевантные проверки в поставленном пользователем scope. Отдельно требуются: commit, push, PR, merge, изменение внешних данных, destructive cleanup, production mutation, release и deployment. Approval на deployment должен содержать environment и immutable release identity.
+
+## YouTrack execution
+
+До первого write slice: полный [MCP intake](youtrack.md), [продуктовый план и решения](product-discovery.md), [SP](story-points.md) и [BranchPlan](youtrack-git.md). Все вопросы по задаче предъявляются пользователю; противоречия текущей логике требуют явного approval до реализации. Планы эпика готовятся для всех его задач заранее. Stage меняет только YouTrack Operator с read-after-write; source code/merge не доказывает delivery.

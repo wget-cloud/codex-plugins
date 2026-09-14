@@ -23,7 +23,7 @@ test_policy:
 
 `likely_disposition` не является gate и не связывает Test-maker. Окончательный `TestAssessment`, criticality и `add | update | reuse | none` выбирает Test-maker только при implementation по актуальным plan/acceptance revisions и repository evidence. `critical + none` будет запрещён; `standard + none` потребует доказанной непропорциональной стоимости и более сильной альтернативы.
 
-Не создавай новые GitHub Project fields для test policy. Блок хранится только в managed task body и отражается в acceptance criteria: выполнить окончательный TestAssessment и сохранить все обязательные repository/CI, typecheck, lint, build, coverage-threshold, proto/Prisma, consumer/contract/security/GitOps, review и QA gates независимо от disposition.
+Не создавай новые YouTrack fields для test policy. Блок хранится только в managed task body и отражается в acceptance criteria: выполнить окончательный TestAssessment и сохранить все обязательные repository/CI, typecheck, lint, build, coverage-threshold, proto/Prisma, consumer/contract/security/GitOps, review и QA gates независимо от disposition.
 
 ## Владелец в v7
 

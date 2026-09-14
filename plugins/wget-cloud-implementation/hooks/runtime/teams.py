@@ -92,9 +92,7 @@ def required_gates(profile, task):
     mode = task['mode']
     signals = set(task['risk_signals'])
     if profile == 'task-creation':
-        gates |= {'backlog-review'}
-        if mode != 'light':
-            gates |= {'product', 'project', 'implementation-audit'}
+        gates |= {'backlog-review', 'effort-estimate', 'product', 'project', 'implementation-audit'}
         if mode == 'full':
             gates.add('architect')
         return gates

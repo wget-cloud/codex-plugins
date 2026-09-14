@@ -68,7 +68,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
-        self.assertEqual(version, "7.0.0")
+        self.assertEqual(version, "8.0.0")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -415,6 +415,19 @@ contexts:
         if auto_defaults and state.get("profile") == "epic-implementation":
             if role == "project-manager" and verdict == "planned" and phase == "scope":
                 marker_value.setdefault("selected_items", [{"item_id": "EPIC-1", "item_revision": "a" * 64, "plan_revision": "test-plan-r1", "acceptance_revision": "test-ac-r1", "minimum_test_criticality": "low"}])
+            if role == "project-manager" and verdict == "planned" and phase == "scope":
+                entries = [{k: i[k] for k in ('item_id','item_revision')} for i in marker_value['selected_items']]
+                inv = {'items': sorted(entries,key=lambda i:i['item_id']), 'external_dependencies': []}
+                inv['revision'] = hashlib.sha256(json.dumps(inv,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+                marker_value.setdefault('epic_inventory',inv)
+                if state.get('epic_inventory',{}).get('revision') not in (None,inv['revision']):
+                    marker_value.setdefault('inventory_change_decision','synthetic-scope-change')
+            if role == "project-manager" and verdict == "progress_updated" and phase == "reconcile":
+                inv=state.get('epic_inventory',{})
+                report={'inventory_revision':inv.get('revision'),'items':[], 'external_dependencies':[]}
+                for field in ('items','external_dependencies'):
+                    report[field]=[{**item,'disposition':'implemented' if field=='items' else 'satisfied','evidence_refs':['synthetic-proof'],'decision_ref':''} for item in inv.get(field,[])]
+                marker_value.setdefault('epic_reconciliation',report)
             if role in {"test-maker", "implementor", "reviewer", "qa"} or (role == "architecture-guardian" and phase == "diff") or (role == "product-manager" and phase == "outcome"):
                 marker_value.setdefault("item_id", "EPIC-1")
                 marker_value.setdefault("item_revision", "a" * 64)
@@ -1069,7 +1082,7 @@ contexts:
     def test_prompt_submit_routes_task_creation_and_epic_profiles(self):
         task = self.activate_profile(
             "task-creation",
-            prompt="Use $wgc-task-creation to create an ordered backlog in GitHub Project #42",
+            prompt="Use $wgc-task-creation to create an ordered backlog in YouTrack BE",
         )
         self.assertIn("task-creation workflow activated", task["hookSpecificOutput"]["additionalContext"])
         task_state_path = next((self.data / "hook-state").glob("*.json"))
@@ -1083,7 +1096,7 @@ contexts:
             {
                 "session_id": "session-epic-profile",
                 "hook_event_name": "UserPromptSubmit",
-                "prompt": "Use $wgc-epic-implementation to implement epic CRM-EP01 from GitHub Project #1",
+                "prompt": "Use $wgc-epic-implementation to implement epic CRM-EP01 from YouTrack BE",
             },
             self.projects["backend"],
         )
@@ -1116,7 +1129,7 @@ contexts:
 
     def test_project_profiles_do_not_persist_raw_prompt_or_project_url(self):
         secret_title = "Confidential Customer Migration"
-        project_url = "https://github.com/orgs/wget-cloud/projects/987"
+        project_url = "https://youtrack.wget-cloud.ru/projects/BE"
         self.activate_profile(
             "task-creation",
             prompt=f"Use $wgc-task-creation to create {secret_title} in {project_url}",
@@ -1133,7 +1146,7 @@ contexts:
         cwd = self.projects["backend"]
         self.activate_profile(
             "epic-implementation",
-            prompt="Use $wgc-epic-implementation for CRM-EP01 without updating GitHub Project",
+            prompt="Use $wgc-epic-implementation for CRM-EP01 without updating YouTrack",
         )
         state_path = next((self.data / "hook-state").glob("*.json"))
         state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -1170,7 +1183,7 @@ contexts:
         cwd = self.projects["backend"]
         self.activate_profile(
             "epic-implementation",
-            prompt="Use $wgc-epic-implementation and sync GitHub Project statuses",
+            prompt="Use $wgc-epic-implementation and sync YouTrack statuses",
         )
         state_path = next((self.data / "hook-state").glob("*.json"))
         before = json.loads(state_path.read_text(encoding="utf-8"))
@@ -1180,7 +1193,7 @@ contexts:
             {
                 "hook_event_name": "UserPromptSubmit",
                 "turn_id": "turn-epic-opt-out-followup",
-                "prompt": "Do not update GitHub Project; continue implementation read-only for statuses",
+                "prompt": "Do not update YouTrack; continue implementation read-only for statuses",
             },
             cwd,
         )
@@ -1191,7 +1204,7 @@ contexts:
         cwd = self.projects["backend"]
         self.activate_profile(
             "epic-implementation",
-            prompt="Use $wgc-epic-implementation for CRM-EP01 from GitHub Project #1",
+            prompt="Use $wgc-epic-implementation for CRM-EP01 from YouTrack BE",
         )
         self.record_agent(cwd, "product-manager", "accepted", "scope")
         self.record_agent(cwd, "product-manager", "accepted", "outcome")
@@ -2447,7 +2460,7 @@ metadata:
         cwd = self.projects["backend"]
         self.activate_profile(
             "task-creation",
-            prompt="Use $wgc-task-creation to analyze and create tasks in GitHub Project #1",
+            prompt="Use $wgc-task-creation to analyze and create tasks in YouTrack BE",
         )
         blocked = self.call(
             "stop",
@@ -2468,8 +2481,9 @@ metadata:
             ("project-manager", "project_ready"),
             ("implementation-auditor", "audited"),
             ("architect", "proposed"),
+            ("effort-estimator", "estimated"),
             ("backlog-reviewer", "approved"),
-            ("github-project-operator", "published"),
+            ("youtrack-operator", "published"),
         ):
             self.record_agent(cwd, role, verdict)
         completed = self.call(
@@ -2496,6 +2510,7 @@ metadata:
             ("project-manager", "project_ready"),
             ("implementation-auditor", "audited"),
             ("architect", "proposed"),
+            ("effort-estimator", "estimated"),
             ("backlog-reviewer", "approved"),
         ):
             self.record_agent(cwd, role, verdict)
@@ -2515,7 +2530,7 @@ metadata:
         cwd = self.projects["backend"]
         self.activate_profile(
             "epic-implementation",
-            prompt="Use $wgc-epic-implementation to implement CRM-EP01 from GitHub Project #1",
+            prompt="Use $wgc-epic-implementation to implement CRM-EP01 from YouTrack BE",
         )
         invalid_phase = self.record_agent(cwd, "project-manager", "planned")
         self.assertEqual(invalid_phase["decision"], "block")
@@ -2535,7 +2550,7 @@ metadata:
             ("qa", "pass", ""),
             ("product-manager", "accepted", "outcome"),
             ("project-manager", "progress_updated", "reconcile"),
-            ("github-project-operator", "synced", ""),
+            ("youtrack-operator", "synced", ""),
         ):
             self.record_agent(cwd, role, verdict, phase)
             if role == "project-manager" and phase == "scope":

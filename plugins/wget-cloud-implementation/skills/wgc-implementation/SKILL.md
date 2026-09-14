@@ -1,6 +1,6 @@
 ---
 name: wgc-implementation
-description: Coordinate architecture-safe planned implementation work across the Wget Cloud frontend, backend microservices, shared front-lib, public sites, and Kubernetes GitOps repositories. Use for feature development, refactors, contracts, cross-repository changes, tests, reviews, QA, infrastructure preparation, rollout, or any planned task that benefits from specialized architect, architecture guardian, test-maker, implementor, reviewer, QA, DevOps, infrastructure reviewer, and deployment agents. For a user-reported defect, regression, failure, crash, or production incident that must be investigated and fixed, use wgc-bugfix instead. Do not use for a simple explanation or read-only question that needs no implementation workflow.
+description: Coordinate architecture-safe planned implementation work across the Wget Cloud frontend, backend microservices, shared front-lib, public sites, and Kubernetes GitOps repositories. Use when asked to implement a YouTrack issue ID or URL, or for feature development, refactors, contracts, cross-repository changes, tests, reviews, QA, infrastructure preparation, rollout, or any planned task that benefits from specialized architect, architecture guardian, test-maker, implementor, reviewer, QA, DevOps, infrastructure reviewer, and deployment agents. For a user-reported defect, regression, failure, crash, or production incident that must be investigated and fixed, use wgc-bugfix instead. Do not use for a simple explanation or read-only question that needs no implementation workflow.
 ---
 
 # WGC Implementation
@@ -8,6 +8,10 @@ description: Coordinate architecture-safe planned implementation work across the
 ## Preflight
 
 До работы проверь `service_tier=default` и `features.fast_mode=false`. Fast/priority/ultrafast → `WGC_FAST_MODE_FORBIDDEN`; неизвестное → `WGC_SERVICE_TIER_UNVERIFIABLE`. Priority-only spawn — blocker. Модель и reasoning effort наследуются из чата, без overrides.
+
+## YouTrack и продуктовая готовность
+
+Для карточок работай только через [YouTrack MCP](references/youtrack.md). Прочитай [product discovery](references/product-discovery.md), исследуй код и задачи, предложи альтернативы, задай пользователю material questions. До зависимой реализации получи явный approval на выявленные противоречия/проблемы; молчание не approval. Оценки — [story points](references/story-points.md), отдельный Effort Estimator не подменяет Task Assessor. Для delivery соблюдай [ветки dev/task/epic и squash](references/youtrack-git.md).
 
 ## Intake и выбор команды
 
@@ -18,7 +22,7 @@ description: Coordinate architecture-safe planned implementation work across the
 
 ## Этот процесс
 
-Один planned WorkItem: новая функция или refactor. Для reported defect выбирай bugfix; для ordered Project pool — epic. Не расширяй задачу до общего аудита.
+Один planned WorkItem: новая функция или refactor. Для reported defect выбирай bugfix; для ordered YouTrack pool — epic. Не расширяй задачу до общего аудита.
 
 ## Исполнение и готовность
 

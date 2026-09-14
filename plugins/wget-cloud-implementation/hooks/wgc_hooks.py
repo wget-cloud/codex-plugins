@@ -134,20 +134,19 @@ DEPLOYMENT_FOLLOWUP = re.compile(
     re.IGNORECASE,
 )
 TASK_CREATION_SIGNAL = re.compile(
-    r"(?=.*\b(?:github\s+project|project\s*#?\d+|backlog|issue|issues|задач\w*|бэклог\w*|проект\w*)\b)"
+    r"(?=.*\b(?:youtrack|epic|backlog|issue|issues|эпик\w*|задач\w*|бэклог\w*)\b)"
     r"(?=.*\b(?:create|add|publish|populate|decompose|prioritize|созда\w*|добав\w*|сформир\w*|"
     r"декомпоз\w*|приоритиз\w*|завест\w*)\b)",
     re.IGNORECASE | re.DOTALL,
 )
 EPIC_IMPLEMENTATION_SIGNAL = re.compile(
     r"(?=.*\b(?:implement|deliver|execute|реализ\w*|имплемент\w*|выполн\w*)\b)"
-    r"(?=.*\b(?:epic|task\s+pool|pool\s+of\s+tasks|github\s+project|эпик\w*|пул\w*\s+задач|"
+    r"(?=.*\b(?:epic|task\s+pool|pool\s+of\s+tasks|эпик\w*|пул\w*\s+задач|"
     r"задач\w*\s+из\s+проект\w*)\b)",
     re.IGNORECASE | re.DOTALL,
 )
 PROJECT_TARGET_SIGNAL = re.compile(
-    r"(?:https://github\.com/orgs/[A-Za-z0-9_.-]+/projects/\d+|\bgithub\s+project\b|\bproject\s*#\d+\b|"
-    r"\bпроект\w*\s+(?:в\s+)?github\b)",
+    r"(?:https://youtrack\.wget-cloud\.ru/|\byoutrack\b|\b(?:PRD|BE|FE|SITE|WGET|FL|K8S)-[1-9]\d*\b)",
     re.IGNORECASE,
 )
 PROJECT_MUTATION_SIGNAL = re.compile(
@@ -188,7 +187,7 @@ SOURCE_SUFFIXES = {
 # Keep the public hook entry point stable, including importlib-based validators.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from runtime.contracts import *
-from runtime import teams, evidence
+from runtime import teams, evidence, inventory
 from runtime.state import migrate_state_v4
 
 
@@ -219,6 +218,7 @@ def project_routes(prompt: str, profile: str) -> Dict[str, bool]:
         and (
             PROJECT_MUTATION_SIGNAL.search(prompt)
             or profile == "epic-implementation"
+            or (profile in {"implementation", "bugfix"} and (IMPLEMENTATION_INTENT.search(prompt) or BUGFIX_ACTION.search(prompt)))
         )
     )
     return {
@@ -2317,6 +2317,14 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, A
             return None, "TestAssessment marker contains unknown fields: " + ", ".join(unknown)
     if role == 'task-assessor' and set(value) - {'role', 'verdict', 'phase', 'input_revision', 'task_assessment', 'assessment'}:
         return None, 'Task Assessor marker contains unknown fields'
+    inventory_fields = {'epic_inventory', 'epic_reconciliation', 'inventory_change_decision'} & set(value)
+    allowed_inventory_fields = (
+        {'epic_inventory', 'inventory_change_decision'} if phase == 'scope' and verdict == 'planned'
+        else {'epic_reconciliation'} if phase == 'reconcile' and verdict == 'progress_updated'
+        else set()
+    ) if profile == 'epic-implementation' and role == 'project-manager' else set()
+    if inventory_fields - allowed_inventory_fields:
+        return None, 'inventory metadata belongs only to the Project Manager scope/reconcile contract'
     result: Dict[str, Any] = {
         "role": role,
         "verdict": verdict,
@@ -2346,6 +2354,9 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, A
         "test_plan",
         "assessed_paths",
         "selected_items",
+        "epic_inventory",
+        "epic_reconciliation",
+        "inventory_change_decision",
         "item_id",
         "item_revision",
     ):
@@ -2455,6 +2466,15 @@ def update_epic_item_gate(state: Dict[str, Any], result: Dict[str, Any]) -> Opti
 def epic_item_gaps(state: Dict[str, Any]) -> List[str]:
     gaps: List[str] = []
     selected = state.get("selected_items", [])
+    if selected == [] and state.get('epic_inventory'):
+        # A fully delivered epic still needs full reconciliation, but no fake
+        # implementation assignments solely to populate the execution ledger.
+        reports = [r for r in state.get('subagent_results', []) if r.get('role') == 'project-manager' and r.get('phase') == 'reconcile']
+        if reports:
+            report = reports[-1].get('epic_reconciliation')
+            if (inventory.complete(report, state['epic_inventory'])
+                    and all(e['disposition'] in {'already-delivered', 'cancelled'} for e in report['items'])):
+                return []
     if not isinstance(selected, list) or not selected:
         return ["frozen selected_items ledger"]
     for item in selected:
@@ -2543,7 +2563,7 @@ def invalidate_epic_items(
         if invalidate_integration:
             if role == "project-manager" and phase == "reconcile":
                 return False
-            if role == "github-project-operator":
+            if role == "youtrack-operator":
                 return False
         return True
 
@@ -2556,6 +2576,16 @@ def invalidate_epic_items(
         item["gates"] = ["test-maker"] if keep_assessment and "test-maker" in item.get("gates", []) else []
 
 
+def invalidate_archived_items(state: Dict[str, Any], changed_paths: Set[str], sensitive: bool) -> None:
+    """Later shared/unattributed changes cannot reuse a prior batch's witness."""
+    covered = {p for a in state.get('task_assessments', []) for p in a.get('assessed_paths', [])}
+    shared = sensitive or bool(changed_paths - covered) or any(
+        re.search(r'(?:lock|package\.json|config|AGENTS\.md)', p, re.I) for p in changed_paths)
+    state['completed_epic_items'] = [entry for entry in state.get('completed_epic_items', [])
+                                    if not shared and entry.get('assessed_paths')
+                                    and not changed_paths.intersection(entry['assessed_paths'])]
+
+
 def reconcile_selected_items(state: Dict[str, Any], normalized: List[Dict[str, Any]]) -> None:
     previous = {
         str(item.get("item_id")): item
@@ -2564,6 +2594,19 @@ def reconcile_selected_items(state: Dict[str, Any], normalized: List[Dict[str, A
     }
     incoming_ids = {str(item["item_id"]) for item in normalized}
     removed_ids = set(previous) - incoming_ids
+    # Archive actual per-item gate completion before the bounded batch is
+    # replaced. A final report alone cannot invent execution of earlier batches.
+    completed = {e['item_id']: e for e in state.get('completed_epic_items', [])}
+    revision = workspace_identity(state['context']) if state.get('context') else str(state.get('current_revision', ''))
+    for item_id in removed_ids:
+        item_state = {**state, 'selected_items': [previous[item_id]], 'current_revision': revision}
+        if not epic_item_gaps(item_state):
+            completed[item_id] = {k: previous[item_id][k] for k in ('item_id', 'item_revision')}
+            completed[item_id]['evidence_revision'] = revision
+            completed[item_id]['assessed_paths'] = sorted({p for a in state.get('task_assessments', []) + state.get('test_assessments', [])
+                                                          if a.get('item_id') == item_id for p in a.get('assessed_paths', [])})
+    inventory_ids = {(e['item_id'],e['item_revision']) for e in state.get('epic_inventory',{}).get('items',[])}
+    state['completed_epic_items'] = [e for e in completed.values() if (e['item_id'],e['item_revision']) in inventory_ids]
     affected_ids: Set[str] = set(removed_ids)
     merged: List[Dict[str, Any]] = []
     revision_fields = {"plan_revision", "acceptance_revision", "minimum_test_criticality"}
@@ -2660,21 +2703,29 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
             gates.add("project-scope")
         elif role == "project-manager" and verdict == "progress_updated" and phase == "reconcile":
             gates.add("project-reconcile")
+            report = result.get('epic_reconciliation')
+            if result_is_current(result, state, current_revision) and inventory.complete(report, state.get('epic_inventory')):
+                executed = {(e['item_id'],e['item_revision']) for e in state.get('completed_epic_items', []) + state.get('selected_items', [])}
+                # Selected items are checked separately by epic_item_gaps.
+                if all(e['disposition'] != 'implemented' or (e['item_id'],e['item_revision']) in executed for e in report['items']):
+                    gates.add("epic-inventory")
         elif role == "implementation-auditor" and verdict == "audited":
             gates.add("implementation-audit")
         elif role == "backlog-reviewer" and verdict == "approved":
             gates.add("backlog-review")
+        elif role == "effort-estimator" and verdict == "estimated" and result_is_current(result, state, current_revision):
+            gates.add("effort-estimate")
         elif (
-            role == "github-project-operator"
+            role == "youtrack-operator"
             and verdict in {"published", "no_changes"}
             and profile == "task-creation"
             and result_is_current(result, state, current_revision)
         ):
             gates.add("project-publish")
         elif (
-            role == "github-project-operator"
+            role == "youtrack-operator"
             and verdict in {"synced", "no_changes"}
-            and profile == "epic-implementation"
+            and profile in {"implementation", "bugfix", "epic-implementation"}
             and result_is_current(result, state, current_revision)
         ):
             gates.add("project-sync")
@@ -2773,7 +2824,7 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     require_standard_service_tier(payload)
     profile, activation = selected
     routes = bugfix_routes(prompt) if profile == "bugfix" else {}
-    project = project_routes(prompt, profile) if profile in {"task-creation", "epic-implementation"} else {}
+    project = project_routes(prompt, profile)
 
     baseline = workspace_snapshot(context)
 
@@ -2797,7 +2848,7 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
             }
         else:
             state["bugfix_routes"] = {}
-        if profile in {"task-creation", "epic-implementation"}:
+        if profile in PROFILE_ROLE_VERDICTS:
             previous_project = state.get("project_routes", {}) if already_active and not profile_changed else {}
             mutation_opt_out = bool(PROJECT_MUTATION_OPT_OUT.search(prompt))
             state["project_routes"] = {
@@ -2820,6 +2871,8 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
             state["subagent_results"] = []
             state["test_assessments"] = []
             state["selected_items"] = []
+            state.pop("epic_inventory", None)
+            state['completed_epic_items'] = []
             state["repository_gates"] = sorted(repository_gate_floor(context["project"]))
             state["activated_at"] = int(time.time())
         elif already_active:
@@ -2841,12 +2894,12 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         mutation = "publish only through an exact MutationPlan" if project.get("mutation_requested") else "remain read-only until publication is requested"
         return additional_context(
             "UserPromptSubmit",
-            f"WGC task-creation workflow activated {mode}. Resolve an unambiguous GitHub Project, audit the implementation, obtain TaskAssessment and its applicable backlog artifacts, and {mutation}. Do not persist raw prompts or guess missing product semantics.",
+            f"WGC task-creation workflow activated {mode}. Use YouTrack MCP only, resolve project keys, research code, interview the user, compare alternatives, obtain TaskAssessment, independent story-point estimates and backlog review, and {mutation}. Do not persist raw prompts or guess missing product semantics.",
         )
     if profile == "epic-implementation":
         return additional_context(
             "UserPromptSubmit",
-            f"WGC epic-implementation workflow activated {mode}. Freeze selected Project item IDs, build dependency waves, require per-item TaskAssessment and its applicable gates, and synchronize statuses only after evidence.",
+            f"WGC epic-implementation workflow activated {mode}. Research the full YouTrack epic and plan every task before execution; freeze batches of up to 100 issue IDs, build dependency waves, require per-item TaskAssessment and its applicable gates, and synchronize statuses only after evidence.",
         )
     return additional_context(
         "UserPromptSubmit",
@@ -2876,7 +2929,7 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> D
         " For bugfix work, gather runtime evidence read-only with narrow time/service scope, redact secrets and personal data, and never persist raw logs or the user prompt."
         if profile == "bugfix"
         else (
-            " For GitHub Project work, use only the assigned Project/item allowlist, never persist raw issue bodies or the user prompt, and do not mutate Project state unless assigned the github-project-operator role with explicit authority."
+            " For YouTrack MCP work, use only the assigned Project/item allowlist, never persist raw issue bodies or the user prompt, and do not mutate Project state unless assigned the youtrack-operator role with explicit authority."
             if profile in {"task-creation", "epic-implementation"}
             else ""
         )
@@ -3137,7 +3190,22 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         and result.get("verdict") == "planned"
         and result.get("phase") == "scope"
     ):
-        normalized_items, error = normalize_selected_items(result.get("selected_items"))
+        if result.get('selected_items') == [] and result.get('epic_inventory'):
+            normalized_items, error = [], None
+        else:
+            normalized_items, error = normalize_selected_items(result.get("selected_items"))
+        if not error:
+            try:
+                snapshot = inventory.normalize(result.get('epic_inventory') or state.get('epic_inventory'))
+                prior_inventory = state.get('epic_inventory')
+                if prior_inventory and prior_inventory['revision'] != snapshot['revision']:
+                    if not re.fullmatch(r'[A-Za-z0-9_.:/-]{1,200}', str(result.get('inventory_change_decision') or '')):
+                        raise ValueError('changed epic inventory requires an explicit user decision reference')
+                if not inventory.covers_batch(snapshot, normalized_items):
+                    raise ValueError('execution batch must be a subset of the complete epic inventory')
+                result['epic_inventory'] = snapshot
+            except (ValueError, TypeError, KeyError) as problem:
+                error = str(problem)
         if not error and normalized_items is not None:
             previous_items = {
                 str(item.get("item_id")): item
@@ -3166,6 +3234,13 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
                     )
                     break
             result["selected_items"] = normalized_items
+    if (not error and result and profile == 'epic-implementation'
+            and result.get('role') == 'project-manager' and result.get('verdict') == 'progress_updated'
+            and result.get('phase') == 'reconcile'):
+        try:
+            result['epic_reconciliation'] = inventory.normalize_report(result.get('epic_reconciliation'), state.get('epic_inventory'))
+        except (ValueError, TypeError, KeyError) as problem:
+            error = str(problem)
     epic_item_bound_result = bool(
         result
         and profile == "epic-implementation"
@@ -3364,6 +3439,7 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
                     invalidate_epic_items(value, {str(item["item_id"])}, keep_assessment=False)
                 item["acceptance_revision"] = next_acceptance
         if normalized_items is not None:
+            value['epic_inventory'] = result['epic_inventory']
             reconcile_selected_items(value, normalized_items)
         if role == "test-maker" and verdict == "assessment_ready":
             assessment = dict(result["assessment"])
@@ -3461,6 +3537,8 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                 verification.pop("test", None)
                 verification.pop("coverage", None)
             profile = str(state.get("profile") or "implementation")
+            if profile == 'epic-implementation':
+                invalidate_archived_items(state, changed_paths, bool(sensitive_paths))
             if profile == "epic-implementation" and not (production_paths or test_paths or sensitive_paths):
                 all_items = {
                     str(item.get("item_id")) for item in state.get("selected_items", [])
@@ -3548,7 +3626,7 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                     "data-migration-reviewer",
                     "reliability-reviewer",
                     "deployment-agent",
-                    "github-project-operator",
+                    "youtrack-operator",
                 }
                 if invalidate_assessment:
                     invalidate_test_assessment(state)
@@ -3668,7 +3746,7 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
 
     routes = state.get("bugfix_routes", {}) if profile == "bugfix" else {}
     routes = routes if isinstance(routes, dict) else {}
-    project = state.get("project_routes", {}) if profile in {"task-creation", "epic-implementation"} else {}
+    project = state.get("project_routes", {})
     project = project if isinstance(project, dict) else {}
     required = required_checks_for_state(classification, state)
     if profile == "bugfix" and routes.get("ui"):
@@ -3703,7 +3781,7 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
         if routes.get("deployment"):
             required_gates.add("deployment")
     elif profile == "task-creation":
-        required_gates = {"product", "project", "implementation-audit", "architect", "backlog-review"}
+        required_gates = {"product", "project", "implementation-audit", "architect", "backlog-review", "effort-estimate"}
         if project.get("mutation_requested"):
             required_gates.add("project-publish")
     elif profile == "epic-implementation":
@@ -3730,7 +3808,7 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
             required_gates.add("infrastructure")
     task = teams.active(state)
     if profile == 'epic-implementation':
-        required_gates = {'project-scope', 'project-reconcile'}
+        required_gates = {'project-scope', 'project-reconcile', 'epic-inventory'}
         if project.get('mutation_requested'):
             required_gates.add('project-sync')
     elif task:
@@ -3743,6 +3821,8 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
                     required_gates.add(gate)
     else:
         required_gates.add('task-assessor')
+    if profile in {'implementation', 'bugfix'} and project.get('mutation_requested'):
+        required_gates.add('project-sync')
     if task and profile != 'task-creation' and active_test_assessment(state) is None:
         required_gates.add('test-assessment')
     current_revision = workspace_identity(context)

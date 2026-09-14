@@ -100,3 +100,14 @@ Architecture Guardian в `phase=plan` добавляет exact текущий Fi
 ## Выбор команды
 
 [TaskAssessment](../task-assessment.md) определяет применимость ролей; таблица — каталог, не требование запускать всех. Каждый downstream marker повторяет `assessment_revision`. Skills не передают control друг другу: Orchestrator сохраняет единый WorkItem и выбирает процесс/профили.
+
+## YouTrack и продуктовая проработка
+
+Все роли читают [product discovery](../product-discovery.md) перед постановкой/планом. Только YouTrack Operator меняет карточки; Orchestrator проверяет результат независимо.
+
+| Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
+|---|---|---|---|---|---|
+| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | inherit | [effort-estimator.md](effort-estimator.md) |
+| YouTrack Operator | youtrack_operator | разрешённые записи карточек и Stage | exact MCP allowlist | inherit | [youtrack-operator.md](youtrack-operator.md) |
+
+Assignment дополнительно содержит TRACKER=youtrack, ISSUE_SCOPE (exact project keys/IDs), PLAN_REVISION, DECISION_REFS, ESTIMATE_REFS и MUTATION_ALLOWLIST; секреты не передаются. Registry задаёт существующие marker fields; `phase` новых ролей пустой. Effort Estimator не совмещается с автором оцениваемой постановки/плана.

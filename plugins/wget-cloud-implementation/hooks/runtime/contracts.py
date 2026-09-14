@@ -38,9 +38,6 @@ PROFILE_ROLE_VERDICTS: Dict[str, Dict[str, Set[str]]] = {
         "implementation-auditor": {"audited", "needs_input"},
         "architect": {"proposed", "needs_input"},
         "backlog-reviewer": {"approved", "changes_requested", "needs_input"},
-        "github-project-operator": {
-            "published", "partially_published", "no_changes", "authorization_required", "blocked"
-        },
     },
     "epic-implementation": {
         "product-manager": {"accepted", "changes_requested", "needs_input"},
@@ -52,9 +49,6 @@ PROFILE_ROLE_VERDICTS: Dict[str, Dict[str, Set[str]]] = {
         "implementor": {"implemented", "needs_input", "blocked"},
         "reviewer": {"approved", "changes_requested", "needs_input"},
         "qa": {"pass", "defects_found", "blocked"},
-        "github-project-operator": {
-            "synced", "partially_synced", "no_changes", "authorization_required", "blocked"
-        },
         "devops": {"prepared", "needs_input", "blocked"},
         "infrastructure-reviewer": {"approved", "changes_requested", "needs_input"},
         "deployment-agent": {"deployed_healthy", "failed", "blocked", "approval_invalid"},
@@ -108,7 +102,7 @@ TEST_DOWNSTREAM_ROLES = {
     "security-reviewer",
     "contract-qa",
     "deployment-agent",
-    "github-project-operator",
+    "youtrack-operator",
 }
 EPIC_ITEM_GATES = {"test-maker", "implementor", "reviewer", "architecture", "qa", "product-outcome"}
 
@@ -128,6 +122,10 @@ PROFILE_ROLE_PHASES: Dict[str, Dict[str, Set[str]]] = {
 
 
 for profile in PROFILE_ROLE_VERDICTS:
+    PROFILE_ROLE_VERDICTS[profile]['effort-estimator'] = {'estimated', 'needs_input', 'needs_research'}
+    PROFILE_ROLE_VERDICTS[profile]['youtrack-operator'] = {
+        'published', 'synced', 'partially_applied', 'no_changes', 'authorization_required', 'blocked'
+    }
     PROFILE_ROLE_VERDICTS[profile]['task-assessor'] = {'assessed', 'needs_evidence', 'needs_input'}
     if profile != 'task-creation':
         PROFILE_ROLE_VERDICTS[profile].update({
@@ -137,4 +135,4 @@ for profile in PROFILE_ROLE_VERDICTS:
             'security-reviewer': {'approved', 'changes_requested', 'needs_input'},
             'contract-qa': {'pass', 'defects_found', 'blocked'},
         })
-TEST_DOWNSTREAM_ROLES.update({'data-migration-reviewer', 'reliability-reviewer'})
+TEST_DOWNSTREAM_ROLES.update({'data-migration-reviewer', 'reliability-reviewer', 'effort-estimator', 'youtrack-operator'})

@@ -210,6 +210,42 @@
         "sources": [
           "workflows/implementation/references/workflow.md"
         ]
+      },
+      {
+        "target": "references/youtrack.md",
+        "sources": [
+          "policies/youtrack.md"
+        ]
+      },
+      {
+        "target": "references/product-discovery.md",
+        "sources": [
+          "policies/product-discovery.md"
+        ]
+      },
+      {
+        "target": "references/story-points.md",
+        "sources": [
+          "policies/story-points.md"
+        ]
+      },
+      {
+        "target": "references/youtrack-git.md",
+        "sources": [
+          "policies/youtrack-git.md"
+        ]
+      },
+      {
+        "target": "references/agents/youtrack-operator.md",
+        "sources": [
+          "roles/youtrack-operator.md"
+        ]
+      },
+      {
+        "target": "references/agents/effort-estimator.md",
+        "sources": [
+          "roles/effort-estimator.md"
+        ]
       }
     ],
     "wgc-bugfix": [
@@ -456,6 +492,42 @@
         "sources": [
           "workflows/bugfix/references/workflow.md"
         ]
+      },
+      {
+        "target": "references/youtrack.md",
+        "sources": [
+          "policies/youtrack.md"
+        ]
+      },
+      {
+        "target": "references/product-discovery.md",
+        "sources": [
+          "policies/product-discovery.md"
+        ]
+      },
+      {
+        "target": "references/story-points.md",
+        "sources": [
+          "policies/story-points.md"
+        ]
+      },
+      {
+        "target": "references/youtrack-git.md",
+        "sources": [
+          "policies/youtrack-git.md"
+        ]
+      },
+      {
+        "target": "references/agents/youtrack-operator.md",
+        "sources": [
+          "roles/youtrack-operator.md"
+        ]
+      },
+      {
+        "target": "references/agents/effort-estimator.md",
+        "sources": [
+          "roles/effort-estimator.md"
+        ]
       }
     ],
     "wgc-task-creation": [
@@ -482,13 +554,6 @@
         "target": "references/agents/backlog-reviewer.md",
         "sources": [
           "roles/backlog-reviewer.md"
-        ]
-      },
-      {
-        "target": "references/agents/github-project-operator.md",
-        "sources": [
-          "roles/github-project-operator.md",
-          "workflows/task-creation/roles/github-project-operator.md"
         ]
       },
       {
@@ -567,12 +632,6 @@
         ]
       },
       {
-        "target": "references/github-projects.md",
-        "sources": [
-          "workflows/task-creation/references/github-projects.md"
-        ]
-      },
-      {
         "target": "references/hooks.md",
         "sources": [
           "workflows/task-creation/references/hooks.md"
@@ -606,6 +665,42 @@
         "target": "references/workflow.md",
         "sources": [
           "workflows/task-creation/references/workflow.md"
+        ]
+      },
+      {
+        "target": "references/youtrack.md",
+        "sources": [
+          "policies/youtrack.md"
+        ]
+      },
+      {
+        "target": "references/product-discovery.md",
+        "sources": [
+          "policies/product-discovery.md"
+        ]
+      },
+      {
+        "target": "references/story-points.md",
+        "sources": [
+          "policies/story-points.md"
+        ]
+      },
+      {
+        "target": "references/youtrack-git.md",
+        "sources": [
+          "policies/youtrack-git.md"
+        ]
+      },
+      {
+        "target": "references/agents/youtrack-operator.md",
+        "sources": [
+          "roles/youtrack-operator.md"
+        ]
+      },
+      {
+        "target": "references/agents/effort-estimator.md",
+        "sources": [
+          "roles/effort-estimator.md"
         ]
       }
     ],
@@ -673,13 +768,6 @@
         "sources": [
           "roles/explorer.md",
           "workflows/epic-implementation/roles/explorer.md"
-        ]
-      },
-      {
-        "target": "references/agents/github-project-operator.md",
-        "sources": [
-          "roles/github-project-operator.md",
-          "workflows/epic-implementation/roles/github-project-operator.md"
         ]
       },
       {
@@ -805,12 +893,6 @@
         ]
       },
       {
-        "target": "references/github-projects.md",
-        "sources": [
-          "workflows/epic-implementation/references/github-projects.md"
-        ]
-      },
-      {
         "target": "references/gitops-and-deployment.md",
         "sources": [
           "workflows/epic-implementation/references/gitops-and-deployment.md"
@@ -850,6 +932,42 @@
         "target": "references/workflow.md",
         "sources": [
           "workflows/epic-implementation/references/workflow.md"
+        ]
+      },
+      {
+        "target": "references/youtrack.md",
+        "sources": [
+          "policies/youtrack.md"
+        ]
+      },
+      {
+        "target": "references/product-discovery.md",
+        "sources": [
+          "policies/product-discovery.md"
+        ]
+      },
+      {
+        "target": "references/story-points.md",
+        "sources": [
+          "policies/story-points.md"
+        ]
+      },
+      {
+        "target": "references/youtrack-git.md",
+        "sources": [
+          "policies/youtrack-git.md"
+        ]
+      },
+      {
+        "target": "references/agents/youtrack-operator.md",
+        "sources": [
+          "roles/youtrack-operator.md"
+        ]
+      },
+      {
+        "target": "references/agents/effort-estimator.md",
+        "sources": [
+          "roles/effort-estimator.md"
         ]
       }
     ]

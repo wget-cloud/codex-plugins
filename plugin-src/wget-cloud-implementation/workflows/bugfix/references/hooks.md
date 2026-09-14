@@ -57,3 +57,7 @@ python3 -m unittest discover -s hooks/tests -v
 ```
 
 Runner принимает JSON события через stdin. Для изолированного запуска передай `WGC_STATE_ROOT` во временный каталог; не используй реальный workspace state в fixtures.
+
+## YouTrack / SP contracts v8
+
+Новые роли доступны во всех профилях: Effort Estimator (`estimated | needs_input | needs_research`), YouTrack Operator (`published | synced | partially_applied | no_changes | authorization_required | blocked`); phase пустой. В task-creation актуальный estimated закрывает обязательный effort-estimate gate во всех режимах. published/no_changes закрывают project-publish, synced/no_changes — project-sync в delivery с разрешённой YouTrack mutation. Частичный результат не закрывает gate. input_revision/assessment_revision/item identity проверяются как у downstream roles. Hook state не хранит SP rationale, токены или тела карточек. Семантическую готовность, user decisions и реальные MCP записи независимо проверяет Orchestrator: marker сам по себе их не доказывает.

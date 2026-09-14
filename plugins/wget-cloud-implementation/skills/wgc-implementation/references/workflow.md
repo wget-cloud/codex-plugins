@@ -244,3 +244,7 @@ Integration gate выполняет оркестратор:
 - критичная проверка недоступна и альтернативное доказательство недостаточно.
 
 `blocked` должен содержать конкретный blocker, уже выполненные безопасные проверки и минимальный следующий input. Трудность или длительность сами по себе не blocker.
+
+## YouTrack execution
+
+До первого write slice: полный [MCP intake](youtrack.md), [продуктовый план и решения](product-discovery.md), [SP](story-points.md) и [BranchPlan](youtrack-git.md). Все вопросы по задаче предъявляются пользователю; противоречия текущей логике требуют явного approval до реализации. Планы эпика готовятся для всех его задач заранее. Stage меняет только YouTrack Operator с read-after-write; source code/merge не доказывает delivery.

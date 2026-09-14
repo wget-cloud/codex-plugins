@@ -28,3 +28,7 @@ Exact assessed production diff сохраняет owning item TestAssessment/tes
 ## Stop conditions
 
 Останови новую wave при shared contract failure, migration incompatibility, cross-tenant/security finding, dirty-state collision, rate limit, lost Project authorization или исчерпании согласованного scope. Уже начатые безопасные проверки можно завершить read-only.
+
+## YouTrack execution
+
+До первого write slice: полный [MCP intake](youtrack.md), [продуктовый план и решения](product-discovery.md), [SP](story-points.md) и [BranchPlan](youtrack-git.md). Все вопросы по задаче предъявляются пользователю; противоречия текущей логике требуют явного approval до реализации. Планы эпика готовятся для всех его задач заранее. Stage меняет только YouTrack Operator с read-after-write; source code/merge не доказывает delivery.

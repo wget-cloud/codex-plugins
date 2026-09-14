@@ -1,6 +1,6 @@
 ---
 name: wgc-bugfix
-description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defects across frontend, backend microservices, shared front-lib, public sites, and Kubernetes GitOps. Use when a user reports a bug, regression, crash, exception, failed UI/API/realtime/PWA flow, authorization or tenant-isolation defect, production incident, or behavior that no longer matches expectations and asks to fix it. The skill gathers scoped logs and runtime evidence when available, reproduces before patching, establishes a supported root cause, protects regression tests from implementor edits, performs independent review and architecture checks, runs targeted QA including browser/API/security specialists when relevant, and uses gated GitOps rollout only with explicit human approval. Do not use for explanation-only diagnostics with no requested fix, planned feature development, or blind deployment.
+description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defects across frontend, backend microservices, shared front-lib, public sites, and Kubernetes GitOps. Use for YouTrack Bug issues and when a user reports a bug, regression, crash, exception, failed UI/API/realtime/PWA flow, authorization or tenant-isolation defect, production incident, or behavior that no longer matches expectations and asks to fix it. The skill gathers scoped logs and runtime evidence when available, reproduces before patching, establishes a supported root cause, protects regression tests from implementor edits, performs independent review and architecture checks, runs targeted QA including browser/API/security specialists when relevant, and uses gated GitOps rollout only with explicit human approval. Do not use for explanation-only diagnostics with no requested fix, planned feature development, or blind deployment.
 ---
 
 # WGC Bugfix
@@ -8,6 +8,10 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 ## Preflight
 
 До работы проверь `service_tier=default` и `features.fast_mode=false`. Fast/priority/ultrafast → `WGC_FAST_MODE_FORBIDDEN`; неизвестное → `WGC_SERVICE_TIER_UNVERIFIABLE`. Priority-only spawn — blocker. Модель и reasoning effort наследуются из чата, без overrides.
+
+## YouTrack и продуктовая готовность
+
+Для карточок работай только через [YouTrack MCP](references/youtrack.md). Прочитай [product discovery](references/product-discovery.md), исследуй код и задачи, предложи альтернативы, задай пользователю material questions. До зависимой реализации получи явный approval на выявленные противоречия/проблемы; молчание не approval. Оценки — [story points](references/story-points.md), отдельный Effort Estimator не подменяет Task Assessor. Для delivery соблюдай [ветки dev/task/epic и squash](references/youtrack-git.md).
 
 ## Intake и выбор команды
 

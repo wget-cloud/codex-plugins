@@ -1,4 +1,10 @@
 interface:
   display_name: "WGC Task Creation"
-  short_description: "Product-managed tasks and GitHub Project backlogs"
-  default_prompt: "Use $wgc-task-creation to analyze this request and create an ordered task backlog in the selected GitHub Project."
+  short_description: "Product-managed tasks and YouTrack backlogs"
+  default_prompt: "Use $wgc-task-creation to analyze this request and create an ordered task backlog in the selected YouTrack."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "youtrack"
+      description: "Wget Cloud YouTrack MCP; personal authentication required"

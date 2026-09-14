@@ -4,7 +4,7 @@
 
 ## TaskRequest
 
-Содержит revision, objective, actors, business workflow, exclusions, target Project, repositories, labels, known decisions, unknowns и creation authorization.
+Содержит revision, objective, actors, business workflow, exclusions, target Project, repositories, tags, known decisions, unknowns и creation authorization.
 
 ## AuditReport
 
@@ -16,7 +16,7 @@
 
 ## BacklogPlan
 
-Для каждого item: code, title, type, owner repo, label, parent, goal, business logic, cases, requirements, acceptance, dependencies, priority, initial status, evidence и provisional `test_policy` из [test-assessment.md](test-assessment.md). Политика живёт в managed body/AC, не в новом Project field; окончательное решение принимает Test-maker при implementation.
+Для каждого item: code, title, type, owner project/repositories, category, parent, goal, business logic, cases, requirements, acceptance, dependencies, Priority из schema, initial Stage, story points/calibration/confidence, DecisionLog, alternatives, evidence и provisional `test_policy` из [test-assessment.md](test-assessment.md). Политика живёт в managed body/AC, не в новом Project field; окончательное решение принимает Test-maker при implementation.
 
 ## BacklogReview
 
@@ -24,11 +24,11 @@ Verdict `approved | changes_requested | needs_input`, blocking findings с item 
 
 ## MutationPlan
 
-Для каждой write содержит exact Project/repository/operation/fields, managed marker/hash, duplicate fingerprint и expected current state для compare-and-swap.
+Для каждой write содержит exact Project/repository/operation/fields, managed marker/hash, duplicate fingerprint и expected current state для read/compare/write; это не атомарный CAS без поддержки сервера.
 
 ## BacklogReport
 
-Project/roadmap URLs, created/reused/updated counts, hierarchy, priority distribution, ordering verification, labels, unresolved decisions и skipped mutations.
+Project/roadmap URLs, created/reused/updated counts, hierarchy, priority distribution, ordering verification, tags, unresolved decisions и skipped mutations.
 
 ## Machine result
 

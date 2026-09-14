@@ -2,3 +2,9 @@ interface:
   display_name: "WGC Bugfix"
   short_description: "Agent-driven bug diagnosis and verified fixes"
   default_prompt: "Use $wgc-bugfix to investigate, reproduce, fix, review, and verify this Wget Cloud bug."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "youtrack"
+      description: "Wget Cloud YouTrack MCP; personal authentication required"

@@ -14,7 +14,7 @@
 
 Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical/full. Architecture и cross-repo требуют full. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Не запускать полный штат автоматически из-за нехватки контекста. Light при неопределённости запрещён.
 
-В task-creation light = оценщик + независимый Backlog Reviewer + Orchestrator; standard добавляет Product/Project/Auditor, full — Architect. Operator нужен только для явно разрешённой записи. В epic Project scope/reconcile и truthful sync общие, остальная команда выбирается для каждого item; Product outcome остаётся per-item. В bugfix full сохраняет triage/investigator/reproducer/RCA reviewer; light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
+В task-creation все режимы требуют Task Assessor, Product/Project/Auditor, отдельного Effort Estimator (SP), независимого Backlog Reviewer и Orchestrator; full добавляет Architect. Малый объём не отменяет продуктовую проработку. Operator нужен только для явно разрешённой записи. В epic Project scope/reconcile и truthful sync общие, остальная команда выбирается для каждого item; Product outcome остаётся per-item. В bugfix full сохраняет triage/investigator/reproducer/RCA reviewer; light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
 
 ## Формат
 

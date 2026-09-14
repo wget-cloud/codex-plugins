@@ -15,7 +15,7 @@ plugins/
     skills/
       wgc-implementation/                 # planned delivery workflow
       wgc-bugfix/                         # evidence-driven defect workflow
-      wgc-task-creation/                  # product backlog and GitHub Project workflow
+      wgc-task-creation/                  # product discovery and YouTrack MCP workflow
       wgc-epic-implementation/            # ordered Project task-pool delivery workflow
   wget-cloud-plugin-maintainer/
     .codex-plugin/plugin.json             # approval-gated maintenance bundle
@@ -36,15 +36,15 @@ scripts/build_wgc_skills.py               # детерминированная �
 
 ## Выбор скилла
 
-- `$wgc-task-creation` — аудит требований/реализации, декомпозиция и публикация product-quality backlog в выбранный GitHub Project.
-- `$wgc-epic-implementation` — массовая реализация выбранного эпика или пула Project items с dependency waves и синхронизацией статусов.
+- `$wgc-task-creation` — аудит требований/реализации, декомпозиция и публикация product-quality backlog в YouTrack через MCP с интервью и оценкой SP.
+- `$wgc-epic-implementation` — массовая реализация выбранного эпика или пула задач YouTrack с dependency waves и синхронизацией статусов.
 - `$wgc-implementation` — новая функциональность, refactor, contract или плановое cross-repo/GitOps изменение.
 - `$wgc-bugfix` — пользовательский дефект, regression, crash, incident или неверное observable behavior, которое нужно воспроизвести и исправить.
 - `$wgc-plugin-maintenance` — explicit-only аудит, repair и capability evolution самого `wget-cloud/codex-plugins` с item-level approvals.
 
 ## Проверка
 
-Engineering 7.0.0 редактируется через `plugin-src/wget-cloud-implementation`: `roles/` содержит общие части контрактов, `workflows/` — отличия процессов и локальные references, `domains/` — профильные знания, `policies/` — общие правила. `composition.json` явно перечисляет каждый выходной файл и его источники. `make skills-build` обновляет deployable skills, а `make validate` проверяет отсутствие расхождений и переносимость. Generated files хранятся в Git; runtime не обращается к `plugin-src` или соседним skills. Maintenance bundle не зависит от этой сборки.
+Engineering 8.0.0 редактируется через `plugin-src/wget-cloud-implementation`: `roles/` содержит общие части контрактов, `workflows/` — отличия процессов и локальные references, `domains/` — профильные знания, `policies/` — общие правила. `composition.json` явно перечисляет каждый выходной файл и его источники. `make skills-build` обновляет deployable skills, а `make validate` проверяет отсутствие расхождений и переносимость. Generated files хранятся в Git; runtime не обращается к `plugin-src` или соседним skills. Maintenance bundle не зависит от этой сборки.
 
 Перед проверкой нужен Python с PyYAML для официальных validators (CI использует PyYAML 6.0.2). Собственные hooks/сборщик используют только stdlib. При нескольких Python передай `make validate PYTHON=/absolute/path/to/python3`.
 

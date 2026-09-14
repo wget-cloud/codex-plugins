@@ -154,7 +154,7 @@ class TeamLifecycleTests(unittest.TestCase):
         self.assertIsNone(self.h.call('stop',{'hook_event_name':'Stop','turn_id':'bug-ok','last_assistant_message':'WGC_ORCHESTRATOR_RESULT: '+json.dumps(value)},self.cwd))
 
     def test_mixed_epic_has_per_item_gates_and_scope_isolation(self):
-        self.h.activate_profile('epic-implementation',prompt='Use $wgc-epic-implementation without updating GitHub Project')
+        self.h.activate_profile('epic-implementation',prompt='Use $wgc-epic-implementation without updating YouTrack')
         self.h.freeze_epic_items(self.cwd,[{'item_id':'L','item_revision':'a'*64},{'item_id':'F','item_revision':'b'*64}])
         light = task(item_id='L',item_revision='a'*64)
         self.h.record_task(self.cwd,light,{**assessment(light),'item_id':'L','item_revision':'a'*64})

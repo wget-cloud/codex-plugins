@@ -1,6 +1,6 @@
 ---
 name: wgc-epic-implementation
-description: Implement a Wget Cloud epic or ordered pool of GitHub Project tasks through product, project, architecture, test, implementation, review, QA, integration, and optional GitOps gates. Use when the user asks to implement an epic, roadmap slice, batch, priority class, or multiple related Project items and expects progress to be tracked in GitHub Project. Do not use to create or audit a backlog without implementation; use wgc-task-creation. For one standalone planned task without Project-level coordination, use wgc-implementation; for a reported defect requiring RCA, use wgc-bugfix.
+description: Implement a Wget Cloud epic or ordered pool of YouTrack tasks through MCP with product, project, architecture, test, implementation, review, QA, integration, and optional GitOps gates. Use when the user asks to implement an epic, roadmap slice, batch, priority class, or multiple related YouTrack issues and expects progress to be tracked in YouTrack, including full per-task research and implementation plans before execution. Do not use to create or audit a backlog without implementation; use wgc-task-creation. For one standalone planned task without epic-level coordination, use wgc-implementation; for a reported defect requiring RCA, use wgc-bugfix.
 ---
 
 # WGC Epic Implementation
@@ -8,6 +8,10 @@ description: Implement a Wget Cloud epic or ordered pool of GitHub Project tasks
 ## Preflight
 
 До работы проверь `service_tier=default` и `features.fast_mode=false`. Fast/priority/ultrafast → `WGC_FAST_MODE_FORBIDDEN`; неизвестное → `WGC_SERVICE_TIER_UNVERIFIABLE`. Priority-only spawn — blocker. Модель и reasoning effort наследуются из чата, без overrides.
+
+## YouTrack и продуктовая готовность
+
+Для карточок работай только через [YouTrack MCP](references/youtrack.md). Прочитай [product discovery](references/product-discovery.md), исследуй код и задачи, предложи альтернативы, задай пользователю material questions. До зависимой реализации получи явный approval на выявленные противоречия/проблемы; молчание не approval. Оценки — [story points](references/story-points.md), отдельный Effort Estimator не подменяет Task Assessor. Для delivery соблюдай [ветки dev/task/epic и squash](references/youtrack-git.md).
 
 ## Intake и выбор команды
 
@@ -18,7 +22,7 @@ description: Implement a Wget Cloud epic or ordered pool of GitHub Project tasks
 
 ## Этот процесс
 
-Заморозь максимум 100 selected items и зависимости через Project Manager. Затем отдельный Task Assessor для каждого item. Выполняй ready items по waves; Product outcome и Project reconciliation сохраняются. Done отражает реальный delivery. Unknown defect переключает item в RCA workflow.
+Project Manager собирает весь EpicInventory без усечения: все descendants, связанные работы и внешние dependencies. Исследуй все задачи/репозитории и представь отдельный план каждой задачи до реализации; реши вопросы и противоречия. Затем заморозь execution batch максимум 100 selected items; это не предел состава эпика. Отдельный Task Assessor для каждого item. Выполняй ready items по waves; Product outcome и Project reconciliation сохраняются. Done отражает реальный delivery. Unknown defect переключает item в RCA workflow.
 
 ## Исполнение и готовность
 
