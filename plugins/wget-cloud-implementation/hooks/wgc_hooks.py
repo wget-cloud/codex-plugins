@@ -187,7 +187,7 @@ SOURCE_SUFFIXES = {
 # Keep the public hook entry point stable, including importlib-based validators.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from runtime.contracts import *
-from runtime import teams, evidence, inventory
+from runtime import teams, evidence, inventory, epic_stages
 from runtime.state import migrate_state_v4
 
 
@@ -2310,6 +2310,21 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, A
         return None, f"role {role} requires an empty phase"
     if not revision:
         return None, "WGC_AGENT_RESULT requires input_revision from SubagentStart"
+    if role == 'project-manager' and ((phase == 'lifecycle') != (verdict in epic_stages.VERDICTS)):
+        return None, 'lifecycle verdicts require Project Manager lifecycle phase'
+    stage_plan = value.get('epic_stage_plan')
+    if phase == 'lifecycle' or 'epic_stage_plan' in value:
+        if role not in {'project-manager', 'youtrack-operator'} or (role == 'project-manager' and phase != 'lifecycle'):
+            return None, 'EpicStagePlan belongs to lifecycle Project Manager or YouTrack Operator'
+        try:
+            stage_plan = epic_stages.normalize(stage_plan)
+            gaps = epic_stages.gaps(stage_plan)
+        except (ValueError, TypeError, KeyError):
+            return None, 'malformed EpicStagePlan'
+        if verdict in {'stage_ready', 'synced', 'published', 'no_changes'} and gaps:
+            return None, 'EpicStagePlan transition blocked: ' + ', '.join(gaps)
+        if verdict == 'awaiting_user' and not any(g == 'questions_open' or g.startswith('approval_required:') for g in gaps):
+            return None, 'awaiting_user requires unresolved questions or user approval'
     if role == "test-maker" and verdict == "assessment_ready":
         allowed = {"role", "verdict", "phase", "input_revision", "revision", "assessment", "assessment_revision"} | TEST_ASSESSMENT_FIELDS
         unknown = sorted(set(value) - allowed)
@@ -2357,6 +2372,7 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, A
         "epic_inventory",
         "epic_reconciliation",
         "inventory_change_decision",
+        "epic_stage_plan",
         "item_id",
         "item_revision",
     ):
@@ -2685,6 +2701,15 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
         verdict = result.get("verdict")
         phase = result.get("phase")
         task = teams.active(state, result.get('item_id'))
+        if role == 'youtrack-operator':
+            if result.get('epic_stage_plan') is not None and not epic_stages.matches_inventory(result['epic_stage_plan'], state):
+                continue
+            managers = [r for r in latest.values() if r.get('role') == 'project-manager' and r.get('phase') == 'lifecycle']
+            if result.get('epic_stage_plan') is not None or any(r.get('verdict') == 'stage_ready' for r in managers):
+                if not any(r.get('verdict') == 'stage_ready' and result_is_current(r, state, current_revision)
+                           and r.get('assessment_revision') == result.get('assessment_revision')
+                           and r.get('epic_stage_plan') == result.get('epic_stage_plan') for r in managers):
+                    continue
         if task and role != 'task-assessor' and result.get('assessment_revision') != task['assessment_revision']:
             continue
         if role == 'task-assessor' and verdict == 'assessed' and task and result.get('task_assessment') == task:
@@ -3732,6 +3757,12 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
         state = update_state(payload, context, lambda value: None)
     relevant_snapshot = snapshot_since_baseline(snapshot, state.get("baseline_dirty"))
     classification = classify_paths(relevant_snapshot, state.get("touched_paths", []))
+    if not classification['paths'] and (
+            epic_stages.pending_user(state, workspace_identity(context))
+            or epic_stages.stage_checkpoint(state, workspace_identity(context))):
+        # Keep the workflow active. A user interview/approval pause must neither
+        # fabricate a fully decomposed backlog nor be labelled completion.
+        return None
     if (
         profile not in {"task-creation", "epic-implementation"}
         and not any((classification["production"], classification["tests"], classification["docs"], classification["k8s"]))

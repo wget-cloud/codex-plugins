@@ -35,3 +35,5 @@ Project/roadmap URLs, created/reused/updated counts, hierarchy, priority distrib
 Каждый субагент завершает одной строкой:
 
 `WGC_AGENT_RESULT: {"role":"<role>","verdict":"<allowed-verdict>","phase":"","input_revision":"<exact revision>"}`
+
+Для эпика ProductSpec развивается на Исследовании/Груминге; полный BacklogPlan обязателен к концу Декомпозиции. Ранняя публикация Epic/Research не равна завершению backlog. PM готовит EpicStagePlan и решения по [стадиям](epic-lifecycle.md); готовность текущего этапа нельзя подменять gate готовности разработки.

@@ -106,3 +106,9 @@ Architecture Guardian в `phase=plan` добавляет exact текущий `p
 | YouTrack Operator | youtrack_operator | разрешённые записи карточек и Stage | exact MCP allowlist | inherit | [youtrack-operator.md](youtrack-operator.md) |
 
 Assignment дополнительно содержит TRACKER=youtrack, ISSUE_SCOPE (exact project keys/IDs), PLAN_REVISION, DECISION_REFS, ESTIMATE_REFS и MUTATION_ALLOWLIST; секреты не передаются. Registry задаёт существующие marker fields; `phase` новых ролей пустой. Effort Estimator не совмещается с автором оцениваемой постановки/плана.
+
+При любом scope эпика назначается отдельный [Project Manager](project-manager.md) с phase=lifecycle для [переходов Stage](../epic-lifecycle.md). Verdicts: stage_ready/awaiting_user/stage_blocked; обязательный EpicStagePlan. Прежние phase/verdicts сохраняются для их исходных назначений. В implementation/bugfix PM работает только в lifecycle; он read-only и не совмещается с Operator.
+
+| Role | Task prefix | When | Write scope | Model lane | Contract |
+|---|---|---|---|---|---|
+| Project Manager | project_manager | Stage эпика при изменении дочерней задачи | read-only | inherit | [project-manager.md](project-manager.md) |

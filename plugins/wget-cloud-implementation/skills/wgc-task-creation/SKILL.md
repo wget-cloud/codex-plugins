@@ -13,16 +13,18 @@ description: Create or refine product-quality Wget Cloud tasks, epics, bug/refac
 
 Для карточок работай только через [YouTrack MCP](references/youtrack.md). Прочитай [product discovery](references/product-discovery.md), исследуй код и задачи, предложи альтернативы, задай пользователю material questions. До зависимой реализации получи явный approval на выявленные противоречия/проблемы; молчание не approval. Оценки — [story points](references/story-points.md), отдельный Effort Estimator не подменяет Task Assessor. Для delivery соблюдай [ветки dev/task/epic и squash](references/youtrack-git.md).
 
+Для эпика или его дочерней задачи обязателен [жизненный цикл эпика](references/epic-lifecycle.md): Project Manager управляет этапами и approvals, Operator синхронизирует Stage через MCP. Research не запускает разработку эпика.
+
 ## Intake и выбор команды
 
 1. Прочитай root/затронутые AGENTS.md и обязательные project docs; проверь Git baseline и фактический execution path.
 2. Прочитай [TaskAssessment](references/task-assessment.md) и [registry](references/agents/index.md). Назначь отдельного Task Assessor с узким scope.
 3. По verdict выбери Light/Standard/Full. Загружай только выбранные [Backend](references/domains/backend.md), [Frontend](references/domains/frontend.md), [Site](references/domains/site.md), [Front-lib](references/domains/front-lib.md), [GitOps](references/domains/gitops.md). Role file — перед конкретным назначением.
-4. Перед execution прочитай [test policy](references/test-assessment.md) и [verification](references/verification.md). [Full workflow](references/workflow.md) — только Full. [Hooks](references/hooks.md) — при диагностике; [gates](references/artifacts-and-gates.md) — когда нужен формат артефакта.
+4. Для каждого этапа загружай только применимые роли; SP/BacklogReview требуются для подготовленных карточек текущего этапа, а не для ещё не спроектированных задач разработки. Перед execution прочитай [test policy](references/test-assessment.md) и [verification](references/verification.md). [Full workflow](references/workflow.md) — только Full. [Hooks](references/hooks.md) — при диагностике; [gates](references/artifacts-and-gates.md) — когда нужен формат артефакта.
 
 ## Этот процесс
 
-Не реализуй application code. Для создания задачи/эпика всегда назначь Product Manager, Implementation Auditor, Project Manager, отдельного Effort Estimator и независимого Backlog Reviewer; Architect — для декомпозиции/технических вариантов и Full. Проведи раунды интервью до/после исследования. Найди project keys и дубли через MCP. Для эпика нужна полная декомпозиция и проработка каждой задачи. Публикуй только после решений пользователя и review по exact MutationPlan; запрос «создай» уже даёт authority в своём scope. Read-after-write обязателен. Test policy остаётся provisional.
+Не реализуй application code. Для создания задачи/эпика всегда назначь Product Manager, Implementation Auditor, Project Manager, отдельного Effort Estimator и независимого Backlog Reviewer; Architect — для декомпозиции/технических вариантов и Full. Проведи раунды интервью до/после исследования. Найди project keys и дубли через MCP. Эпик создаётся поэтапно: ранняя карточка и Research на Исследовании; полная декомпозиция и задачи разработки — только на Декомпозиции после груминга. Не форсируй подготовку всего backlog до раннего создания. Завершение хода в ожидании пользователя не означает завершённый эпик. Публикуй только после решений пользователя и review по exact MutationPlan; запрос «создай» уже даёт authority в своём scope. Read-after-write обязателен. Test policy остаётся provisional.
 
 ## Исполнение и готовность
 

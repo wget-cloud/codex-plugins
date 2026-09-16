@@ -136,3 +136,8 @@ for profile in PROFILE_ROLE_VERDICTS:
             'contract-qa': {'pass', 'defects_found', 'blocked'},
         })
 TEST_DOWNSTREAM_ROLES.update({'data-migration-reviewer', 'reliability-reviewer', 'effort-estimator', 'youtrack-operator'})
+
+for profile in PROFILE_ROLE_VERDICTS:
+    PROFILE_ROLE_VERDICTS[profile].setdefault('project-manager', set()).update(
+        {'stage_ready', 'awaiting_user', 'stage_blocked'})
+    PROFILE_ROLE_PHASES[profile].setdefault('project-manager', {''} if profile == 'task-creation' else set()).add('lifecycle')

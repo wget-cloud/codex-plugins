@@ -17,3 +17,5 @@
 - Артефакт: `YouTrackMutationReport`: operation/task IDs, expected/observed revisions, verified fields/links, completed/pending operations, conflicts и безопасный следующий шаг. Без raw responses.
 - Verdict: `published | synced | partially_applied | no_changes | authorization_required | blocked`; phase пустой.
 - `published` — все разрешённые creation/update operations подтверждены; `synced` — все назначенные transitions подтверждены; `no_changes` — reread доказывает уже достигнутое состояние. Частичный результат не закрывает publication/sync gate. Marker содержит current `input_revision` и `assessment_revision`, а при item assignment — item identity.
+
+Для изменения Stage эпика нужен проверенный PM EpicStagePlan из [lifecycle](../epic-lifecycle.md). Проверяй фактические условия и пользовательские решения перед MCP write, после reread возвращай этот же epic_stage_plan в marker. Нет актуального PM plan/approval — нет перехода. Начало Research не переводит эпик в разработку; ошибки перехода родителя не скрывай за успешной записью дочерней задачи.

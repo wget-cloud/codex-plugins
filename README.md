@@ -16,7 +16,7 @@ plugins/
       wgc-implementation/                 # planned delivery workflow
       wgc-bugfix/                         # evidence-driven defect workflow
       wgc-task-creation/                  # product discovery and YouTrack MCP workflow
-      wgc-epic-implementation/            # ordered Project task-pool delivery workflow
+      wgc-epic-implementation/            # staged YouTrack epic delivery workflow
   wget-cloud-plugin-maintainer/
     .codex-plugin/plugin.json             # approval-gated maintenance bundle
     hooks/                                 # lifecycle approval and scope contracts
@@ -44,7 +44,7 @@ scripts/build_wgc_skills.py               # детерминированная �
 
 ## Проверка
 
-Engineering 8.0.0 редактируется через `plugin-src/wget-cloud-implementation`: `roles/` содержит общие части контрактов, `workflows/` — отличия процессов и локальные references, `domains/` — профильные знания, `policies/` — общие правила. `composition.json` явно перечисляет каждый выходной файл и его источники. `make skills-build` обновляет deployable skills, а `make validate` проверяет отсутствие расхождений и переносимость. Generated files хранятся в Git; runtime не обращается к `plugin-src` или соседним skills. Maintenance bundle не зависит от этой сборки.
+Engineering 8.1.0 редактируется через `plugin-src/wget-cloud-implementation`: `roles/` содержит общие части контрактов, `workflows/` — отличия процессов и локальные references, `domains/` — профильные знания, `policies/` — общие правила. `composition.json` явно перечисляет каждый выходной файл и его источники. `make skills-build` обновляет deployable skills, а `make validate` проверяет отсутствие расхождений и переносимость. Generated files хранятся в Git; runtime не обращается к `plugin-src` или соседним skills. Maintenance bundle не зависит от этой сборки.
 
 Перед проверкой нужен Python с PyYAML для официальных validators (CI использует PyYAML 6.0.2). Собственные hooks/сборщик используют только stdlib. При нескольких Python передай `make validate PYTHON=/absolute/path/to/python3`.
 

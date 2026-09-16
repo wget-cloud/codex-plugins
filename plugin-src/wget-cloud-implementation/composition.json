@@ -246,6 +246,19 @@
         "sources": [
           "roles/effort-estimator.md"
         ]
+      },
+      {
+        "target": "references/epic-lifecycle.md",
+        "sources": [
+          "policies/epic-lifecycle.md"
+        ]
+      },
+      {
+        "target": "references/agents/project-manager.md",
+        "sources": [
+          "roles/project-manager.md",
+          "roles/project-manager-lifecycle.md"
+        ]
       }
     ],
     "wgc-bugfix": [
@@ -528,6 +541,19 @@
         "sources": [
           "roles/effort-estimator.md"
         ]
+      },
+      {
+        "target": "references/epic-lifecycle.md",
+        "sources": [
+          "policies/epic-lifecycle.md"
+        ]
+      },
+      {
+        "target": "references/agents/project-manager.md",
+        "sources": [
+          "roles/project-manager.md",
+          "roles/project-manager-lifecycle.md"
+        ]
       }
     ],
     "wgc-task-creation": [
@@ -586,7 +612,8 @@
         "target": "references/agents/project-manager.md",
         "sources": [
           "roles/project-manager.md",
-          "workflows/task-creation/roles/project-manager.md"
+          "workflows/task-creation/roles/project-manager.md",
+          "roles/project-manager-lifecycle.md"
         ]
       },
       {
@@ -702,6 +729,12 @@
         "sources": [
           "roles/effort-estimator.md"
         ]
+      },
+      {
+        "target": "references/epic-lifecycle.md",
+        "sources": [
+          "policies/epic-lifecycle.md"
+        ]
       }
     ],
     "wgc-epic-implementation": [
@@ -808,7 +841,8 @@
         "target": "references/agents/project-manager.md",
         "sources": [
           "roles/project-manager.md",
-          "workflows/epic-implementation/roles/project-manager.md"
+          "workflows/epic-implementation/roles/project-manager.md",
+          "roles/project-manager-lifecycle.md"
         ]
       },
       {
@@ -968,6 +1002,12 @@
         "target": "references/agents/effort-estimator.md",
         "sources": [
           "roles/effort-estimator.md"
+        ]
+      },
+      {
+        "target": "references/epic-lifecycle.md",
+        "sources": [
+          "policies/epic-lifecycle.md"
         ]
       }
     ]

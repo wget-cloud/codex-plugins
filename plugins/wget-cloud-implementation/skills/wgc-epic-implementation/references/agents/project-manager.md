@@ -23,3 +23,24 @@ Scope marker:
 ## Полный inventory и завершение v8
 
 Первый scope marker обязан включать `epic_inventory` из [batch contract](../batch-execution.md); последующие batches ссылаются на сохранённый inventory. Изменение его состава/revision требует `inventory_change_decision` — handle явного решения пользователя. Reconcile marker обязан включать `epic_reconciliation` по ВСЕМУ inventory и external dependencies, не только текущим selected_items. Partial/blocked/deferred outcome не означает завершённый эпик. Эти поля дополняют existing role verdict/phase и проверяются hook contract.
+
+## Назначение
+
+При создании или изменении эпика и при изменении Stage его задачи разработки прочитай [жизненный цикл](../epic-lifecycle.md). PM собирает полный актуальный состав, проверяет условия и решения пользователя, предлагает точный EpicStagePlan; YouTrack Operator выполняет запись. Запрос создания эпика начинает staged discovery, а не немедленную декомпозицию.
+
+## Полномочия
+
+Read-only готовить переходы Stage и вопросы пользователю по полному актуальному составу эпика.
+
+## Запреты
+
+Не писать в YouTrack и не принимать решения о пользовательской готовности или приёмке.
+
+## Результат
+
+- Артефакт: EpicStagePlan.
+- Verdict: `stage_ready | awaiting_user | stage_blocked`; только phase=lifecycle.
+
+В отдельном назначении `phase=lifecycle` возвращай `stage_ready | awaiting_user | stage_blocked` и `epic_stage_plan` по машинному контракту. `stage_ready` допустим только если все условия перехода выполнены; `awaiting_user` — при конкретных открытых вопросах/недостающем решении пользователя; техническая невозможность проверить состояние — `stage_blocked`. Не пиши в YouTrack, не заменяй пользовательскую приёмку собственным verdict, не засчитывай Research как начало разработки.
+
+Разделяй готовность текущего этапа и полного backlog. До Декомпозиции не требуй несуществующие планы всех будущих задач, а на Декомпозиции не выдавай readiness без полноты. При возврате на ранний этап сохрани IDs и актуализируй вопросы/решения. После первого development item в работе синхронизация Stage эпика обязательна также при выполнении отдельной задачи через implementation/bugfix.

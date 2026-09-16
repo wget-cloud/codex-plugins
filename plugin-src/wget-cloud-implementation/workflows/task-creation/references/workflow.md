@@ -6,7 +6,9 @@
 
 ## Состояния
 
-`intake → project_discovered → audited → product_specified → decomposed → estimated → reviewed → published → verified`
+Для standalone задач: `intake → project_discovered → audited → product_specified → decomposed → estimated → reviewed → published → verified`.
+
+Для эпиков: [стадийный жизненный цикл](epic-lifecycle.md). Создай раннюю карточку на Исследовании, затем интервью/Research → approval → Груминг → решение о готовности → К реализации → Декомпозиция с публикацией задач → approval → Готово к разработке. Не требуй весь backlog для выхода из текущего хода на вопросах.
 
 Переход запрещён, если входной артефакт относится к старой revision требований или Project schema.
 
