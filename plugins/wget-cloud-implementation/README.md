@@ -1,6 +1,6 @@
 # Wget Cloud Engineering Plugin
 
-Версия 8.1.0 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
+Версия 9.0.0 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
 
 | Skill | Назначение |
 |---|---|
@@ -13,7 +13,7 @@
 
 ## Runtime policy
 
-WGC skills работают только при `service_tier = "default"` и `[features].fast_mode = false`. Hooks отклоняют Fast/priority/ultrafast и непроверяемую конфигурацию. Все агенты наследуют модель и reasoning effort чата; overrides при spawn опускаются. GPT-6 не требует отдельной ветки конвейера. Priority-only инструмент означает blocker, настройки пользователя не меняются. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`.
+WGC skills работают только при `service_tier = "default"` и `[features].fast_mode = false`. Hooks отклоняют Fast/priority/ultrafast и непроверяемую конфигурацию. Все роли используют явную минимально достаточную GPT-5.6 lane: Luna/low для простых bounded-задач, Terra/medium для обычной инженерной работы и Sol/high для orchestration, сложной архитектуры, RCA и critical review gates. Orchestrator требует запуска основной задачи на Sol/high; `main-only` и `inherit` не являются допустимыми lanes. Priority-only инструмент означает blocker, настройки пользователя не меняются. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`.
 
 ## Команды и профили
 

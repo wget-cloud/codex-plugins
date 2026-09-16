@@ -39,7 +39,7 @@ class HookConfigurationTest(unittest.TestCase):
 
     def test_manifest_uses_plain_semver(self):
         manifest = json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))
-        self.assertEqual("0.3.0", manifest["version"])
+        self.assertEqual("1.0.0", manifest["version"])
         self.assertRegex(manifest["version"], r"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$")
         self.assertNotIn("+", manifest["version"])
 

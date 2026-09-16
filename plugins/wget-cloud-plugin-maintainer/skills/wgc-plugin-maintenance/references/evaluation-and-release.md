@@ -28,4 +28,4 @@ After green CI, reinstall exact changed plugins and create a separate Codex smok
 
 Use patch for compatible repair, minor for a compatible capability such as a skill or role, and major for incompatible routing, contract, removal, or behavior. Versions are plain SemVer without build metadata.
 
-Bundle `0.3.0` adds fail-closed standard-tier preflight and the `economy` Luna/low route while preserving explicit-only activation and approval gates.
+Bundle `1.0.0` assigns every role an explicit economy, balanced, or frontier GPT-5.6 route; Orchestrator uses frontier, and the legacy `main-only`/`inherit` lanes are removed while explicit-only activation and approval gates remain unchanged.

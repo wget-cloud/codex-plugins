@@ -16,9 +16,9 @@ INPUT_ARTIFACTS: <findings, proposal, tests, diff или evidence>
 LOCAL_INSTRUCTIONS: <AGENTS.md, README и component docs>
 EXPECTED_COMMANDS: <read-only inspection или проверки>
 OUTPUT_CONTRACT: <artifact и verdict enum>
-MODEL_ROUTE: <economy|balanced|frontier|main-only>
-MODEL: <selected advertised model или inherit>
-REASONING_EFFORT: <selected effort или inherit>
+MODEL_ROUTE: <economy|balanced|frontier>
+MODEL: <selected advertised model>
+REASONING_EFFORT: <selected effort>
 ROUTING_BASIS: <lane, risk и benchmark evidence>
 FORK_TURNS: <none|smallest justified positive N|all>
 TIME_BUDGET_MIN: <positive supervision budget>
@@ -27,16 +27,17 @@ MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence at checkpoints and completion>
 ```
 
-`TASK_NAME` использует точный prefix из таблицы. Передавай полное значение без изменений в `spawn_agent.task_name`. Orchestrator имеет `n/a` и не spawn.
+`TASK_NAME` использует точный prefix из таблицы. Передавай полное значение без изменений в `spawn_agent.task_name`. Orchestrator имеет `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane.
 
 Каждому субагенту передавай exact repository revision и instruction: работать только в назначенном scope, сохранить baseline dirty paths, не выполнять commit/push/install/release и не считать отсутствие ответа approval. Write-роли получают доказательство Gate 1. Reviewer и QA не исправляют findings.
 
 ## Model routing policy
 
-- `economy`: `gpt-5.6-luna/low`, затем `gpt-5.6-terra/low`, затем advertised equivalent или inherit. Это не Codex Fast mode.
-- `balanced`: `gpt-5.6-terra/medium`, затем `gpt-5.6-sol/medium`, затем inherit.
-- `frontier`: `gpt-5.6-sol/high`, затем `gpt-5.6-terra/high`; неизвестный inherit не заменяет frontier для approval/security архитектуры.
-- `main-only`: только Orchestrator.
+- `economy`: `gpt-5.6-luna/low`, затем `gpt-5.6-terra/low`. Это не Codex Fast mode.
+- `balanced`: `gpt-5.6-terra/medium`, затем `gpt-5.6-luna/high`, затем `gpt-5.6-sol/medium`.
+- `frontier`: `gpt-5.6-sol/high`, затем `gpt-5.6-terra/high`; lane применяется также к Orchestrator, поэтому основная задача запускается на выбранной frontier-модели.
+
+Не используй `inherit` как lane или fallback. Если модели выбранной lane недоступны, верни blocker.
 
 Не более трёх субагентов одновременно. Default `FORK_TURNS` — `none`; используй минимальный положительный fork только при незаменимом conversational context. Model-route изменения самого plugin проходят benchmark из evaluation contract.
 
@@ -44,7 +45,7 @@ PROGRESS_CRITERIA: <objective evidence at checkpoints and completion>
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| Orchestrator | n/a | всегда | coordination и approved delivery | main-only | [orchestrator.md](orchestrator.md) |
+| Orchestrator | n/a | всегда | coordination и approved delivery | frontier | [orchestrator.md](orchestrator.md) |
 | Auditor | auditor | full repository/CI/runtime audit | нет | balanced | [auditor.md](auditor.md) |
 | Architect | architect | item boundaries, capability design | нет | frontier | [architect.md](architect.md) |
 | Test-maker | test_maker | regression, contract и eval baseline | approved tests/evals only | balanced | [test-maker.md](test-maker.md) |

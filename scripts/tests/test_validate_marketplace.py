@@ -57,7 +57,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         self,
         *,
         rows: tuple[tuple[str, str, str], ...] = (
-            ("Orchestrator", "main-only", "n/a"),
+            ("Orchestrator", "frontier", "n/a"),
             ("Implementor", "economy", "implementor"),
         ),
         role_files: tuple[str, ...] = ("orchestrator", "implementor"),
@@ -166,7 +166,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_routing_table_requires_an_exact_task_prefix_column(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | main-only | [orchestrator](orchestrator.md) |",
+                "| Orchestrator | frontier | [orchestrator](orchestrator.md) |",
                 "| Implementor | economy | [implementor](implementor.md) |",
             )
         )
@@ -191,7 +191,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_spawned_role_task_prefix_must_equal_its_role_file_prefix(self) -> None:
         self.build_fixture(
             rows=(
-                ("Orchestrator", "main-only", "n/a"),
+                ("Orchestrator", "frontier", "n/a"),
                 ("Implementor", "economy", "reviewer"),
             )
         )
@@ -200,7 +200,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_spawned_role_task_prefix_rejects_a_full_runtime_task_name(self) -> None:
         self.build_fixture(
             rows=(
-                ("Orchestrator", "main-only", "n/a"),
+                ("Orchestrator", "frontier", "n/a"),
                 ("Implementor", "economy", "implementor_fixture"),
             )
         )
@@ -209,7 +209,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_spawned_role_task_prefix_rejects_orchestrator_na(self) -> None:
         self.build_fixture(
             rows=(
-                ("Orchestrator", "main-only", "n/a"),
+                ("Orchestrator", "frontier", "n/a"),
                 ("Implementor", "economy", "n/a"),
             )
         )
@@ -218,7 +218,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_role_filename_hyphens_normalize_to_underscores_in_task_prefix(self) -> None:
         self.build_fixture(
             rows=(
-                ("Orchestrator", "main-only", "n/a"),
+                ("Orchestrator", "frontier", "n/a"),
                 ("Test-maker", "economy", "test_maker"),
             ),
             role_files=("orchestrator", "test-maker"),
@@ -228,20 +228,20 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_orchestrator_task_prefix_must_be_literal_na(self) -> None:
         self.build_fixture(
             rows=(
-                ("Orchestrator", "main-only", "orchestrator"),
+                ("Orchestrator", "frontier", "orchestrator"),
                 ("Implementor", "economy", "implementor"),
             )
         )
         self.assert_error("orchestrator task prefix must be n/a")
 
     def test_omitted_role_route_fails(self) -> None:
-        self.build_fixture(rows=(("Orchestrator", "main-only", "n/a"),))
+        self.build_fixture(rows=(("Orchestrator", "frontier", "n/a"),))
         self.assert_error("missing model route")
 
     def test_duplicate_role_route_fails(self) -> None:
         self.build_fixture(
             rows=(
-                ("Orchestrator", "main-only", "n/a"),
+                ("Orchestrator", "frontier", "n/a"),
                 ("Implementor", "economy", "implementor"),
                 ("Implementor", "balanced", "implementor"),
             )
@@ -250,21 +250,23 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
 
     def test_unknown_model_lane_fails(self) -> None:
         self.build_fixture(
-            rows=(("Orchestrator", "main-only", "n/a"), ("Implementor", "fast", "implementor"))
+            rows=(("Orchestrator", "frontier", "n/a"), ("Implementor", "fast", "implementor"))
         )
         self.assert_error("unknown model lane")
 
-    def test_orchestrator_must_use_main_only_lane(self) -> None:
+    def test_orchestrator_must_use_frontier_lane(self) -> None:
         self.build_fixture(
-            rows=(("Orchestrator", "frontier", "n/a"), ("Implementor", "economy", "implementor"))
+            rows=(("Orchestrator", "balanced", "n/a"), ("Implementor", "economy", "implementor"))
         )
-        self.assert_error("orchestrator must use main-only")
+        self.assert_error("orchestrator must use frontier")
 
-    def test_subagent_cannot_use_main_only_lane(self) -> None:
-        self.build_fixture(
-            rows=(("Orchestrator", "main-only", "n/a"), ("Implementor", "main-only", "implementor"))
-        )
-        self.assert_error("only orchestrator may use main-only")
+    def test_legacy_implicit_lanes_fail(self) -> None:
+        for lane in ("main-only", "inherit"):
+            with self.subTest(lane=lane):
+                self.build_fixture(
+                    rows=(("Orchestrator", "frontier", "n/a"), ("Implementor", lane, "implementor"))
+                )
+                self.assert_error("unknown model lane")
 
     def test_each_assignment_routing_field_is_required(self) -> None:
         for missing in ASSIGNMENT_FIELDS:
@@ -284,7 +286,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_malformed_routing_table_row_fails(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Orchestrator | n/a | frontier | [orchestrator](orchestrator.md) |",
                 "| Implementor | implementor | economy | [implementor](implementor.md) | unexpected |",
             )
         )
@@ -293,7 +295,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_routing_row_without_contract_link_fails(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Orchestrator | n/a | frontier | [orchestrator](orchestrator.md) |",
                 "| Implementor | implementor | economy | |",
             )
         )
@@ -302,7 +304,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_routing_row_with_multiple_contract_links_fails(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Orchestrator | n/a | frontier | [orchestrator](orchestrator.md) |",
                 "| Implementor | implementor | economy | [implementor](implementor.md) [duplicate](orchestrator.md) |",
             )
         )
@@ -311,7 +313,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_orphan_linked_role_contract_fails(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Orchestrator | n/a | frontier | [orchestrator](orchestrator.md) |",
                 "| Implementor | implementor | economy | [missing](missing.md) |",
             )
         )
@@ -324,7 +326,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
                 "```markdown\n"
                 "| Role | Model lane | Contract |\n"
                 "|---|---|---|\n"
-                "| Fake | main-only | [fake](missing.md) |\n"
+                "| Fake | frontier | [fake](missing.md) |\n"
                 "```\n"
             )
         )
@@ -333,7 +335,7 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
     def test_active_contract_link_must_stay_in_role_directory(self) -> None:
         self.build_fixture(
             raw_rows=(
-                "| Orchestrator | n/a | main-only | [orchestrator](orchestrator.md) |",
+                "| Orchestrator | n/a | frontier | [orchestrator](orchestrator.md) |",
                 "| Implementor | implementor | economy | [outside](../../../../outside.md) |",
             )
         )

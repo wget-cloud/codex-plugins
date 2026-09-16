@@ -19,10 +19,10 @@ EXPECTED_COMMANDS: <read-only или verification checks>
 ASSESSMENT_REVISION: <current TaskAssessment revision; n/a only during assessment/intake>
 DOMAIN_PROFILES: <selected domain reference paths>
 OUTPUT_CONTRACT: <артефакт и verdict enum>
-MODEL_ROUTE: <inherit|main-only>
-MODEL: inherit
-REASONING_EFFORT: inherit
-ROUTING_BASIS: <TaskAssessment mode/risk; inherited chat model>
+MODEL_ROUTE: <economy|balanced|frontier>
+MODEL: <selected advertised model>
+REASONING_EFFORT: <selected effort>
+ROUTING_BASIS: <role lane, risk и fallback evidence>
 FORK_TURNS: <none|smallest justified positive N|all>
 TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
@@ -31,23 +31,23 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 INPUT_REVISION: <exact current workflow revision>
 ```
 
-`TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator не spawn. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет YouTrack scope и не объявляет весь backlog готовым.
+`TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет YouTrack scope и не объявляет весь backlog готовым.
 
 ## Model routing policy
 
-Все роли наследуют model/effort чата; overrides при spawn опускаются. Model lane `inherit` — одинаковая модель, не снижение качества. Service tier проверяется отдельно. Подробности: [model policy](../model-routing.md).
+Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/high. Fallback и service-tier ограничения: [model policy](../model-routing.md).
 
 ## Роли
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| Orchestrator | n/a | всегда | coordination | main-only | [orchestrator.md](orchestrator.md) |
-| Product Manager | product_manager | business workflow и acceptance | нет | inherit | [product-manager.md](product-manager.md) |
-| Project Manager | project_manager | schema, priority, sequence | нет | inherit | [project-manager.md](project-manager.md) |
-| Implementation Auditor | implementation_auditor | current-state evidence | нет | inherit | [implementation-auditor.md](implementation-auditor.md) |
-| Architect | architect | ownership/contracts/decomposition | нет | inherit | [architect.md](architect.md) |
-| Backlog Reviewer | backlog_reviewer | независимый quality gate | нет | inherit | [backlog-reviewer.md](backlog-reviewer.md) |
-| YouTrack Operator | youtrack_operator | идемпотентная publication | exact YouTrack MCP allowlist | inherit | [youtrack-operator.md](youtrack-operator.md) |
+| Orchestrator | n/a | всегда | coordination | frontier | [orchestrator.md](orchestrator.md) |
+| Product Manager | product_manager | business workflow и acceptance | нет | balanced | [product-manager.md](product-manager.md) |
+| Project Manager | project_manager | schema, priority, sequence | нет | balanced | [project-manager.md](project-manager.md) |
+| Implementation Auditor | implementation_auditor | current-state evidence | нет | balanced | [implementation-auditor.md](implementation-auditor.md) |
+| Architect | architect | ownership/contracts/decomposition | нет | frontier | [architect.md](architect.md) |
+| Backlog Reviewer | backlog_reviewer | независимый quality gate | нет | balanced | [backlog-reviewer.md](backlog-reviewer.md) |
+| YouTrack Operator | youtrack_operator | идемпотентная publication | exact YouTrack MCP allowlist | economy | [youtrack-operator.md](youtrack-operator.md) |
 
 ## Машинный результат
 
@@ -72,7 +72,7 @@ Task-creation хранит только provisional test policy в task body/AC 
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| task-assessor | task_assessor | по TaskAssessment | read-only | inherit | [task-assessor.md](task-assessor.md) |
+| task-assessor | task_assessor | по TaskAssessment | read-only | balanced | [task-assessor.md](task-assessor.md) |
 
 ## Выбор команды
 
@@ -84,7 +84,7 @@ Task-creation хранит только provisional test policy в task body/AC 
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | inherit | [effort-estimator.md](effort-estimator.md) |
+| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | economy | [effort-estimator.md](effort-estimator.md) |
 
 Assignment дополнительно содержит TRACKER=youtrack, ISSUE_SCOPE (exact project keys/IDs), PLAN_REVISION, DECISION_REFS, ESTIMATE_REFS и MUTATION_ALLOWLIST; секреты не передаются. Registry задаёт существующие marker fields; `phase` новых ролей пустой. Effort Estimator не совмещается с автором оцениваемой постановки/плана.
 

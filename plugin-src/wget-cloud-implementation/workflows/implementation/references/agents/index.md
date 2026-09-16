@@ -18,10 +18,10 @@ EXPECTED_COMMANDS: <проверки>
 ASSESSMENT_REVISION: <current TaskAssessment revision; n/a only during assessment/intake>
 DOMAIN_PROFILES: <selected domain reference paths>
 OUTPUT_CONTRACT: <артефакт и verdict enum>
-MODEL_ROUTE: <inherit|main-only>
-MODEL: inherit
-REASONING_EFFORT: inherit
-ROUTING_BASIS: <TaskAssessment mode/risk; inherited chat model>
+MODEL_ROUTE: <economy|balanced|frontier>
+MODEL: <selected advertised model>
+REASONING_EFFORT: <selected effort>
+ROUTING_BASIS: <role lane, risk и fallback evidence>
 FORK_TURNS: <none|smallest justified positive N|all>
 TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
@@ -29,7 +29,7 @@ MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 ```
 
-`TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное итоговое значение `TASK_NAME` передай без изменений в `spawn_agent.task_name`. Orchestrator использует `n/a` и не spawn.
+`TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное итоговое значение `TASK_NAME` передай без изменений в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane.
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Сохраняй существующие изменения. Не выполняй commit, push, PR, merge, release или deployment без приложенного разрешения. Не объявляй всю задачу завершённой. Если scope недостаточен, верни `needs_input`».
 
@@ -37,7 +37,7 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 
 ## Model routing policy
 
-Все роли наследуют model/effort чата; overrides при spawn опускаются. Model lane `inherit` — одинаковая модель, не снижение качества. Service tier проверяется отдельно. Подробности: [model policy](../model-routing.md).
+Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/high. Fallback и service-tier ограничения: [model policy](../model-routing.md).
 
 ## Роли
 
@@ -45,17 +45,17 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| Orchestrator | n/a | всегда | координационные действия | main-only | [orchestrator.md](orchestrator.md) |
-| Explorer | explorer | reconnaissance | нет | inherit | [explorer.md](explorer.md) |
-| Architect | architect | design и DAG | нет | inherit | [architect.md](architect.md) |
-| Architecture guardian | architecture_guardian | plan/diff architecture gate | нет | inherit | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | test_maker | adaptive TestAssessment; conditional tests | только tests allowlist при add/update | inherit | [test-maker.md](test-maker.md) |
-| Implementor | implementor | один DAG slice | production/docs allowlist | inherit | [implementor.md](implementor.md) |
-| Reviewer | reviewer | code review | нет | inherit | [reviewer.md](reviewer.md) |
-| QA | qa | adversarial behavior verification | нет в repository | inherit | [qa.md](qa.md) |
-| DevOps | devops | GitOps desired state | `k8s` allowlist | inherit | [devops.md](devops.md) |
-| Infrastructure reviewer | infrastructure_reviewer | GitOps review | нет | inherit | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
-| Deployment agent | deployment_agent | approved publication/rollout observation | только exact publish action | inherit | [deployment-agent.md](deployment-agent.md) |
+| Orchestrator | n/a | всегда | координационные действия | frontier | [orchestrator.md](orchestrator.md) |
+| Explorer | explorer | reconnaissance | нет | economy | [explorer.md](explorer.md) |
+| Architect | architect | design и DAG | нет | frontier | [architect.md](architect.md) |
+| Architecture guardian | architecture_guardian | plan/diff architecture gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
+| Test-maker | test_maker | adaptive TestAssessment; conditional tests | только tests allowlist при add/update | balanced | [test-maker.md](test-maker.md) |
+| Implementor | implementor | один DAG slice | production/docs allowlist | balanced | [implementor.md](implementor.md) |
+| Reviewer | reviewer | code review | нет | frontier | [reviewer.md](reviewer.md) |
+| QA | qa | adversarial behavior verification | нет в repository | balanced | [qa.md](qa.md) |
+| DevOps | devops | GitOps desired state | `k8s` allowlist | balanced | [devops.md](devops.md) |
+| Infrastructure reviewer | infrastructure_reviewer | GitOps review | нет | frontier | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
+| Deployment agent | deployment_agent | approved publication/rollout observation | только exact publish action | economy | [deployment-agent.md](deployment-agent.md) |
 
 ## Машинный результат
 
@@ -85,12 +85,12 @@ Architecture Guardian в `phase=plan` добавляет exact текущий `p
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| browser-qa | browser_qa | по TaskAssessment | read-only | inherit | [browser-qa.md](browser-qa.md) |
-| contract-qa | contract_qa | по TaskAssessment | read-only | inherit | [contract-qa.md](contract-qa.md) |
-| data-migration-reviewer | data_migration_reviewer | по TaskAssessment | read-only | inherit | [data-migration-reviewer.md](data-migration-reviewer.md) |
-| reliability-reviewer | reliability_reviewer | по TaskAssessment | read-only | inherit | [reliability-reviewer.md](reliability-reviewer.md) |
-| security-reviewer | security_reviewer | по TaskAssessment | read-only | inherit | [security-reviewer.md](security-reviewer.md) |
-| task-assessor | task_assessor | по TaskAssessment | read-only | inherit | [task-assessor.md](task-assessor.md) |
+| browser-qa | browser_qa | по TaskAssessment | read-only | balanced | [browser-qa.md](browser-qa.md) |
+| contract-qa | contract_qa | по TaskAssessment | read-only | frontier | [contract-qa.md](contract-qa.md) |
+| data-migration-reviewer | data_migration_reviewer | по TaskAssessment | read-only | frontier | [data-migration-reviewer.md](data-migration-reviewer.md) |
+| reliability-reviewer | reliability_reviewer | по TaskAssessment | read-only | frontier | [reliability-reviewer.md](reliability-reviewer.md) |
+| security-reviewer | security_reviewer | по TaskAssessment | read-only | frontier | [security-reviewer.md](security-reviewer.md) |
+| task-assessor | task_assessor | по TaskAssessment | read-only | balanced | [task-assessor.md](task-assessor.md) |
 
 ## Выбор команды
 
@@ -102,8 +102,8 @@ Architecture Guardian в `phase=plan` добавляет exact текущий `p
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | inherit | [effort-estimator.md](effort-estimator.md) |
-| YouTrack Operator | youtrack_operator | разрешённые записи карточек и Stage | exact MCP allowlist | inherit | [youtrack-operator.md](youtrack-operator.md) |
+| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | economy | [effort-estimator.md](effort-estimator.md) |
+| YouTrack Operator | youtrack_operator | разрешённые записи карточек и Stage | exact MCP allowlist | economy | [youtrack-operator.md](youtrack-operator.md) |
 
 Assignment дополнительно содержит TRACKER=youtrack, ISSUE_SCOPE (exact project keys/IDs), PLAN_REVISION, DECISION_REFS, ESTIMATE_REFS и MUTATION_ALLOWLIST; секреты не передаются. Registry задаёт существующие marker fields; `phase` новых ролей пустой. Effort Estimator не совмещается с автором оцениваемой постановки/плана.
 
@@ -111,4 +111,4 @@ Assignment дополнительно содержит TRACKER=youtrack, ISSUE_S
 
 | Role | Task prefix | When | Write scope | Model lane | Contract |
 |---|---|---|---|---|---|
-| Project Manager | project_manager | Stage эпика при изменении дочерней задачи | read-only | inherit | [project-manager.md](project-manager.md) |
+| Project Manager | project_manager | Stage эпика при изменении дочерней задачи | read-only | balanced | [project-manager.md](project-manager.md) |

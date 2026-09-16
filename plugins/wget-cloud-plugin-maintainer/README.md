@@ -2,7 +2,7 @@
 
 Отдельный maintenance bundle для репозитория `wget-cloud/codex-plugins`. Он остаётся работоспособным независимо от `wget-cloud-implementation`, поэтому может диагностировать и исправлять целевой plugin, его hooks, skills, role contracts, validators и marketplace metadata.
 
-Версия `0.3.0` запускается только при `service_tier = "default"` и `[features].fast_mode = false`; Fast/priority/ultrafast и непроверяемая конфигурация завершаются fail-closed исключением. Внутренняя lane `economy` использует Luna/low, не Codex Fast mode. Одновременно допускается максимум три субагента.
+Версия `1.0.0` запускается только при `service_tier = "default"` и `[features].fast_mode = false`; Fast/priority/ultrafast и непроверяемая конфигурация завершаются fail-closed исключением. Все роли имеют явный маршрут: economy использует Luna/low, balanced — Terra/medium, frontier — Sol/high. Orchestrator также использует frontier; `main-only` и `inherit` удалены. Одновременно допускается максимум три субагента.
 
 ## Компоненты
 
