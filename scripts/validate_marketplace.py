@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
 import sys
@@ -442,23 +441,6 @@ def validate_plugin(plugin: Path, errors: List[str]) -> Tuple[int, int]:
     return len(skills), roles
 
 
-def validate_maintainer_contracts(root: Path) -> List[str]:
-    """Run the bundle's live semantic validator when the maintainer is present."""
-    script = root / "plugins" / "wget-cloud-plugin-maintainer" / "scripts" / "validate_maintainer_contracts.py"
-    if not script.is_file():
-        return []
-    try:
-        spec = importlib.util.spec_from_file_location("wgc_maintainer_contracts", script)
-        if spec is None or spec.loader is None:
-            return ["maintainer semantic validator cannot be loaded"]
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        result = module.validate(root)
-        return result if isinstance(result, list) and all(isinstance(item, str) for item in result) else ["maintainer semantic validator returned an invalid result"]
-    except (ImportError, OSError, AttributeError):
-        return ["maintainer semantic validator failed to execute"]
-
-
 def validate_repository(root: Path | None = None) -> Tuple[List[str], Dict[str, int]]:
     root = ROOT if root is None else root
     marketplace_path = root / ".agents" / "plugins" / "marketplace.json"
@@ -509,7 +491,6 @@ def validate_repository(root: Path | None = None) -> Tuple[List[str], Dict[str, 
         errors.append(f"plugins/{orphan}: plugin is not registered in marketplace")
     validate_links([root / "README.md", root / "AGENTS.md"], errors)
     validate_tooling_pins(root, errors)
-    errors.extend(validate_maintainer_contracts(root))
     return errors, counts
 
 

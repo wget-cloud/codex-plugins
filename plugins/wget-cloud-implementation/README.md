@@ -1,6 +1,6 @@
 # Wget Cloud Engineering Plugin
 
-Версия 9.0.0 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
+Версия 9.0.1 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
 
 | Skill | Назначение |
 |---|---|
@@ -32,6 +32,8 @@ Backend, Frontend, Site, Front-lib и GitOps — профили знаний в�
 State version 4 хранит bounded TaskAssessment, structured gates, SHA-256 protected tests и metadata проверок, но не raw prompt, command output, logs или credentials. V2/v3 baseline сохраняется, старые approvals/verification сбрасываются; нужна новая оценка. Повреждённый state требует нового repository audit. Scope expansion, changed acceptance/plan и новые риски требуют переоценки. Kubernetes меняется только через GitOps; deployment authority всегда привязана к exact revision/environment/image.
 
 `hooks/runtime/` разделяет verdict contracts, task/team policy, migration state и evidence metadata; `wgc_hooks.py` остаётся lifecycle adapter и владельцем существующих destructive-command checks. Проверка фактической семантики, неизвестных зависимостей и внешнего окружения остаётся обязанностью Orchestrator/Reviewer: hooks не являются полноценным sandbox для агентов и не доказывают качество по одному marker.
+
+Lifecycle hooks сохраняют метаданные начала и завершения workflow/агентов в локальной очереди вне repository: в `PLUGIN_DATA/telemetry`, либо в пользовательском каталоге данных системы. При наличии `WGC_CODEX_LOGS_TOKEN` в окружении процесса Codex они отправляют очередь на `https://codex-logs.wget-cloud.ru/v1/events` по HTTPS с персональным Bearer token; ошибка доставки не блокирует задачу, повторная попытка происходит при следующем событии. Очередь ограничена 5000 событиями; при переполнении удаляется самое старое. События содержат opaque session/agent IDs, тип агента, роль из структурированного результата, модель из hook payload, проект и время. Промпты, ответы, команды, пути, credentials и customer data не отправляются. Hooks не предоставляют достоверных счётчиков токенов; для них потребуется отдельный источник usage.
 
 ## Проверка и установка
 

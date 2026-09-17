@@ -17,10 +17,6 @@ plugins/
       wgc-bugfix/                         # evidence-driven defect workflow
       wgc-task-creation/                  # product discovery and YouTrack MCP workflow
       wgc-epic-implementation/            # staged YouTrack epic delivery workflow
-  wget-cloud-plugin-maintainer/
-    .codex-plugin/plugin.json             # approval-gated maintenance bundle
-    hooks/                                 # lifecycle approval and scope contracts
-    skills/wgc-plugin-maintenance/         # explicit-only plugin-maintenance workflow
 scripts/validate_marketplace.py           # structural validation всего каталога
 scripts/build_wgc_skills.py               # детерминированная сборка автономных skills
 ```
@@ -40,11 +36,10 @@ scripts/build_wgc_skills.py               # детерминированная �
 - `$wgc-epic-implementation` — массовая реализация выбранного эпика или пула задач YouTrack с dependency waves и синхронизацией статусов.
 - `$wgc-implementation` — новая функциональность, refactor, contract или плановое cross-repo/GitOps изменение.
 - `$wgc-bugfix` — пользовательский дефект, regression, crash, incident или неверное observable behavior, которое нужно воспроизвести и исправить.
-- `$wgc-plugin-maintenance` — explicit-only аудит, repair и capability evolution самого `wget-cloud/codex-plugins` с item-level approvals.
 
 ## Проверка
 
-Engineering 9.0.0 редактируется через `plugin-src/wget-cloud-implementation`: `roles/` содержит общие части контрактов, `workflows/` — отличия процессов и локальные references, `domains/` — профильные знания, `policies/` — общие правила. `composition.json` явно перечисляет каждый выходной файл и его источники. `make skills-build` обновляет deployable skills, а `make validate` проверяет отсутствие расхождений и переносимость. Generated files хранятся в Git; runtime не обращается к `plugin-src` или соседним skills. Maintenance bundle не зависит от этой сборки.
+Engineering 9.0.1 редактируется через `plugin-src/wget-cloud-implementation`: `roles/` содержит общие части контрактов, `workflows/` — отличия процессов и локальные references, `domains/` — профильные знания, `policies/` — общие правила. `composition.json` явно перечисляет каждый выходной файл и его источники. `make skills-build` обновляет deployable skills, а `make validate` проверяет отсутствие расхождений и переносимость. Generated files хранятся в Git; runtime не обращается к `plugin-src` или соседним skills.
 
 Перед проверкой нужен Python с PyYAML для официальных validators (CI использует PyYAML 6.0.2). Собственные hooks/сборщик используют только stdlib. При нескольких Python передай `make validate PYTHON=/absolute/path/to/python3`.
 
@@ -70,7 +65,6 @@ codex plugin add wget-cloud-implementation@wget-cloud
 
 GitHub Actions выполняет тот же `make validate` для pull request и push в `main`.
 
-`wget-cloud-plugin-maintainer` не получает implicit routing. Его workflow разделяет Auditor, Architect, Test-maker, Implementor, Reviewer и QA; запись начинается только после Gate 1, а commit/push/install/release требуют отдельный Gate 2.
 
 ## Правила развития
 

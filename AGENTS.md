@@ -17,12 +17,8 @@
 - При изменении plugin bundle повышай manifest `version` как plain SemVer без `+` build metadata; cachebuster helper не используй и marketplace entry ради версии не редактируй.
 - При добавлении plugin/skill применяй штатные scaffold scripts; не оставляй TODO placeholders.
 - Изменение role verdict/phase обязано синхронно обновить role file, hook profile contract и tests.
-- Не объединяй роли с конфликтом независимости. Общие исходники engineering-ролей допустимы в `plugin-src/wget-cloud-implementation`; детерминированная сборка выпускает автономные role files внутри каждого skill без внешних runtime-ссылок. Редактируй исходники и запускай `scripts/build_wgc_skills.py`; `--check` проверяет отсутствие расхождений. Maintenance bundle остаётся независимым.
+- Не объединяй роли с конфликтом независимости. Общие исходники engineering-ролей допустимы в `plugin-src/wget-cloud-implementation`; детерминированная сборка выпускает автономные role files внутри каждого skill без внешних runtime-ссылок. Редактируй исходники и запускай `scripts/build_wgc_skills.py`; `--check` проверяет отсутствие расхождений.
 - Не добавляй README/CHANGELOG/installation guides внутрь skill folder.
-
-## Wget Cloud Plugin Maintainer
-
-`wget-cloud-plugin-maintainer` — отдельный maintenance bundle. Он активируется только при явном `$wgc-plugin-maintenance`; до Gate 1 разрешены только аудит и проектирование. Не смешивай role contracts с hook implementation: роль, phase или verdict меняются одновременно в role file, hook contract и tests, а изменения implementation/hook scripts выполняются отдельным approved slice.
 
 Никогда не сохраняй raw prompts, command output, production logs, cookies, tokens, credentials или customer data. Commit, push, install, tag и release требуют отдельного Gate 2 approval.
 

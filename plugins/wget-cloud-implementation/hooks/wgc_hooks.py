@@ -187,7 +187,7 @@ SOURCE_SUFFIXES = {
 # Keep the public hook entry point stable, including importlib-based validators.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from runtime.contracts import *
-from runtime import teams, evidence, inventory, epic_stages
+from runtime import teams, evidence, inventory, epic_stages, telemetry
 from runtime.state import migrate_state_v4
 
 
@@ -2825,9 +2825,12 @@ def approved_agent_gates(state: Dict[str, Any], current_revision: str) -> Set[st
 
 
 def handle_session_start(payload: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    telemetry.flush_pending()
     state_path, _ = state_paths(payload, context)
-    if read_state(state_path).get("active"):
-        require_standard_service_tier(payload)
+    prior = read_state(state_path)
+    if not prior.get("active"):
+        return additional_context("SessionStart", context_text(context))
+    require_standard_service_tier(payload)
 
     def updater(state: Dict[str, Any]) -> None:
         state["last_start_source"] = payload.get("source")
@@ -2851,7 +2854,13 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     routes = bugfix_routes(prompt) if profile == "bugfix" else {}
     project = project_routes(prompt, profile)
 
-    baseline = workspace_snapshot(context)
+    new_workflow = (
+        not prior_state.get("active")
+        or prior_state.get("profile") != profile
+        or prior_state.get("repository_reaudit_required")
+        or prior_state.get("state_health") != "healthy"
+    )
+    baseline = workspace_snapshot(context) if new_workflow else {}
 
     def updater(state: Dict[str, Any]) -> None:
         already_active = bool(state.get("active"))
@@ -2863,8 +2872,6 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         state["active"] = True
         state["activation"] = activation
         state["profile"] = profile
-        state["task_assessments"] = []
-        state["task_reassessment_required"] = True
         state["last_prompt_sha256"] = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
         if profile == "bugfix":
             previous_routes = state.get("bugfix_routes", {}) if already_active and not profile_changed else {}
@@ -2887,6 +2894,8 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         else:
             state["project_routes"] = {}
         if not already_active or profile_changed or recovering:
+            state["task_assessments"] = []
+            state["task_reassessment_required"] = True
             state["baseline_dirty"] = baseline
             state["current_dirty"] = baseline
             state["commands"] = []
@@ -2900,14 +2909,12 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
             state['completed_epic_items'] = []
             state["repository_gates"] = sorted(repository_gate_floor(context["project"]))
             state["activated_at"] = int(time.time())
-        elif already_active:
-            invalidate_test_assessment(state, invalidate_plan_approval=True)
-            if profile == "epic-implementation":
-                state["selected_items"] = []
         state["state_health"] = "healthy"
         state["repository_reaudit_required"] = False
 
     update_state(payload, context, updater)
+    if not prior_state.get("active") or prior_state.get("profile") != profile:
+        telemetry.record("workflow_started", payload, context, profile)
     mode = "explicitly" if activation == "explicit" else "from task intent"
     if profile == "bugfix":
         enabled = ", ".join(name for name, value in routes.items() if value) or "local"
@@ -2932,10 +2939,11 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     )
 
 
-def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     state_path, _ = state_paths(payload, context)
-    if read_state(state_path).get("active"):
-        require_standard_service_tier(payload)
+    if not read_state(state_path).get("active"):
+        return None
+    require_standard_service_tier(payload)
     revision = workspace_identity(context)
     agent_id = str(payload.get("agent_id") or "")
 
@@ -2948,6 +2956,7 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> D
                 inputs.pop(key, None)
 
     state = update_state(payload, context, updater)
+    telemetry.record("agent_started", payload, context, str(state.get("profile") or "implementation"))
     active = " Active WGC workflow state is present." if state.get("active") else ""
     profile = str(state.get("profile") or "implementation")
     evidence = (
@@ -3022,6 +3031,9 @@ def valid_orchestrator_result(payload, task, profile, revision):
 
 
 def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    state_path, _ = state_paths(payload, context)
+    if not read_state(state_path).get("active"):
+        return None
     state = update_state(payload, context, lambda value: None)
     if not state.get("active"):
         return None
@@ -3029,6 +3041,7 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         str(payload.get("last_assistant_message") or ""),
         str(state.get("profile") or "implementation"),
     )
+    telemetry.record("agent_stopped", payload, context, str(state.get("profile") or "implementation"), result.get("role") if result else None)
     agent_id = str(payload.get("agent_id") or "")
     expected = state.get("subagent_inputs", {}).get(agent_id, {}).get("revision")
     if not error and expected and result and result.get("input_revision") != expected:
@@ -3525,6 +3538,9 @@ def handle_pre_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Optiona
 
 
 def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    state_path, _ = state_paths(payload, context)
+    if not read_state(state_path).get("active"):
+        return None
     tool = str(payload.get("tool_name") or "")
     command = tool_command(payload)
     touched = relative_touched_paths(command, context) if tool in {"apply_patch", "Edit", "Write"} else []
@@ -3773,6 +3789,7 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
             value["completion"] = "no_tracked_changes"
 
         update_state(payload, context, no_changes)
+        telemetry.record("workflow_ended", payload, context, profile, outcome="no_tracked_changes")
         return None
 
     routes = state.get("bugfix_routes", {}) if profile == "bugfix" else {}
@@ -3873,6 +3890,7 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
             value["completed_at"] = int(time.time())
 
         update_state(payload, context, complete)
+        telemetry.record("workflow_ended", payload, context, profile, outcome="completed")
         return None
 
     turn_id = str(payload.get("turn_id") or "unknown")
@@ -3884,6 +3902,7 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
             value["remaining_gaps"] = {"verification": missing, "gates": gate_missing}
 
         update_state(payload, context, incomplete)
+        telemetry.record("workflow_ended", payload, context, profile, outcome="incomplete")
         return None
 
     def updater(value: Dict[str, Any]) -> None:
@@ -3906,6 +3925,11 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
 
 
 def handle_session_end(payload: Dict[str, Any], context: Dict[str, Any]) -> None:
+    state_path, _ = state_paths(payload, context)
+    prior = read_state(state_path)
+    if not prior.get("active"):
+        return None
+    telemetry.record("workflow_ended", payload, context, str(prior.get("profile") or "implementation"), outcome="session_closed")
     def updater(state: Dict[str, Any]) -> None:
         state["active"] = False
         state["ended_at"] = int(time.time())

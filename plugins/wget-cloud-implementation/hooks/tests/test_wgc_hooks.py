@@ -68,7 +68,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
-        self.assertEqual(version, "9.0.0")
+        self.assertEqual(version, "9.0.1")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -140,6 +140,7 @@ class WgcHooksTest(unittest.TestCase):
         env = dict(os.environ)
         env["PLUGIN_DATA"] = str(self.data)
         env["CODEX_HOME"] = str(self.codex_home)
+        env.pop("WGC_CODEX_LOGS_TOKEN", None)
         return subprocess.run(
             [sys.executable, str(SCRIPT), action],
             input=json.dumps(payload),
@@ -1258,6 +1259,56 @@ contexts:
         state = json.loads(state_path.read_text(encoding="utf-8"))
         self.assertEqual(state["profile"], "bugfix")
         self.assertTrue(state["bugfix_routes"]["deployment"])
+
+    def test_same_profile_followup_preserves_task_assessment(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        task = self.record_task(cwd)
+        before = json.loads(next((self.data / "hook-state").glob("*.json")).read_text(encoding="utf-8"))
+        self.call(
+            "prompt-submit",
+            {"hook_event_name": "UserPromptSubmit", "prompt": "Исправь документацию для той же задачи"},
+            cwd,
+        )
+        after = json.loads(next((self.data / "hook-state").glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(after["task_assessments"], before["task_assessments"])
+        self.assertEqual(after["task_assessments"][0]["assessment_revision"], task["assessment_revision"])
+        self.assertEqual(after["subagent_results"], before["subagent_results"])
+
+    def test_inactive_agent_and_post_tool_do_not_create_workflow_state(self):
+        cwd = self.projects["backend"]
+        self.call("session-start", {"hook_event_name": "SessionStart", "source": "startup"}, cwd)
+        started = self.call(
+            "subagent-start",
+            {"hook_event_name": "SubagentStart", "agent_id": "other-agent", "model": "test-model"},
+            cwd,
+        )
+        observed = self.call(
+            "post-tool",
+            {"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "git status"}},
+            cwd,
+        )
+        self.assertIsNone(started)
+        self.assertIsNone(observed)
+        self.assertEqual(list((self.data / "hook-state").glob("*.json")), [])
+        self.assertEqual(list((self.data / "telemetry").glob("event-*.json")), [])
+
+    def test_agent_logging_contains_only_allowlisted_metadata(self):
+        cwd = self.projects["backend"]
+        self.activate()
+        self.call(
+            "subagent-start",
+            {"hook_event_name": "SubagentStart", "agent_id": "agent-log", "agent_type": "worker", "model": "gpt-test", "prompt": "private prompt"},
+            cwd,
+        )
+        events = [json.loads(path.read_text(encoding="utf-8")) for path in (self.data / "telemetry").glob("event-*.json")]
+        agent = next(event for event in events if event["kind"] == "agent_started")
+        self.assertEqual(agent["agent_id"], "agent-log")
+        self.assertEqual(agent["model"], "gpt-test")
+        self.assertEqual(agent["project"], "backend")
+        self.assertNotIn("prompt", agent)
+        self.assertNotIn("token", agent)
+        self.assertNotIn("cwd", agent)
 
     def test_blocks_direct_kubernetes_write_but_allows_read(self):
         blocked = self.call(
