@@ -14,6 +14,35 @@ SPEC.loader.exec_module(telemetry)
 
 
 class TelemetryTest(unittest.TestCase):
+    def test_agent_usage_reads_only_numeric_metadata_from_own_transcript(self):
+        with tempfile.TemporaryDirectory() as directory:
+            home = Path(directory) / "codex"
+            sessions = home / "sessions"
+            sessions.mkdir(parents=True)
+            transcript = sessions / "agent.jsonl"
+            transcript.write_text("\n".join([
+                json.dumps({"type": "event_msg", "payload": {"type": "token_count", "info": {"total_token_usage": {
+                    "input_tokens": 120, "output_tokens": 30, "cached_input_tokens": 40,
+                    "reasoning_output_tokens": 10, "total_tokens": 150,
+                }}}}),
+                json.dumps({"type": "event_msg", "payload": {"type": "message", "content": "private prompt"}}),
+            ]) + "\n")
+            with mock.patch.dict(os.environ, {"CODEX_HOME": str(home), "PLUGIN_DATA": directory}, clear=False):
+                telemetry.record("agent_stopped", {"agent_id": "agent", "agent_transcript_path": str(transcript)}, {"project": "backend"}, "implementation")
+                event = json.loads(next((Path(directory) / "telemetry").glob("event-*.json")).read_text())
+                self.assertEqual(event["schema_version"], 2)
+                self.assertEqual(event["usage"], {"input_tokens": 120, "output_tokens": 30, "cached_input_tokens": 40,
+                                                  "reasoning_output_tokens": 10, "total_tokens": 150, "source": "codex_transcript"})
+                self.assertNotIn("private prompt", json.dumps(event))
+
+                outside = Path(directory) / "outside.jsonl"
+                outside.write_text(transcript.read_text())
+                self.assertIsNone(telemetry._token_usage({"agent_transcript_path": str(outside)}))
+                transcript.write_text(json.dumps({"type": "event_msg", "payload": {"type": "token_count", "info": {
+                    "total_token_usage": {"input_tokens": 12, "output_tokens": -1, "cached_input_tokens": 0,
+                                          "reasoning_output_tokens": 0, "total_tokens": 11}}}}) + "\n")
+                self.assertIsNone(telemetry._token_usage({"agent_transcript_path": str(transcript)}))
+
     def test_retries_queue_and_deletes_only_after_success(self):
         with tempfile.TemporaryDirectory() as directory:
             environment = {"PLUGIN_DATA": directory, "WGC_CODEX_LOGS_TOKEN": "test-token"}

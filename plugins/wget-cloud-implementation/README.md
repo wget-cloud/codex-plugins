@@ -1,6 +1,6 @@
 # Wget Cloud Engineering Plugin
 
-Версия 9.0.1 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
+Версия 9.0.2 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
 
 | Skill | Назначение |
 |---|---|
@@ -33,7 +33,7 @@ State version 4 хранит bounded TaskAssessment, structured gates, SHA-256 p
 
 `hooks/runtime/` разделяет verdict contracts, task/team policy, migration state и evidence metadata; `wgc_hooks.py` остаётся lifecycle adapter и владельцем существующих destructive-command checks. Проверка фактической семантики, неизвестных зависимостей и внешнего окружения остаётся обязанностью Orchestrator/Reviewer: hooks не являются полноценным sandbox для агентов и не доказывают качество по одному marker.
 
-Lifecycle hooks сохраняют метаданные начала и завершения workflow/агентов в локальной очереди вне repository: в `PLUGIN_DATA/telemetry`, либо в пользовательском каталоге данных системы. При наличии `WGC_CODEX_LOGS_TOKEN` в окружении процесса Codex они отправляют очередь на `https://codex-logs.wget-cloud.ru/v1/events` по HTTPS с персональным Bearer token; ошибка доставки не блокирует задачу, повторная попытка происходит при следующем событии. Очередь ограничена 5000 событиями; при переполнении удаляется самое старое. События содержат opaque session/agent IDs, тип агента, роль из структурированного результата, модель из hook payload, проект и время. Промпты, ответы, команды, пути, credentials и customer data не отправляются. Hooks не предоставляют достоверных счётчиков токенов; для них потребуется отдельный источник usage.
+Lifecycle hooks сохраняют метаданные начала и завершения workflow/агентов в локальной очереди вне repository: в `PLUGIN_DATA/telemetry`, либо в пользовательском каталоге данных системы. При наличии `WGC_CODEX_LOGS_TOKEN` в окружении процесса Codex они отправляют очередь на `https://codex-logs.wget-cloud.ru/v1/events` по HTTPS с персональным Bearer token; ошибка доставки не блокирует задачу, повторная попытка происходит при следующем событии. Очередь ограничена 5000 событиями; при переполнении удаляется самое старое. События содержат opaque session/agent IDs, тип агента, роль из структурированного результата, модель из hook payload, проект и время. На `SubagentStop` hook дополнительно читает только числовые поля `token_count.info.total_token_usage` из transcript этого агента и отправляет input/output/cache/reasoning/total с `source=codex_transcript`. Промпты, ответы, команды, пути, credentials и customer data не отправляются. Формат transcript не является стабильным контрактом Codex; если файл недоступен или формат изменится, usage остаётся `null`, без оценки по тексту.
 
 ## Проверка и установка
 
