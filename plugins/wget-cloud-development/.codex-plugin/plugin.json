@@ -1,0 +1,40 @@
+{
+  "name": "wget-cloud-development",
+  "version": "1.0.1",
+  "description": "Tracker-independent implementation and evidence-driven bugfix workflows for Wget Cloud Go backend services.",
+  "author": {
+    "name": "Wget Cloud",
+    "url": "https://github.com/wget-cloud"
+  },
+  "homepage": "https://github.com/wget-cloud/codex-plugins/tree/main/plugins/wget-cloud-development",
+  "repository": "https://github.com/wget-cloud/codex-plugins",
+  "keywords": [
+    "wget-cloud",
+    "multi-agent",
+    "implementation",
+    "bugfix",
+    "diagnostics",
+    "architecture",
+    "gitops",
+    "go",
+    "grpc",
+    "protobuf"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Wget Cloud Development",
+    "shortDescription": "Implementation and bugfix without a task tracker.",
+    "longDescription": "Implements planned changes and repairs defects in the Wget Cloud backend-services Go workspace through adaptive specialist teams, independent review, service and contract QA, and gated GitOps delivery. The bundle has no task-tracker integration or dependency.",
+    "developerName": "Wget Cloud",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/wget-cloud/codex-plugins",
+    "defaultPrompt": [
+      "Use $wgc-implementation for planned service, platform, Protobuf, CI, image, or GitOps work in backend-services.",
+      "Use $wgc-bugfix to reproduce, diagnose, repair, review, and verify a backend-services Go defect."
+    ]
+  }
+}

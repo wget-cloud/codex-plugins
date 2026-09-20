@@ -1,0 +1,4 @@
+interface:
+  display_name: "WGC Bugfix"
+  short_description: "Verified fixes for Go backend services"
+  default_prompt: "Use $wgc-bugfix to investigate, reproduce, fix, review, and verify this backend-services Go defect."

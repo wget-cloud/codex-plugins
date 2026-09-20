@@ -1,0 +1,4 @@
+interface:
+  display_name: "WGC Implementation"
+  short_description: "Architecture-safe delivery for Go backend services"
+  default_prompt: "Use $wgc-implementation to implement this backend-services Go task with module, architecture, test, contract, review, QA, and delivery gates."

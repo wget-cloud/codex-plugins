@@ -17,6 +17,11 @@ plugins/
       wgc-bugfix/                         # evidence-driven defect workflow
       wgc-task-creation/                  # product discovery and YouTrack MCP workflow
       wgc-epic-implementation/            # staged YouTrack epic delivery workflow
+  wget-cloud-development/
+    .codex-plugin/plugin.json             # tracker-independent Go backend-services manifest
+    skills/
+      wgc-implementation/                 # planned delivery without task tracker
+      wgc-bugfix/                         # evidence-driven defect workflow without task tracker
 scripts/validate_marketplace.py           # structural validation всего каталога
 scripts/build_wgc_skills.py               # детерминированная сборка автономных skills
 ```
@@ -36,6 +41,8 @@ scripts/build_wgc_skills.py               # детерминированная �
 - `$wgc-epic-implementation` — массовая реализация выбранного эпика или пула задач YouTrack с dependency waves и синхронизацией статусов.
 - `$wgc-implementation` — новая функциональность, refactor, contract или плановое cross-repo/GitOps изменение.
 - `$wgc-bugfix` — пользовательский дефект, regression, crash, incident или неверное observable behavior, которое нужно воспроизвести и исправить.
+
+Plugin `wget-cloud-development` публикует только `$wgc-implementation` и `$wgc-bugfix`. Он не содержит MCP, не зависит от task tracker и не загружает контракты карточек, backlog или epic lifecycle.
 
 ## Проверка
 
