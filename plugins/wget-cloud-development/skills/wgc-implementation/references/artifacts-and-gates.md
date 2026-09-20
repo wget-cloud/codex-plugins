@@ -31,9 +31,11 @@
 - `risks` и `unknowns`;
 - один verdict из разрешённого enum.
 
+Оркестратор отдельно ведёт `DecisionSnapshot`, assignment ledger и `DIFF_IDENTITY` по [coordination contract](coordination-efficiency.md). Finding использует стабильный ключ `role + invariant + location + scenario`; повтор обновляет существующую запись.
+
 Каждый субагент также завершает ответ строкой `WGC_AGENT_RESULT` из [agent registry](agents/index.md). Lifecycle ledger принимает только разрешённый profile-specific verdict и revision, назначенный при старте агента. Для `reviewer`, post-implementation `architecture-guardian`, `QA` и `infrastructure-reviewer` approval перестаёт действовать после изменения reviewed tree.
 
-Артефакт устаревает, если изменился относящийся к нему diff, plan, acceptance criteria, protected test или release identity.
+Артефакт устаревает, если изменилась одна из его заявленных зависимостей: относящийся diff/concern, plan, acceptance criteria, protected test или release identity. Не связанные артефакты сохраняют силу согласно selective invalidation.
 
 ## WorkItem
 

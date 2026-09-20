@@ -13,6 +13,10 @@ REPOSITORIES: <разрешённые repo>
 ALLOW_PATHS: <разрешённые пути>
 DENY_PATHS: <запрещённые пути, включая protected tests>
 INPUT_ARTIFACTS: <план, findings, acceptance criteria>
+DECISION_SNAPSHOT: <актуальные revision IDs и dependency map>
+ASSIGNMENT_KEY: <stable role+phase+slice+scope+revisions+artifact ID>
+RETRY_REASON: <n/a|new evidence|invalidated revision|failed/blocked result|contract correction>
+DIFF_IDENTITY: <immutable reviewed tree ID|n/a>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <проверки>
 ASSESSMENT_REVISION: <current TaskAssessment revision; n/a only during assessment/intake>
@@ -22,7 +26,7 @@ MODEL_ROUTE: <economy|balanced|frontier>
 MODEL: <selected advertised model>
 REASONING_EFFORT: <selected effort>
 ROUTING_BASIS: <role lane, risk и fallback evidence>
-FORK_TURNS: <none|smallest justified positive N|all>
+FORK_TURNS: <none|smallest justified positive N>
 TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
 MAX_EXTENSIONS: <non-negative extension limit>
@@ -33,7 +37,9 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Сохраняй существующие изменения. Не выполняй commit, push, PR, merge, release или deployment без приложенного разрешения. Не объявляй всю задачу завершённой. Если scope недостаточен, верни `needs_input`».
 
-Поля времени задают bounded supervision, а не автоматическую остановку. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split.
+Перед spawn проверь assignment ledger из [coordination contract](../coordination-efficiency.md): одинаковый active key не дублируется, completed key переиспользуется, а retry требует изменённого key и явного `RETRY_REASON`. `FORK_TURNS: all` запрещён.
+
+Поля времени задают bounded supervision, а не автоматическую остановку. Используй event-driven ожидание вместо частого polling. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split.
 
 ## Model routing policy
 

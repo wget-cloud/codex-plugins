@@ -24,6 +24,8 @@ WGC_AGENT_RESULT: {"role":"bug-triage","verdict":"triaged","phase":"","input_rev
 
 Envelope служит вспомогательным ledger. Оркестратор проверяет артефакт и актуальность revision.
 
+Оркестратор отдельно ведёт `DecisionSnapshot`, assignment ledger и `DIFF_IDENTITY` по [coordination contract](coordination-efficiency.md). Finding использует стабильный ключ `role + invariant + location + scenario`; повтор обновляет существующую запись.
+
 ## Обязательные артефакты
 
 ### BugCase
@@ -114,4 +116,4 @@ Reviewer/guardian/QA не должны превращать unrelated notes в �
 
 ## Revision invalidation
 
-После изменения source diff пересчитай workspace revision. Инвалидируй implementor result и все code-based approvals: reviewer, architecture-diff, QA, security и contract. Test-maker остаётся валиден только если protected tests и test assumptions не изменились. Изменение теста, контракта, plan или infra diff инвалидирует зависящие gates согласно workflow.
+После изменения source diff пересчитай workspace revision и `DIFF_IDENTITY`. Инвалидируй implementor result и только code-based approvals, зависящие от изменённого concern. Test-maker остаётся валиден, если protected tests и test assumptions не изменились. Изменение теста, контракта, plan или infra diff инвалидирует зависящие gates согласно workflow и selective invalidation contract.

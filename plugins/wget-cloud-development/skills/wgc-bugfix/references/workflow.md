@@ -1,6 +1,6 @@
 # Full workflow details
 
-Этот reference загружается только для Full. Для Light/Standard используй [TaskAssessment](task-assessment.md). В Full запускаются применимые роли по сигналам, а не все специалисты каталога. [Verification](verification.md) исключает повторные проверки без нового основания.
+Этот reference загружается только для Full. Для Light/Standard используй [TaskAssessment](task-assessment.md). В Full запускаются применимые роли по сигналам, а не все специалисты каталога. [Coordination contract](coordination-efficiency.md) предотвращает дублирование назначений и циклы; [Verification](verification.md) исключает повторные проверки без нового основания.
 
 # Bugfix workflow
 
@@ -55,6 +55,8 @@ WebSocket event schema, event ordering/replay и reconnect protocol считаю
 
 Incident route не отменяет основной поток. Сначала стабилизируй понимание blast radius и release identity; emergency mitigation или rollback требует отдельного разрешения, а постоянное исправление всё равно проходит regression и review.
 
+До production fix заморозь решения, общие для нескольких slices: wire contract, tenant/auth semantics, data ownership, concurrency/idempotency/background work, compatibility, cutover и rollback. Implementor получает минимальный связный vertical fix slice; не дроби один execution path между несколькими write-агентами по слоям.
+
 При возможной активной cross-tenant/PII утечке немедленно сообщи пользователю о security-incident risk и необходимости назначить human incident owner. Не отправляй внешние сообщения и не меняй систему без полномочий. Никогда не воспроизводи утечку чтением реальных foreign-tenant данных; используй synthetic canary tenants или уже существующие redacted evidence handles.
 
 ## Rework и invalidation
@@ -63,8 +65,8 @@ Incident route не отменяет основной поток. Сначала
 - `root_cause_supported` не достигнут: продолжи read-only исследование или остановись `needs_input`; не выбирай «наиболее вероятную» правку.
 - Guardian отклонил план: architect выпускает новую revision плана; старый approval недействителен.
 - Implementor изменил protected test: отклони его результат, восстановление поручить test-maker/оркестратору без потери пользовательских изменений, обновить hashes и повторить реализацию.
-- Reviewer/guardian/security/contract/QA нашли blocking defect: исправление создаёт новую revision и инвалидирует все downstream approvals.
-- Любое изменение production diff после approval инвалидирует reviewer, guardian, QA, security и contract gates.
+- Reviewer/guardian/security/contract/QA нашли blocking defect: исправление создаёт новую revision и инвалидирует зависящие от изменённого concern downstream approvals.
+- Изменение production diff после approval создаёт новую `DIFF_IDENTITY`; selective invalidation из coordination contract определяет, какие reviewer/guardian/QA/security/contract gates повторить.
 - Изменение `k8s` diff инвалидирует DevOps, infrastructure review и deployment result.
 - Failed deployment не исправлять вручную в кластере. Зафиксировать evidence, выбрать Git revert/forward fix через GitOps после разрешения, затем повторить review и rollout gates.
 
@@ -72,15 +74,15 @@ Incident route не отменяет основной поток. Сначала
 
 - Bug-triage и первичный read-only project mapping можно вести параллельно после BugCase.
 - Независимые evidence-запросы допустимы параллельно, если они не создают нагрузку и не раскрывают секреты.
-- Reviewer и architecture guardian могут работать параллельно на одной immutable revision.
+- Reviewer и architecture guardian могут работать параллельно только на одной замороженной `DIFF_IDENTITY`.
 - Security и contract QA могут работать параллельно после code review, если используют отдельные test data и не мешают друг другу.
 - Write-агенты не работают параллельно в одном repository или общем contract boundary.
 
 ## Bounded supervision
 
-Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. На каждом checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
+Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. После spawn используй bounded event-driven wait, обычно 180–300 секунд, без частого polling неизменившегося состояния. На checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
 
-Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Временной budget — граница supervision, а не причина объявить результат готовым или blocked.
+Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Третье повторение того же stable finding/reason требует contradiction summary и решения о rescope/user input, а не нового restart. Временной budget — граница supervision, а не причина объявить результат готовым или blocked.
 
 ## Kubectl authorization boundary
 

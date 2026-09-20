@@ -14,7 +14,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest["name"], "wget-cloud-development")
-        self.assertEqual(manifest["version"], "1.0.1")
+        self.assertEqual(manifest["version"], "1.0.3")
         self.assertNotIn("mcpServers", manifest)
 
     def test_bundle_has_no_tracker_runtime_or_youtrack_knowledge(self):
@@ -56,6 +56,49 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             "pwa",
         ):
             self.assertNotIn(legacy_stack, corpus)
+
+    def test_bundle_does_not_gate_work_by_service_tier(self):
+        corpus = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in PLUGIN.rglob("*")
+            if path.is_file()
+        ).casefold()
+
+        for obsolete_gate in (
+            "service_tier",
+            "service tier",
+            "fast_mode",
+            "priority-only",
+            "wgc_fast_mode_forbidden",
+            "wgc_service_tier_unverifiable",
+        ):
+            self.assertNotIn(obsolete_gate, corpus)
+
+    def test_coordination_contract_prevents_duplicate_agent_work(self):
+        for skill_name in ("wgc-bugfix", "wgc-implementation"):
+            skill = PLUGIN / "skills" / skill_name
+            coordination = (skill / "references" / "coordination-efficiency.md").read_text()
+            registry = (skill / "references" / "agents" / "index.md").read_text()
+            model_routing = (skill / "references" / "model-routing.md").read_text()
+            skill_text = (skill / "SKILL.md").read_text()
+
+            for required in (
+                "DecisionSnapshot",
+                "ASSIGNMENT_KEY",
+                "RETRY_REASON",
+                "DIFF_IDENTITY",
+                "Selective invalidation",
+                "T0",
+                "T3",
+            ):
+                self.assertIn(required, coordination, (skill_name, required))
+
+            self.assertIn("coordination-efficiency.md", skill_text)
+            self.assertIn("ASSIGNMENT_KEY", registry)
+            self.assertIn("RETRY_REASON", registry)
+            self.assertIn("DIFF_IDENTITY", registry)
+            self.assertNotIn("|all>", registry)
+            self.assertIn("`all` запрещён", model_routing)
 
 
 if __name__ == "__main__":

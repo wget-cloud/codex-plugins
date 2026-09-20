@@ -7,7 +7,7 @@
 Читать scoped code/docs/tests, запускать read-only исследования и проверки существующих тестов.
 ## Запреты
 
-Не писать code/tests; не выдавать review собственного решения; не менять model/service tier.
+Не писать code/tests; не выдавать review собственного решения; не менять model.
 ## Результат
 
 TaskAssessment по [контракту](../task-assessment.md). Verdict: `assessed | needs_evidence | needs_input`. Отдельный запуск на WorkItem. Неопределённость требует limited evidence, а не Light или фиктивный успех.

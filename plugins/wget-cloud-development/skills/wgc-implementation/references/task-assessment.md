@@ -1,6 +1,6 @@
 # TaskAssessment и адаптивная команда
 
-Отдельный Task Assessor обязателен для каждого WorkItem. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы.
+Отдельный Task Assessor обязателен для нового WorkItem. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы. Новое evidence в том же WorkItem сначала обрабатывается как delta: повторный полный assessment нужен только при изменении route-affecting полей, перечисленных в [coordination contract](coordination-efficiency.md).
 
 ## Решение
 
@@ -46,7 +46,7 @@ WGC_AGENT_RESULT: {"role":"task-assessor","verdict":"assessed","phase":"","input
 - concurrency/reliability → Reliability Reviewer;
 - gitops → DevOps и независимый Infrastructure Reviewer; доставка отдельно по exact approval.
 
-Scope expansion, изменение acceptance/плана или новый риск требуют новой оценки. In-scope реализация сохраняет маршрут, но отменяет затронутые approvals/checks. Оценщик не может отменить safety floor. Старые verdicts не переходят в новую assessment revision. Независимость исполнения и review, тестов, architecture и infrastructure gates сохраняется.
+Scope expansion, изменение acceptance/плана или новый риск требуют новой оценки только когда меняют route, domains, checks или boundaries. In-scope evidence и реализация сохраняют маршрут, но отменяют затронутые approvals/checks. Оценщик не может отменить safety floor. Старые verdicts не переходят в новую assessment revision. Независимость исполнения и review, тестов, architecture и infrastructure gates сохраняется.
 
 ## Проверка оркестратором
 

@@ -1,6 +1,6 @@
 # Full workflow details
 
-Этот reference загружается только для Full. Для Light/Standard используй [TaskAssessment](task-assessment.md). В Full запускаются применимые роли по сигналам, а не все специалисты каталога. [Verification](verification.md) исключает повторные проверки без нового основания.
+Этот reference загружается только для Full. Для Light/Standard используй [TaskAssessment](task-assessment.md). В Full запускаются применимые роли по сигналам, а не все специалисты каталога. [Coordination contract](coordination-efficiency.md) предотвращает дублирование назначений и циклы; [Verification](verification.md) исключает повторные проверки без нового основания.
 
 # Конвейер реализации
 
@@ -19,7 +19,7 @@
 
 Оркестратор — единственный владелец `WorkItem`, gate ledger и текущего состояния. Агент не назначает работу следующему агенту и не объявляет задачу готовой. Он возвращает ограниченный артефакт с доказательствами и verdict. Оркестратор проверяет артефакт, состояние Git и только затем выполняет переход.
 
-Каждый запуск агента должен быть узким: одна роль, один task slice, известный input, разрешённый path scope и явное условие завершения. Контекст передаётся артефактами, а не свободным пересказом.
+Каждый запуск агента должен быть узким: одна роль, один связный task slice, известный input, разрешённый path scope и явное условие завершения. Контекст передаётся артефактами, а не свободным пересказом. До spawn оркестратор проверяет `ASSIGNMENT_KEY`; повторный запуск без новой revision/evidence/failure запрещён.
 
 ```mermaid
 flowchart TD
@@ -146,7 +146,7 @@ Test-maker сначала выпускает описанный в [test-assessm
 
 ### 6. Implementation slices
 
-Implementor получает ровно один готовый узел DAG. Он не расширяет scope и не редактирует защищённые тесты. После минимального связного изменения он выполняет assessment-prescribed evidence и все repository gates; `none` не разрешает пропустить Go test/race/vet/lint/build, CI thresholds, consumer или generation checks. Если contract или test scope изменился, assessment инвалидируется и решение возвращается Test-maker.
+Перед первым write заморозь cross-slice решения: wire contract, tenant/auth semantics, data ownership, concurrency/idempotency/background work, compatibility, cutover и rollback. Implementor получает ровно один готовый связный vertical DAG slice, а не искусственное деление по слоям. Он не расширяет scope и не редактирует защищённые тесты. После минимального связного изменения он выполняет assessment-prescribed ступень evidence; полные repository gates выполняются после diff freeze согласно T0–T3. `none` не разрешает пропустить обязательные Go/CI/consumer/generation checks. Если contract или test scope изменился, инвалидируются только зависящие assessment/gates.
 
 После каждого write-agent оркестратор проверяет:
 
@@ -160,7 +160,7 @@ Implementor получает ровно один готовый узел DAG. О
 
 Reviewer проверяет корректность, безопасность, regressions и адекватность тестов. Architecture guardian отдельно проверяет placement, dependency direction, boundaries, public API discipline и стиль проекта. Одобрение одного не заменяет другое.
 
-Если diff стабилен, два read-only review можно делать параллельно. После любой правки оба approval, затронутые этой правкой, сбрасываются.
+Если diff стабилен, зафиксируй `DIFF_IDENTITY` и только затем запускай два read-only review параллельно. После правки создай новую identity и сбрось только approvals, зависящие от изменённого concern.
 
 ### 8. QA и integration
 
@@ -225,9 +225,9 @@ Integration gate выполняет оркестратор:
 
 ## Bounded supervision
 
-Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. На каждом checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
+Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. После spawn используй bounded event-driven wait, обычно 180–300 секунд, без частого polling неизменившегося состояния. На checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
 
-Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Временной budget — граница supervision, а не причина объявить результат готовым или blocked.
+Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Третье повторение того же stable finding/reason требует contradiction summary и решения о rescope/user input, а не нового restart. Временной budget — граница supervision, а не причина объявить результат готовым или blocked.
 
 ## Kubectl authorization boundary
 
