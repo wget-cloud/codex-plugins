@@ -14,7 +14,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest["name"], "wget-cloud-development")
-        self.assertEqual(manifest["version"], "1.0.3")
+        self.assertEqual(manifest["version"], "1.0.4")
         self.assertNotIn("mcpServers", manifest)
 
     def test_bundle_has_no_tracker_runtime_or_youtrack_knowledge(self):
@@ -84,9 +84,12 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
             for required in (
                 "DecisionSnapshot",
+                "ResumeCapsule",
                 "ASSIGNMENT_KEY",
                 "RETRY_REASON",
                 "DIFF_IDENTITY",
+                "FREEZE_STATUS",
+                "ContradictionReport",
                 "Selective invalidation",
                 "T0",
                 "T3",
@@ -99,6 +102,41 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             self.assertIn("DIFF_IDENTITY", registry)
             self.assertNotIn("|all>", registry)
             self.assertIn("`all` запрещён", model_routing)
+
+    def test_long_running_workflow_regression_contracts(self):
+        for skill_name in ("wgc-bugfix", "wgc-implementation"):
+            skill = PLUGIN / "skills" / skill_name
+            coordination = (skill / "references" / "coordination-efficiency.md").read_text()
+            registry = (skill / "references" / "agents" / "index.md").read_text()
+            orchestrator = (skill / "references" / "agents" / "orchestrator.md").read_text()
+            architect = (skill / "references" / "agents" / "architect.md").read_text()
+            test_maker = (skill / "references" / "agents" / "test-maker.md").read_text()
+            workflow = (skill / "references" / "workflow.md").read_text()
+
+            for required in (
+                "ACTIVE_ASSIGNMENTS",
+                "COMPLETED_ASSIGNMENTS",
+                "BLOCKING_FINDINGS",
+                "PROTECTED_TEST_HASHES",
+                "VALID_CHECK_CACHE",
+                "NEXT_ALLOWED_TRANSITIONS",
+                "compaction",
+                "same `ASSIGNMENT_KEY`",
+                "exponential backoff",
+            ):
+                self.assertIn(required, coordination, (skill_name, required))
+
+            self.assertIn("RESUME_CAPSULE_REVISION", registry)
+            self.assertIn("Test-maker owner", registry)
+            self.assertIn("production code или tests", orchestrator)
+            self.assertIn("diff-review", architect)
+            self.assertIn("TEST_OWNER_ID", test_maker)
+            self.assertIn("bounded vertical", workflow)
+            self.assertIn("ContradictionReport", workflow)
+
+    def test_plugin_remains_skills_only_after_coordination_hardening(self):
+        self.assertFalse((PLUGIN / "hooks").exists())
+        self.assertFalse((PLUGIN / ".mcp.json").exists())
 
 
 if __name__ == "__main__":

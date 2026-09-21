@@ -14,9 +14,11 @@ ALLOW_PATHS: <разрешённые пути>
 DENY_PATHS: <запрещённые пути, включая protected tests>
 INPUT_ARTIFACTS: <план, findings, acceptance criteria>
 DECISION_SNAPSHOT: <актуальные revision IDs и dependency map>
+RESUME_CAPSULE_REVISION: <exact restored capsule revision|n/a before first capsule>
 ASSIGNMENT_KEY: <stable role+phase+slice+scope+revisions+artifact ID>
 RETRY_REASON: <n/a|new evidence|invalidated revision|failed/blocked result|contract correction>
 DIFF_IDENTITY: <immutable reviewed tree ID|n/a>
+FREEZE_STATUS: <pending|approved|stale|n/a>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <проверки>
 ASSESSMENT_REVISION: <current TaskAssessment revision; n/a only during assessment/intake>
@@ -37,7 +39,7 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Сохраняй существующие изменения. Не выполняй commit, push, PR, merge, release или deployment без приложенного разрешения. Не объявляй всю задачу завершённой. Если scope недостаточен, верни `needs_input`».
 
-Перед spawn проверь assignment ledger из [coordination contract](../coordination-efficiency.md): одинаковый active key не дублируется, completed key переиспользуется, а retry требует изменённого key и явного `RETRY_REASON`. `FORK_TURNS: all` запрещён.
+Перед spawn проверь assignment ledger из [coordination contract](../coordination-efficiency.md): одинаковый active key не дублируется, completed key переиспользуется, а retry требует изменённого key и явного `RETRY_REASON`. После compaction сначала восстанови и сверь `RESUME_CAPSULE_REVISION`. `FORK_TURNS: all` запрещён.
 
 Поля времени задают bounded supervision, а не автоматическую остановку. Используй event-driven ожидание вместо частого polling. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split.
 
@@ -83,6 +85,8 @@ Architecture Guardian в `phase=plan` добавляет exact текущий `p
 
 - Implementor не совмещается с Test-maker, Reviewer или Architecture guardian.
 - Architect не утверждает свой план.
+- Architect не выполняет Guardian plan/diff gate, а Orchestrator не пишет production code или tests.
+- Один Test-maker owner владеет exact test-plan revision; replacement требует нового `TEST_OWNER_ID` и `REPLACEMENT_REASON`.
 - DevOps не является Infrastructure reviewer.
 - Deployment agent не пишет application-код или manifests.
 - Два write-агента не работают одновременно в одном repository или contract boundary.

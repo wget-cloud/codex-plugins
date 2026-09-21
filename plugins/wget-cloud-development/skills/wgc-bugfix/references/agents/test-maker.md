@@ -6,6 +6,7 @@
 ## Полномочия
 
 Писать только test/spec/fixture allowlist и разрешённую test-only configuration.
+Для exact `test_plan` revision вернуть стабильный `TEST_OWNER_ID`; replacement другим агентом допустим только с `REPLACEMENT_REASON` и инвалидирует прежний TestAssessment/protected hashes.
 ## Запреты
 
 Не писать production fix, не адаптировать expected behavior к багу, не ослаблять assertions и не публиковать Git.

@@ -1,6 +1,6 @@
 # Wget Cloud Development Plugin
 
-Версия 1.0.3 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
+Версия 1.0.4 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
 
 | Skill | Назначение |
 |---|---|
@@ -11,7 +11,9 @@
 
 ## Runtime policy
 
-Роли используют минимально достаточную GPT-5.6 lane из registry. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`, а полный fork истории запрещён. DecisionSnapshot, assignment deduplication, immutable diff review, selective invalidation и ступени T0–T3 сокращают повторный анализ, ожидание и дорогие проверки без ослабления независимых gates.
+Роли используют минимально достаточную GPT-5.6 lane из registry. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`, а полный fork истории запрещён. DecisionSnapshot и ResumeCapsule переживают compaction, assignment ledger исключает дубли, а immutable diff review, selective invalidation и ступени T0–T3 сокращают повторный анализ и дорогие проверки без ослабления независимых gates.
+
+Перед первым production write Full workflow замораживает cross-slice contracts, auth/tenant semantics, ownership и compatibility. Большие сервисы выполняются bounded vertical slices; Orchestrator не пишет production code или tests, Architect не закрывает собственный architecture gate, а повторные findings имеют жёсткий предел rework.
 
 Task Assessor выбирает Light/Standard/Full по риску и сложности. Профили соответствуют фактическим границам репозитория: отдельный Go service module, `contracts`, `platform`, CI/service registry и GitOps. Security, данные, миграции, публичные Protobuf-контракты, concurrency, background work и GitOps не допускают Light. Независимость исполнителя, автора тестов, reviewer и архитектурных gates сохраняется.
 

@@ -146,7 +146,7 @@ Test-maker сначала выпускает описанный в [test-assessm
 
 ### 6. Implementation slices
 
-Перед первым write заморозь cross-slice решения: wire contract, tenant/auth semantics, data ownership, concurrency/idempotency/background work, compatibility, cutover и rollback. Implementor получает ровно один готовый связный vertical DAG slice, а не искусственное деление по слоям. Он не расширяет scope и не редактирует защищённые тесты. После минимального связного изменения он выполняет assessment-prescribed ступень evidence; полные repository gates выполняются после diff freeze согласно T0–T3. `none` не разрешает пропустить обязательные Go/CI/consumer/generation checks. Если contract или test scope изменился, инвалидируются только зависящие assessment/gates.
+Перед первым write заморозь affected behavior/RPC inventory и cross-slice решения: wire contract, tenant/auth semantics, data ownership, concurrency/idempotency/background work, compatibility, cutover и rollback. Exact plan revision должен иметь `FREEZE_STATUS: approved`. Implementor получает ровно один готовый bounded vertical DAG slice, а не искусственное деление по слоям или весь large service. Он не расширяет scope и не редактирует защищённые тесты. После минимального связного изменения он выполняет assessment-prescribed ступень evidence; полные repository gates выполняются после diff freeze согласно T0–T3. `none` не разрешает пропустить обязательные Go/CI/consumer/generation checks. Если contract или test scope изменился, write останавливается и инвалидируются только зависящие assessment/gates.
 
 После каждого write-agent оркестратор проверяет:
 
@@ -225,9 +225,9 @@ Integration gate выполняет оркестратор:
 
 ## Bounded supervision
 
-Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. После spawn используй bounded event-driven wait, обычно 180–300 секунд, без частого polling неизменившегося состояния. На checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
+Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. После spawn используй cursor-based event-driven wait: первое интерактивное ожидание 45–60 секунд, затем exponential backoff до supervision boundary без status-only follow-up. На checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
 
-Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Третье повторение того же stable finding/reason требует contradiction summary и решения о rescope/user input, а не нового restart. Временной budget — граница supervision, а не причина объявить результат готовым или blocked.
+Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Третье повторение того же stable finding/reason требует `ContradictionReport` и решения о rescope/user input, а не нового restart. После compaction до новых назначений восстанови ResumeCapsule и сверь Git/agent state. Временной budget — граница supervision, а не причина объявить результат готовым или blocked.
 
 ## Kubectl authorization boundary
 

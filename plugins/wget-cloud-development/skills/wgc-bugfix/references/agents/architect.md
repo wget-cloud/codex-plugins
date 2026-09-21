@@ -8,7 +8,7 @@
 Read-only design: repository DAG, invariants, contracts, compatibility/migration, docs, rollback/rollout boundary и `minimum_test_criticality` по `../test-assessment.md`.
 ## Запреты
 
-Не писать code/tests/manifests, не расширять scope и не утверждать собственный план.
+Не писать code/tests/manifests, не расширять scope, не утверждать собственный план и не выполнять Guardian plan/diff-review своего решения.
 ## Результат
 
 - Артефакт: `FixPlan` с `plan_revision` и minimum test criticality; в waiver-flow ранний CharacterizationPlan не заменяет FixPlan.

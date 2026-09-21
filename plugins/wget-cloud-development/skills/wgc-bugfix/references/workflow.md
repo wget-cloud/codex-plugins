@@ -55,7 +55,7 @@ WebSocket event schema, event ordering/replay и reconnect protocol считаю
 
 Incident route не отменяет основной поток. Сначала стабилизируй понимание blast radius и release identity; emergency mitigation или rollback требует отдельного разрешения, а постоянное исправление всё равно проходит regression и review.
 
-До production fix заморозь решения, общие для нескольких slices: wire contract, tenant/auth semantics, data ownership, concurrency/idempotency/background work, compatibility, cutover и rollback. Implementor получает минимальный связный vertical fix slice; не дроби один execution path между несколькими write-агентами по слоям.
+До production fix заморозь affected behavior/RPC inventory и решения, общие для нескольких slices: wire contract, tenant/auth semantics, data ownership, concurrency/idempotency/background work, compatibility, cutover и rollback. Exact FixPlan должен иметь `FREEZE_STATUS: approved`. Implementor получает один bounded vertical fix slice; не дроби execution path между write-агентами по слоям и не переноси весь large service одним assignment.
 
 При возможной активной cross-tenant/PII утечке немедленно сообщи пользователю о security-incident risk и необходимости назначить human incident owner. Не отправляй внешние сообщения и не меняй систему без полномочий. Никогда не воспроизводи утечку чтением реальных foreign-tenant данных; используй synthetic canary tenants или уже существующие redacted evidence handles.
 
@@ -80,9 +80,9 @@ Incident route не отменяет основной поток. Сначала
 
 ## Bounded supervision
 
-Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. После spawn используй bounded event-driven wait, обычно 180–300 секунд, без частого polling неизменившегося состояния. На checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
+Каждый assignment задаёт `TIME_BUDGET_MIN`, `CHECKPOINT_INTERVAL_MIN`, `MAX_EXTENSIONS` и объективные `PROGRESS_CRITERIA`. После spawn используй cursor-based event-driven wait: первое интерактивное ожидание 45–60 секунд, затем exponential backoff до supervision boundary без status-only follow-up. На checkpoint оркестратор требует objective evidence: фактический diff, команды или другой измеримый результат; сообщение «работаю» прогрессом не считается. Extension возможен только в пределах `MAX_EXTENSIONS`, а его log обязан содержать reason, evidence и new boundary.
 
-Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Третье повторение того же stable finding/reason требует contradiction summary и решения о rescope/user input, а не нового restart. Временной budget — граница supervision, а не причина объявить результат готовым или blocked.
+Первый stall требует correction или rescope. Повторный stall либо scope drift требует interrupt, inspection partial work и затем restart с уточнённым контрактом или split на меньшие slices. Третье повторение того же stable finding/reason требует `ContradictionReport` и решения о rescope/user input, а не нового restart. После compaction до новых назначений восстанови ResumeCapsule и сверь Git/agent state. Временной budget — граница supervision, а не причина объявить результат готовым или blocked.
 
 ## Kubectl authorization boundary
 

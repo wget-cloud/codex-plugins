@@ -22,7 +22,7 @@ description: Coordinate tracker-independent, evidence-driven diagnosis and repai
 
 ## Исполнение и готовность
 
-Оркестратор владеет WorkItem, DecisionSnapshot, assignment/gate ledger и transitions. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. Сохраняй independence исполнителя, test author и reviewer; Architect не утверждает свой план. Максимум три активных субагента, fork none по умолчанию; [model/context policy](references/model-routing.md).
+Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, assignment/gate ledger и transitions, но не пишет production code/tests. После compaction сначала восстанавливается ledger; Full fix начинается только после freeze exact plan revision. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. Сохраняй independence исполнителя, test author и reviewer; Architect не утверждает и не review собственный plan/diff. Максимум три активных субагента, fork none по умолчанию; [model/context policy](references/model-routing.md).
 
 Сохраняй пользовательские изменения. Каждый `services/<name>`, `platform` и `contracts` — отдельный Go module внутри одного Git repository; module boundary не является отдельной Git history. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 
