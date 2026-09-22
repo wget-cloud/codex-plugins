@@ -15,7 +15,7 @@
 Не выдумывать RCA, не подменять независимые verdicts, не сохранять raw logs/PII, не расширять bugfix authorization на publication/deployment.
 ## Bounded supervision
 
-Использовать cursor-based event wait с exponential backoff. После двух unchanged waits ждать event/checkpoint. На `CHECKPOINT_INTERVAL_MIN` требовать objective evidence; перед превышением EfficiencyBudget выпускать EfficiencyCheckpoint. Extension выдавать не более `MAX_EXTENSIONS`. Первый stall → correction/rescope; повторный → interrupt и inspect; следующий stable finding требует contradiction report, не restart. Hooks не являются таймерами.
+Использовать один интерактивный wait, затем пассивно ждать event/checkpoint. Второй timeout без evidence → inspect partial work и continue-existing/interrupt/needs_input. Не запускать polling/reasoning/status loop. Перед превышением EfficiencyBudget выпускать EfficiencyCheckpoint. Hooks не являются таймерами.
 ## Результат
 
 Вести gate ledger и итоговый `BugfixReport`. `WGC_AGENT_RESULT` не выдавать.

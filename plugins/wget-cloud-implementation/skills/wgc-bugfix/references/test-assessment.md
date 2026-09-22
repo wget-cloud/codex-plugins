@@ -1,6 +1,6 @@
 # Адаптивная политика тестирования bugfix
 
-В Full и add/update отдельный Test-maker после approved RCA/FixPlan выпускает `TestAssessment` с disposition `add | update | reuse | none`. В Light/Standard none/reuse assessment выпускает Task Assessor после проверенной причины. Новый regression test обычно наиболее полезен, но не создаётся формально, если уже существует точное доказательство или тест действительно непропорционален риску. После изменения scope, RCA/FixPlan, acceptance, tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
+В обычном Light/Standard/Full bugfix Implementor пишет минимальный regression test вместе с fix и сам выполняет targeted проверку. Отдельный Test-maker выпускает `TestAssessment` и protected failing baseline только для заранее обозначенного critical invariant, когда независимость materially снижает риск. None/reuse assessment выпускает Orchestrator либо Task Assessor после проверенной причины. После изменения scope, RCA/FixPlan, acceptance, protected tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
 
 ## Критичность
 
@@ -27,7 +27,7 @@ Formal `reproduction_waiver` разрешает `characterized` только п�
 
 Артефакт содержит `plan_revision`, `acceptance_revision`, `scope_fingerprint`, bounded exact `assessed_paths`, criticality/disposition, original regression и tested invariants, existing tests, `coverage_mode`, alternative evidence, residual risks/follow-up и disposition-specific proof. `add/update` создают условный `TestPlan` с matching action, непустыми bounded exact runnable `commands`, `expected_baseline`, `actual_baseline`, exact test paths и `protected_hashes`: canonical keysets обязаны точно совпадать, каждый файл уже существует, а объявленный SHA-256 равен фактическому. Boolean/string handshake hashes не заменяет. `reuse` содержит полный `reuse_proof`. `none` содержит только evidence plan и не создаёт искусственный test commit.
 
-`none` не отменяет repository/CI suites, coverage thresholds, typecheck, lint, build, proto/Prisma, consumer/contract/security/GitOps gates, reproduction, RCA review, Reviewer, Architecture Guardian, QA или conditional Browser/Security/Contract QA. Backend 90%+ thresholds сохраняются; около 80% не является новым floor.
+`none` не отменяет фактические repository/CI gates и targeted reproduction. Однако Reviewer, Architecture Guardian, QA и conditional specialists не становятся обязательными только из-за bugfix: каждый требует конкретного risk signal. Coverage выше существующего repository threshold не наращивается ради этого workflow.
 
 ## Машинный marker Test-maker
 
@@ -43,4 +43,4 @@ V2/v3 мигрируются в v4 с сохранением безопасно�
 
 ## Владелец в v7
 
-В Light/Standard none/reuse TestAssessment выпускает Task Assessor вместе с TaskAssessment, используя те же evidence fields. Он задаёт plan/acceptance revision и floor для компактного маршрута. Full floor принадлежит Architect. Add/update всегда принадлежат Test-maker. В task-creation политика provisional. [Команда](task-assessment.md), [повторное использование проверок](verification.md).
+Во всех execution modes TestAssessment выпускает Task Assessor вместе с TaskAssessment. Обычные add/update принадлежат Implementor; `protected_test_maker` выбирается только для явно защищённого critical baseline. В task-creation политика provisional. [Команда](task-assessment.md), [повторное использование проверок](verification.md).

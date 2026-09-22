@@ -7,7 +7,7 @@ description: Coordinate architecture-safe planned implementation work across the
 
 ## Preflight
 
-Spawned-роли получают минимальную достаточную GPT-5.6 lane из registry: Luna для простых, Terra для обычных, Sol для сложных задач. Service tier не блокирует workflow.
+Spawned-роли получают минимальную достаточную GPT-5.6 lane: Luna для механических операций, Terra для разработки и review. Sol допустим только по подтверждённому blocker/critical escalation и не назначается всей команде из-за размера задачи.
 
 ## YouTrack и продуктовая готовность
 
@@ -18,7 +18,7 @@ Spawned-роли получают минимальную достаточную 
 ## Intake и выбор команды
 
 1. Прочитай root/затронутые AGENTS.md и обязательные project docs; проверь Git baseline и фактический execution path.
-2. Прочитай [coordination contract](references/coordination-efficiency.md), [TaskAssessment](references/task-assessment.md) и [registry](references/agents/index.md). Переиспользуй актуальный assessment; очевидный Light/Standard route оценивает Orchestrator, отдельный Task Assessor нужен только для неоднозначного, Full, cross-repo или расширившегося scope.
+2. Прочитай [coordination contract](references/coordination-efficiency.md), [TaskAssessment](references/task-assessment.md) и [registry](references/agents/index.md). Один компактный Task Assessor фиксирует route/RiskMatrix/test ownership; переиспользуй его между slices и не запускай повторно без route-affecting изменения.
 3. По verdict выбери Light/Standard/Full. Загружай только выбранные [Backend](references/domains/backend.md), [Frontend](references/domains/frontend.md), [Site](references/domains/site.md), [Front-lib](references/domains/front-lib.md), [GitOps](references/domains/gitops.md). Role file — перед конкретным назначением.
 4. Перед execution прочитай [test policy](references/test-assessment.md) и [verification](references/verification.md). [Full workflow](references/workflow.md) — только Full. [Hooks](references/hooks.md) — при диагностике; [gates](references/artifacts-and-gates.md) — когда нужен формат артефакта.
 
@@ -28,7 +28,7 @@ Spawned-роли получают минимальную достаточную 
 
 ## Исполнение и готовность
 
-Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget и transitions. По умолчанию применяй lean vertical-slice execution: один Implementor пишет связное изменение с обычными tests, один Reviewer проверяет candidate, остальные gates запускаются только по risk/invalidated concern. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. Protected-test author, Reviewer и Guardian независимы; Architect не утверждает свой план. Максимум три активных субагента; [model/context policy](references/model-routing.md).
+Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget и transitions. Стандартный workflow — компактный Task Assessor и один Implementor на Terra, который пишет связный slice и минимальные tests. Третий assignment — один Reviewer или specialist только для нетривиального риска. Максимум три assignments на slice и один correction batch существующему Implementor; полный pipeline после finding не перезапускается. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. [Model/context policy](references/model-routing.md).
 
 Сохраняй пользовательские изменения. Root/submodules — отдельные repositories. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 

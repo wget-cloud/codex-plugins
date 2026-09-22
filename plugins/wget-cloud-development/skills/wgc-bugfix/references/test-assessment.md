@@ -1,6 +1,6 @@
 # Адаптивная политика тестирования bugfix
 
-В Full и add/update отдельный Test-maker после approved RCA/FixPlan выпускает `TestAssessment` с disposition `add | update | reuse | none`. В Light/Standard none/reuse assessment выпускает Task Assessor после проверенной причины. Новый regression test обычно наиболее полезен, но не создаётся формально, если уже существует точное доказательство или тест действительно непропорционален риску. После изменения scope, RCA/FixPlan, acceptance, tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
+В обычном bugfix Implementor пишет минимальный regression test вместе с fix. Отдельный Test-maker выпускает protected failing baseline только для заранее обозначенного critical invariant, когда независимость materially снижает риск. None/reuse assessment выпускает Orchestrator либо Task Assessor после проверенной причины.
 
 ## Критичность
 
@@ -27,7 +27,7 @@ Formal `reproduction_waiver` разрешает `characterized` только п�
 
 Артефакт содержит `plan_revision`, `acceptance_revision`, `scope_fingerprint`, bounded exact `assessed_paths`, criticality/disposition, original regression и tested invariants, existing tests, `coverage_mode`, alternative evidence, residual risks/follow-up и disposition-specific proof. `add/update` создают условный `TestPlan` с matching action, непустыми bounded exact runnable `commands`, `expected_baseline`, `actual_baseline`, exact test paths и `protected_hashes`: canonical keysets обязаны точно совпадать, каждый файл уже существует, а объявленный SHA-256 равен фактическому. Boolean/string handshake hashes не заменяет. `reuse` содержит полный `reuse_proof`. `none` содержит только evidence plan и не создаёт искусственный test commit.
 
-`none` не отменяет repository/CI suites и module gates: `go test -race ./...`, `go vet ./...`, `golangci-lint run`, exact coverage command/threshold из workflows и `services.json`, `go build ./cmd/...`, применимые Buf/consumer/affected-matrix checks и только выбранные route gates.
+`none` не отменяет фактические repository/CI gates и targeted reproduction. Полные `go test -race`, vet/lint/build/coverage выполняются один раз на service boundary, когда этого требует repository policy; они не повторяются на каждом fix slice.
 
 ## Машинный marker Test-maker
 
@@ -41,4 +41,4 @@ WGC_AGENT_RESULT: {"role":"test-maker","verdict":"assessment_ready","phase":"","
 
 Scope expansion отменяет маршрут. In-scope write сохраняет assessment, но отменяет только затронутые проверки и approvals. Contract/migration/test изменения применяют selective invalidation.
 
-В Light/Standard none/reuse TestAssessment выпускает Task Assessor вместе с TaskAssessment, используя те же evidence fields. Он задаёт plan/acceptance revision и floor для компактного маршрута. Full floor принадлежит Architect. Add/update всегда принадлежат Test-maker. [Команда](task-assessment.md), [повторное использование проверок](verification.md).
+В Light/Standard none/reuse TestAssessment выпускает assessment owner. Обычные add/update принадлежат Implementor; Test-maker — только protected critical baseline. [Команда](task-assessment.md), [повторное использование проверок](verification.md).

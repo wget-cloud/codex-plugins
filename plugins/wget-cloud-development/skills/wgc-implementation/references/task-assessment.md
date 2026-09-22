@@ -8,13 +8,13 @@ TaskAssessment обязателен как артефакт, но не как о
 
 | Mode | Критерий | Роли реализации после оценщика |
 |---|---|---|
-| light | small + low, обратимая правка без изменения поведения/данных/контрактов | Implementor; финальная проверка Orchestrator |
-| standard | bounded изменение, включая локальный critical invariant без architecture/ownership/cross-repo изменения | Implementor, Reviewer; Test-maker, QA и specialist только по точечному risk signal |
-| full | large/multi-slice, архитектура, ownership/compatibility или cross-repo | Service-level Architect + Guardian plan один раз; на транш Implementor + Reviewer; остальные gates только по изменённым concerns |
+| light | small + low, обратимая правка без изменения поведения/данных/контрактов | Implementor; targeted проверка Orchestrator |
+| standard | bounded изменение, включая локальный critical invariant без architecture/ownership/cross-repo изменения | Implementor; Reviewer только для нетривиального risk/diff |
+| full | large/multi-slice, архитектура, ownership/compatibility или cross-repo | Architect только если Orchestrator не может заморозить решение; затем Implementor и максимум один Reviewer/specialist на транш |
 
-Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical testing/concern gates, но не Full автоматически. Architecture, ownership/compatibility, cross-repo и large multi-slice scope требуют Full. Service-level plan и неизменившиеся specialist approvals переиспользуются по selective invalidation. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Light при неопределённости запрещён.
+Security/auth/RBAC/tenant, money, destructive data migration и public compatibility требуют точечной critical проверки, но не набора specialist gates. Для bounded contract/concurrency/reliability работы достаточно `RiskMatrix`, targeted test и одного подходящего Reviewer. Full определяет планирование, а не автоматический состав команды.
 
-В bugfix full сохраняет triage/investigator/reproducer/RCA reviewer; light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
+В bugfix Full сам по себе не включает отдельную цепочку triage/investigator/reproducer/RCA reviewer: для incident или неоднозначной причины выбери один наиболее полезный root-cause concern в пределах бюджета. В light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
 
 ## Формат
 
@@ -40,6 +40,8 @@ Downstream assignment фиксирует `assessment_revision` в ledger; marker
 Для Light/Standard TestAssessment выпускает тот же assessment owner. Обычные implementor-owned `add/update` tests не требуют отдельного Test-maker; он нужен только для protected critical invariants. Full использует отдельного Test-maker только когда independence действительно требуется.
 
 ## Специалисты
+
+Выбирай максимум одного специалиста по наиболее высокому риску; не превращай несколько risk signals в fanout ролей. Исключение — явно разрешённый GitOps delivery, где независимость DevOps и Infrastructure Reviewer обязательна.
 
 - security → Security Reviewer; contract → Contract QA;
 - data/migration → Data & Migration Reviewer;

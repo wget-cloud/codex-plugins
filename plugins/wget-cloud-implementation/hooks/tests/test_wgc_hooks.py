@@ -68,7 +68,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
-        self.assertEqual(version, "9.2.0")
+        self.assertEqual(version, "9.2.1")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -368,6 +368,27 @@ contexts:
             task.update(item_id='EPIC-1', item_revision='a' * 64)
         task.pop('assessment_revision', None)
         task['assessment_revision'] = hashlib.sha256(json.dumps(task, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+        profile = self.adaptive_state().get('profile')
+        if assessment is None and profile != 'task-creation':
+            assessment = {
+                'plan_revision': task['plan_revision'], 'acceptance_revision': task['acceptance_revision'],
+                'test_criticality': task['risk'], 'test_disposition': task['test_disposition'],
+                'test_ownership': 'implementor' if task['test_disposition'] in {'add', 'update'} else 'n/a',
+                'scope_fingerprint': 'fixture', 'assessed_paths': task['assessed_paths'],
+                'tested_invariants': ['bounded task behavior'], 'existing_tests': ['fixture baseline'],
+                'coverage_mode': 'targeted' if task['test_disposition'] in {'add', 'update'} else 'none',
+                'alternative_evidence': ['synthetic fixture evidence'], 'residual_risks': ['none observed'],
+                'rationale': 'fixture assessment',
+            }
+            if task['test_disposition'] in {'add', 'update'}:
+                tests = [path for path in task['assessed_paths'] if '/tests/' in path or path.endswith('.test.ts')]
+                assessment['test_plan'] = {
+                    'action': task['test_disposition'], 'tests': tests or [task['assessed_paths'][-1]],
+                    'commands': ['npm test -- --coverage'], 'expected_baseline': 'fixture baseline',
+                    'actual_baseline': 'fixture baseline',
+                }
+            if epic:
+                assessment.update(item_id=task['item_id'], item_revision=task['item_revision'])
         extra = {'task_assessment': task}
         if assessment is not None:
             extra['assessment'] = assessment

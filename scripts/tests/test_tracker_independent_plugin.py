@@ -14,7 +14,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest["name"], "wget-cloud-development")
-        self.assertEqual(manifest["version"], "1.0.7")
+        self.assertEqual(manifest["version"], "1.0.8")
         self.assertNotIn("mcpServers", manifest)
 
     def test_bundle_has_no_tracker_runtime_or_youtrack_knowledge(self):
@@ -174,7 +174,9 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             "EfficiencyCheckpoint",
             "ServiceHandoff",
             "5–10",
-            "4 assignments, 2 unchanged waits без нового анализа, 1 дорогая T2 suite",
+            "максимум 3 assignments",
+            "10 coordination decisions",
+            "одним correction batch",
         ):
             self.assertIn(required, implementation_coordination, required)
 
@@ -187,8 +189,19 @@ class TrackerIndependentPluginTests(unittest.TestCase):
         for skill in (implementation, bugfix):
             coordination = (skill / "references" / "coordination-efficiency.md").read_text()
             orchestrator = (skill / "references" / "agents" / "orchestrator.md").read_text()
-            self.assertIn("После двух unchanged waits", coordination)
+            self.assertIn("После одного unchanged wait", coordination)
             self.assertIn("EfficiencyBudget", orchestrator)
+
+    def test_startup_defaults_do_not_require_a_separate_profile(self):
+        for skill_name in ("wgc-bugfix", "wgc-implementation"):
+            skill = PLUGIN / "skills" / skill_name
+            coordination = (skill / "references" / "coordination-efficiency.md").read_text()
+            routing = (skill / "references" / "model-routing.md").read_text()
+            self.assertIn("максимум 3 assignments", coordination)
+            self.assertIn("10 coordination decisions", coordination)
+            self.assertIn("полный pipeline не перезапускается", coordination)
+            self.assertIn("Sol escalation", routing)
+            self.assertNotIn("Startup/Fast", coordination)
 
     def test_plugin_remains_skills_only_after_coordination_hardening(self):
         self.assertFalse((PLUGIN / "hooks").exists())
@@ -199,7 +212,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             skill = PLUGIN / "skills" / skill_name
             assessment = (skill / "references" / "task-assessment.md").read_text()
             coordination = (skill / "references" / "coordination-efficiency.md").read_text()
-            self.assertIn("не Full автоматически", assessment)
+            self.assertIn("Full определяет планирование", assessment)
             self.assertIn("FREEZE_STATUS: n/a", coordination)
             self.assertIn("STOP_AFTER_SERVICE", coordination)
 

@@ -284,8 +284,8 @@ def validate_agent_registry(skill: Path, errors: List[str]) -> int:
         for lane in lanes:
             if lane not in MODEL_LANES:
                 errors.append(f"{index.relative_to(ROOT)}: unknown model lane: {lane}")
-            if role_file == "orchestrator.md" and lane != "frontier":
-                errors.append(f"{index.relative_to(ROOT)}: orchestrator must use frontier")
+            if role_file == "orchestrator.md" and lane not in {"balanced", "frontier"}:
+                errors.append(f"{index.relative_to(ROOT)}: orchestrator must use balanced or frontier")
     actual = {path.name for path in role_files}
     for role_file in sorted(actual - set(routes_by_role)):
         errors.append(f"{index.relative_to(ROOT)}: missing model route: {role_file}")

@@ -38,7 +38,7 @@ EFFICIENCY_BUDGET: <max assignments/coordination decisions/unchanged waits/passi
 INPUT_REVISION: <exact current workflow revision>
 ```
 
-`TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет YouTrack scope и не объявляет весь backlog готовым.
+`TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и работает на `balanced`; frontier допустима только узкому подтверждённому escalation. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет YouTrack scope и не объявляет весь backlog готовым.
 
 Перед spawn сверь [coordination contract](../coordination-efficiency.md): active/completed `ASSIGNMENT_KEY`, ResumeCapsule и EfficiencyBudget. Вызов без явных exact `model`, `reasoning_effort` и `fork_turns` запрещён; обычный fork — `none`, `all` запрещён.
 
@@ -50,7 +50,7 @@ INPUT_REVISION: <exact current workflow revision>
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| Orchestrator | n/a | всегда | coordination | frontier | [orchestrator.md](orchestrator.md) |
+| Orchestrator | n/a | всегда | coordination | balanced | [orchestrator.md](orchestrator.md) |
 | Product Manager | product_manager | business workflow и acceptance | нет | balanced | [product-manager.md](product-manager.md) |
 | Project Manager | project_manager | schema, priority, sequence | нет | balanced | [project-manager.md](project-manager.md) |
 | Implementation Auditor | implementation_auditor | current-state evidence | нет | balanced | [implementation-auditor.md](implementation-auditor.md) |

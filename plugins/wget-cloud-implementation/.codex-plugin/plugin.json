@@ -1,6 +1,6 @@
 {
   "name": "wget-cloud-implementation",
-  "version": "9.2.0",
+  "version": "9.2.1",
   "description": "YouTrack MCP product discovery, story-point estimation, task and epic delivery, and evidence-driven bugfix for Wget Cloud.",
   "author": {
     "name": "Wget Cloud",

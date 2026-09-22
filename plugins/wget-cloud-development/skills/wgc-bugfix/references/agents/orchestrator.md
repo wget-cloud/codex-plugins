@@ -13,13 +13,13 @@
 - До spawn вычислять `ASSIGNMENT_KEY`, переиспользовать актуальные результаты и фиксировать `RETRY_REASON` для любого повторного запуска.
 - Замораживать `DIFF_IDENTITY` перед параллельными read-only gates и проверять отсутствие active assignments перед финалом.
 - Поддерживать `ResumeCapsule`, после compaction сверять его с Git/agent state до нового назначения и не продолжать write при stale freeze.
-- Вести `EfficiencyBudget` и check ownership; до каждого spawn проверять explicit model/reasoning/fork args, а до дорогой команды — owner/cache/invalidation trigger.
+- Вести `EfficiencyBudget` и check ownership; стандартный fix ограничить одним Terra Implementor. Reviewer либо specialist добавлять только по risk signal. Не превышать 3 assignments, 10 coordination decisions и один correction/recheck без EfficiencyCheckpoint; correction отправлять существующему Implementor компактной delta.
 ## Запреты
 
 Не выдумывать RCA, не подменять независимые verdicts, не сохранять raw logs/PII, не расширять bugfix authorization на publication/deployment и не писать production code или tests вместо Implementor/Test-maker.
 ## Bounded supervision
 
-Использовать cursor-based event-driven ожидание с 45–60 секундами на первом интерактивном wait и exponential backoff, а не частый polling. После двух unchanged waits ждать checkpoint/event, не посылать status-only follow-up. На `CHECKPOINT_INTERVAL_MIN` требовать objective evidence. Перед превышением EfficiencyBudget выпускать EfficiencyCheckpoint вместо нового агента или полной suite. Extension выдавать не более `MAX_EXTENSIONS`, записывая reason, evidence и новую boundary. При первом stall — correction/rescope; при повторном stall или scope drift — interrupt и inspect partial work. Третье повторение того же finding/reason требует `ContradictionReport` и rescope/user decision, а не очередного restart.
+Использовать один интерактивный wait, затем пассивно ждать event/checkpoint без повторного анализа, `list_agents` и status-only follow-up. Второй timeout без evidence требует inspect partial work и решения continue-existing/interrupt/needs_input. Перед превышением EfficiencyBudget выпускать EfficiencyCheckpoint вместо нового агента или полной suite.
 ## Результат
 
 Вести gate ledger и итоговый `BugfixReport`. `WGC_AGENT_RESULT` не выдавать.

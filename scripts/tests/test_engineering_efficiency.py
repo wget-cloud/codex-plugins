@@ -10,7 +10,7 @@ PLUGIN = ROOT / "plugins" / "wget-cloud-implementation"
 class EngineeringEfficiencyTests(unittest.TestCase):
     def test_version_and_service_tier_policy(self):
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
-        self.assertEqual(manifest["version"], "9.2.0")
+        self.assertEqual(manifest["version"], "9.2.1")
 
         hook = (PLUGIN / "hooks" / "wgc_hooks.py").read_text()
         for obsolete_gate in (
@@ -75,7 +75,7 @@ class EngineeringEfficiencyTests(unittest.TestCase):
             self.assertIn("critical", test_maker.casefold())
 
         bugfix = (PLUGIN / "skills" / "wgc-bugfix" / "references" / "task-assessment.md").read_text()
-        self.assertIn("Bugfix сохраняет независимый Test-maker", bugfix)
+        self.assertIn("Обычные `add/update` tests принадлежат Implementor", bugfix)
 
     def test_compact_coordination_routes_are_explicit(self):
         source = ROOT / "plugin-src" / "wget-cloud-implementation" / "policies"
@@ -85,6 +85,17 @@ class EngineeringEfficiencyTests(unittest.TestCase):
         self.assertIn("ReviewBundle", policy)
         self.assertIn("STOP_AFTER_BOUNDARY", policy)
         self.assertIn("не Full автоматически", assessment)
+
+    def test_startup_defaults_are_enforced_without_a_profile(self):
+        source = ROOT / "plugin-src" / "wget-cloud-implementation" / "policies"
+        coordination = (source / "coordination-efficiency.md").read_text()
+        routing = (source / "model-routing.md").read_text()
+        self.assertIn("максимум 3 assignments", coordination)
+        self.assertIn("10 coordination decisions", coordination)
+        self.assertIn("одним correction batch", coordination)
+        self.assertIn("полный pipeline не перезапускается", coordination)
+        self.assertIn("размер задачи сам по себе не разрешает Sol", routing)
+        self.assertNotIn("Startup/Fast", coordination)
 
 
 if __name__ == "__main__":

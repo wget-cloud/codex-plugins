@@ -1,6 +1,6 @@
 # Wget Cloud Development Plugin
 
-Версия 1.0.7 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
+Версия 1.0.8 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
 
 | Skill | Назначение |
 |---|---|
@@ -11,9 +11,9 @@
 
 ## Runtime policy
 
-Роли используют минимально достаточную GPT-5.6 lane из registry. Terra/medium допустима для Light/Standard orchestration, Sol/medium — для Full и сложных critical routes; effort выше `medium` не используется без явного запроса пользователя. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`, а полный fork истории запрещён. DecisionSnapshot и ResumeCapsule переживают compaction, assignment ledger исключает дубли, а immutable diff review, selective invalidation и ступени T0–T3 сокращают повторный анализ и дорогие проверки без ослабления независимых gates.
+Стандартный workflow ориентирован на скорость и экономный расход токенов без отдельного профиля: один Implementor на Terra/medium, inline assessment/RiskMatrix и targeted checks. Reviewer либо один specialist добавляется только для конкретного нетривиального риска. Sol/medium требует подтверждённого blocker/critical escalation и не назначается всей команде из-за Full/large scope; effort выше `medium` запрещён.
 
-Перед первым production write Full workflow один раз на сервис замораживает cross-slice contracts, auth/tenant semantics, ownership и compatibility. Большие сервисы выполняются траншами связанных RPC/behavior families, а не отдельным полным role pipeline на каждый handler. Implementor пишет production code и обычные slice-local tests; отдельный Test-maker владеет только действительно независимыми protected regression/contract/security tests. Дорогие T2/T3 проверки, immutable snapshot и independent gates повторяются только после релевантной invalidation.
+На slice действует жёсткий default budget: максимум 3 assignments, 10 coordination decisions, один unchanged wait без анализа и один correction/recheck. Implementor пишет production code и 2–5 минимальных tests вместе с ним. Correction возвращается тому же агенту; полный role pipeline после finding не перезапускается. Test-maker используется только для protected critical baseline, а T2 запускается один раз на service/release boundary по repository requirement.
 
 Каждое назначение проходит spawn preflight с явными `model` и `reasoning_effort`; наследование модели и `fork_turns: all` считаются contract violation. EfficiencyBudget отдельно считает назначения, retries, coordination decisions, unchanged waits, passive wait time, дорогие проверки и rework. Неизменившийся wait не запускает повторный анализ или status-only follow-up. На границе сервиса workflow выпускает компактный ServiceHandoff и выполняет явный `STOP_AFTER_SERVICE`.
 

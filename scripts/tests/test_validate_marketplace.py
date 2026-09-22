@@ -254,11 +254,11 @@ class AgentModelRoutingValidationTests(unittest.TestCase):
         )
         self.assert_error("unknown model lane")
 
-    def test_orchestrator_must_use_frontier_lane(self) -> None:
+    def test_orchestrator_must_not_use_economy_lane(self) -> None:
         self.build_fixture(
-            rows=(("Orchestrator", "balanced", "n/a"), ("Implementor", "economy", "implementor"))
+            rows=(("Orchestrator", "economy", "n/a"), ("Implementor", "economy", "implementor"))
         )
-        self.assert_error("orchestrator must use frontier")
+        self.assert_error("orchestrator must use balanced or frontier")
 
     def test_legacy_implicit_lanes_fail(self) -> None:
         for lane in ("main-only", "inherit"):

@@ -36,7 +36,7 @@ Architect указывает `minimum_test_criticality` и `plan_revision`. Test
 - для `add/update` — `TestPlan` с matching action, `test_ownership`, непустыми bounded exact runnable `commands`, expected/actual baseline и exact test paths; при `protected_test_maker` обязательны фактически совпавшие `protected_hashes` с identical canonical keyset, а при `implementor` protected keyset пуст и Reviewer проверяет добавленный тест в общей `DIFF_IDENTITY`;
 - для `none` — только evidence plan; искусственный `TestPlan` и test commit не создаются.
 
-`none` не отменяет repository/CI suites и module gates: `go test -race ./...`, `go vet ./...`, `golangci-lint run`, exact coverage command/threshold из workflows и `services.json`, `go build ./cmd/...`, а также применимые Buf generation/breaking, consumer, affected-matrix, image/security и GitOps checks.
+`none` не отменяет фактические repository/CI gates. Полные race/vet/lint/build/coverage и применимые Buf/consumer checks выполняются один раз на service boundary, когда этого требует repository policy; они не повторяются на каждом tranche.
 
 ## Машинный marker Test-maker
 

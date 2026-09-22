@@ -1,6 +1,6 @@
 # Full workflow details
 
-Этот reference загружается только для Full. Для Light/Standard используй [TaskAssessment](task-assessment.md). В Full запускаются применимые роли по сигналам, а не все специалисты каталога. [Coordination contract](coordination-efficiency.md) предотвращает дублирование назначений и циклы; [Verification](verification.md) исключает повторные проверки без нового основания.
+Этот reference загружается только для Full. Full меняет глубину планирования, но не default team: на tranche остаётся один Terra Implementor, а Reviewer либо один specialist добавляется только по конкретному риску. Diagram ниже — каталог возможных переходов, не обязательная последовательность. Лимит 3 assignments и один correction batch из [coordination contract](coordination-efficiency.md) имеет приоритет; полный pipeline после finding не перезапускается.
 
 # Конвейер реализации
 
@@ -158,13 +158,13 @@ TestAssessment сначала проверяет существующие tests 
 
 ### 7. Independent review
 
-Reviewer проверяет корректность, безопасность, regressions и адекватность обычных tests. Architecture guardian отдельно проверяет diff только когда tranche меняет frozen placement, dependency direction, ownership, public API/versioning strategy или другой architecture concern. Неизменившийся service-level plan approval и прошлые незатронутые diff findings не требуют нового Guardian assignment.
+Для bounded candidate проверку выполняет Orchestrator. Один Reviewer нужен только для нетривиального risk/diff и получает единый ReviewBundle. Architecture guardian заменяет обычного Reviewer только когда tranche меняет frozen placement, dependency direction, ownership или public compatibility; параллельный второй review требует отдельно доказанной независимости.
 
 Если diff стабилен, один раз зафиксируй `DIFF_IDENTITY` и запусти применимые read-only reviews параллельно. Совместимые code/architecture/security/contract/data concerns можно объединить в один `ReviewBundle` независимого reviewer с отдельным verdict по каждому concern; отдельный specialist нужен только при требуемой независимости или особом evidence boundary. После правки создай новую identity и сбрось только approvals, зависящие от изменённого concern.
 
 ### 8. QA и integration
 
-QA запускается после reviewer approval, когда транш меняет critical externally observable behavior, либо один раз на integrated service candidate. Для внутреннего scaffold/docs/mechanical tranche отдельный QA-agent не нужен: применимое evidence проверяет Reviewer/Orchestrator. Найденный product defect возвращается implementor; дефект protected test — test-maker; архитектурная причина — architect, затем implementor.
+Отдельный QA-agent не запускается на обычный tranche. Targeted behavior проверяет Implementor, затем Orchestrator/Reviewer; QA допустим один раз на integrated service candidate или вместо Reviewer для конкретного externally observable risk. Найденные defects объединяются в один correction batch существующему Implementor.
 
 Integration gate выполняет оркестратор:
 

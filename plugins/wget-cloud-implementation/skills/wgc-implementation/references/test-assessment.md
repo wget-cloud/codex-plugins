@@ -1,6 +1,6 @@
 # Адаптивная политика тестирования
 
-Test-maker обязателен для Full critical/protected invariants; Light/Standard оценивает Task Assessor. Обычные slice-local tests пишет Implementor и Reviewer проверяет их вместе с diff. До production implementation владелец assessment выпускает `TestAssessment`, выбирая `add | update | reuse | none` и `test_ownership: implementor | protected_test_maker | n/a`; после изменения scope, плана, acceptance, protected tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
+Test-maker допустим только для protected critical invariant, где независимый baseline materially снижает риск; Full сам по себе его не требует. Обычные slice-local tests пишет Implementor, а Orchestrator или назначенный Reviewer проверяет их вместе с diff. До production implementation владелец assessment выпускает компактный `TestAssessment`, выбирая `add | update | reuse | none` и `test_ownership: implementor | protected_test_maker | n/a`; после изменения scope, плана, acceptance, protected tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
 
 ## Критичность
 
@@ -36,7 +36,7 @@ Architect указывает `minimum_test_criticality` и `plan_revision`. Test
 - для `add/update` — `TestPlan` с matching action, непустыми bounded exact runnable `commands`, expected/actual baseline и exact test paths; при `protected_test_maker` обязательны существующие файлы и matching `protected_hashes`, при `implementor` protected hashes отсутствуют и test проверяется в общей `DIFF_IDENTITY`;
 - для `none` — только evidence plan; искусственный `TestPlan` и test commit не создаются.
 
-`none` не отменяет CI suites, repository coverage thresholds, typecheck, lint, build, proto/Prisma generation, consumer/contract/security/GitOps checks, применимые по TaskAssessment Reviewer, Architecture Guardian или QA. Backend сохраняет текущие 90%+ thresholds; около 80% — лишь необязательный ориентир для измеримого noncritical code, не новый CI floor.
+`none` не отменяет фактические repository/CI gates и targeted contract/security/GitOps checks. Reviewer, Architecture Guardian и QA не становятся обязательными без конкретного risk signal. Не повышай coverage сверх существующего repository threshold в рамках обычного slice.
 
 ## Машинный marker Test-maker
 
@@ -54,4 +54,4 @@ V2/v3 мигрируются в v4 с сохранением безопасно�
 
 ## Владелец в v7
 
-В Light/Standard TestAssessment выпускает Task Assessor вместе с TaskAssessment; add/update используют `test_ownership=implementor`. Full floor принадлежит Architect, а critical/protected add/update — Test-maker. В task-creation политика provisional. [Команда](task-assessment.md), [повторное использование проверок](verification.md).
+Во всех execution modes TestAssessment выпускает Task Assessor вместе с TaskAssessment; обычные add/update используют `test_ownership=implementor`. `protected_test_maker` выбирается только для явно защищённого critical baseline. В task-creation политика provisional. [Команда](task-assessment.md), [повторное использование проверок](verification.md).

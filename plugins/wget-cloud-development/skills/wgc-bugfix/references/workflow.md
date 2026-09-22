@@ -1,6 +1,6 @@
 # Full workflow details
 
-Этот reference загружается только для Full. Для Light/Standard используй [TaskAssessment](task-assessment.md). В Full запускаются применимые роли по сигналам, а не все специалисты каталога. [Coordination contract](coordination-efficiency.md) предотвращает дублирование назначений и циклы; [Verification](verification.md) исключает повторные проверки без нового основания.
+Этот reference загружается только для Full. Full меняет глубину исследования, но не default team: один Terra Implementor исправляет подтверждённую причину и добавляет минимальный regression test. Investigator, Reviewer либо один specialist добавляется только при конкретной неопределённости/риске. Лимит 3 assignments и один correction batch из [coordination contract](coordination-efficiency.md) имеет приоритет; полный pipeline после finding не перезапускается.
 
 # Bugfix workflow
 

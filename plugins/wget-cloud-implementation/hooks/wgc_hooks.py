@@ -2081,8 +2081,6 @@ def normalize_test_assessment(
         return None, "reuse/none TestAssessment requires test_ownership=n/a"
     if disposition in {"add", "update"} and ownership == "n/a":
         return None, "add/update TestAssessment requires implementor or protected_test_maker ownership"
-    if criticality == "critical" and disposition in {"add", "update"} and ownership != "protected_test_maker":
-        return None, "critical add/update requires protected_test_maker ownership"
     normalized["test_criticality"] = criticality
     normalized["test_disposition"] = disposition
     normalized["test_ownership"] = ownership
@@ -2510,8 +2508,11 @@ def epic_item_gaps(state: Dict[str, Any]) -> List[str]:
         task = teams.active(state, item.get('item_id'))
         item_state = {**state, 'profile': 'epic-implementation', 'subagent_results': [r for r in state.get('subagent_results', []) if r.get('item_id') == item['item_id']]}
         required = teams.required_gates('epic-implementation', task)
-        if task and active_test_assessment(state, item['item_id']) is None:
+        item_assessment = active_test_assessment(state, item['item_id'])
+        if task and item_assessment is None:
             required.add('test-assessment')
+        elif item_assessment and item_assessment.get('test_ownership') == 'protected_test_maker':
+            required.add('test-maker')
         observed = approved_agent_gates(item_state, str(state.get('current_revision', '')))
         missing = sorted(required - observed)
         if missing:
@@ -2927,7 +2928,7 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         enabled = ", ".join(name for name, value in routes.items() if value) or "local"
         return additional_context(
             "UserPromptSubmit",
-            f"WGC bugfix workflow activated {mode}; routes={enabled}. Build a redacted BugCase, reproduce before patching, support the root cause with scoped evidence, protect regression tests, then use TaskAssessment to select applicable independent gates. Runtime inspection is read-only and deployment still requires explicit human approval.",
+            f"WGC bugfix workflow activated {mode}; routes={enabled}. Build a redacted BugCase, run one compact Terra Task Assessor, reproduce before patching with minimal scoped evidence, then use one Terra Implementor for fix plus regression test. Use the third assignment only for one risk-driven Reviewer or specialist; protected Test-maker is exceptional. Runtime inspection is read-only and deployment still requires explicit human approval.",
         )
     if profile == "task-creation":
         mutation = "publish only through an exact MutationPlan" if project.get("mutation_requested") else "remain read-only until publication is requested"
@@ -2938,11 +2939,11 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     if profile == "epic-implementation":
         return additional_context(
             "UserPromptSubmit",
-            f"WGC epic-implementation workflow activated {mode}. Research the full YouTrack epic and plan every task before execution; freeze batches of up to 100 issue IDs, build dependency waves, require per-item TaskAssessment and its applicable gates, and synchronize statuses only after evidence.",
+            f"WGC epic-implementation workflow activated {mode}. Research the full YouTrack epic and plan every task before execution; freeze batches of up to 100 issue IDs, then execute each item slice with one Terra Implementor and at most one risk-driven Reviewer or specialist. Do not restart a full role pipeline after findings; synchronize statuses only after evidence.",
         )
     return additional_context(
         "UserPromptSubmit",
-        f"WGC implementation workflow activated {mode}. Build a WorkItem, preserve baseline dirty paths, and launch Task Assessor first, then only the selected Light/Standard/Full roles.",
+        f"WGC implementation workflow activated {mode}. Build a WorkItem, preserve baseline dirty paths, run one compact Terra Task Assessor, then one Terra Implementor. Use the third assignment only for one risk-driven Reviewer or specialist; do not restart the full role pipeline after a finding.",
     )
 
 
@@ -3004,7 +3005,7 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> O
                 else ""
             )
         )
-    message += " Use the assignment's explicit model, reasoning effort and fork_turns; never inherit implicitly. Task Assessor returns task_assessment; every assigned downstream result repeats its assessment_revision. Load only assigned role/domain references."
+    message += " Use the assignment's explicit model, reasoning effort and fork_turns; never inherit implicitly. Default development agents use Terra; Sol requires recorded blocker evidence and an escalation reason. Reuse the current agent for one correction batch instead of spawning a replacement. Task Assessor returns task_assessment; every assigned downstream result repeats its assessment_revision. Load only assigned role/domain references."
     return additional_context("SubagentStart", message)
 
 
@@ -3081,16 +3082,9 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
                         raise ValueError('TaskAssessment disagrees with frozen ' + field)
             elif normalized_task.get('item_id'):
                 raise ValueError('item identity is only valid for epic work')
-            # The assessor may plan ordinary implementation tests but never author them.
-            # Bugfix add/update remains independently owned by Test-maker.
-            assessor_owns_test_plan = (
-                profile != 'task-creation'
-                and normalized_task['mode'] != 'full'
-                and not (
-                    profile == 'bugfix'
-                    and normalized_task['test_disposition'] in {'add', 'update'}
-                )
-            )
+            # The assessor plans tests but never authors them. Implementor owns
+            # ordinary tests; protected_test_maker remains an explicit exception.
+            assessor_owns_test_plan = profile != 'task-creation'
             if assessor_owns_test_plan:
                 test_state = json.loads(json.dumps(state))
                 bind_task_plan(test_state, normalized_task)
@@ -3099,8 +3093,8 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
                     raise ValueError(test_error)
                 if assessor_test['test_disposition'] != normalized_task['test_disposition'] or assessor_test['test_criticality'] != normalized_task['risk'] or assessor_test['assessed_paths'] != normalized_task['assessed_paths']:
                     raise ValueError('TaskAssessment and TestAssessment disagree')
-                if normalized_task['test_disposition'] in {'add', 'update'} and assessor_test['test_ownership'] != 'implementor':
-                    raise ValueError('standard add/update TaskAssessment requires implementor-owned tests')
+                if normalized_task['test_disposition'] in {'add', 'update'} and assessor_test['test_ownership'] not in {'implementor', 'protected_test_maker'}:
+                    raise ValueError('add/update TaskAssessment requires an explicit test owner')
             elif result.get('assessment') is not None:
                 raise ValueError('this route requires a separate Test-maker or no execution tests')
             result = {k: result[k] for k in ('role', 'verdict', 'phase', 'input_revision')}
@@ -3889,16 +3883,17 @@ def handle_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Di
         required_gates = teams.required_gates(profile, task)
         if profile == 'task-creation' and project.get('mutation_requested'):
             required_gates.add('project-publish')
-        if profile == 'bugfix':
-            for route, gate in (('security', 'security'), ('contract', 'contract'), ('deployment', 'deployment')):
-                if routes.get(route):
-                    required_gates.add(gate)
+        if profile == 'bugfix' and routes.get('deployment'):
+            required_gates.add('deployment')
     else:
         required_gates.add('task-assessor')
     if profile in {'implementation', 'bugfix'} and project.get('mutation_requested'):
         required_gates.add('project-sync')
-    if task and profile != 'task-creation' and active_test_assessment(state) is None:
+    test_assessment = active_test_assessment(state)
+    if task and profile != 'task-creation' and test_assessment is None:
         required_gates.add('test-assessment')
+    elif test_assessment and test_assessment.get('test_ownership') == 'protected_test_maker':
+        required_gates.add('test-maker')
     current_revision = workspace_identity(context)
     state['current_revision'] = current_revision
     if task and (task['mode'] == 'light' or profile == 'bugfix' and task['mode'] != 'full'):

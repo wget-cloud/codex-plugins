@@ -18,11 +18,11 @@ description: Coordinate tracker-independent, evidence-driven diagnosis and repai
 
 ## Этот процесс
 
-До production fix докажи observed/expected, reproduction и supported RCA. Light/Standard: Orchestrator независимо проверяет baseline/причину/результат. Full: специализированные triage/investigator/reproducer/RCA reviewer. Unknown defect не исправляется догадкой. Runtime inspection read-only и scoped.
+До production fix зафиксируй observed/expected и минимальное evidence причины. Light/Standard: Orchestrator проверяет baseline/причину/результат, а Implementor добавляет небольшой regression test вместе с fix, если он полезен. Full не запускает каталог ролей автоматически: investigator/reproducer/RCA reviewer нужны только при действительно неоднозначной причине. Runtime inspection read-only и scoped.
 
 ## Исполнение и готовность
 
-Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget, assignment/gate ledger и transitions, но не пишет production code/tests. После compaction сначала восстанавливается ledger; независимый Guardian freeze нужен только для Full, multi-slice или изменённой architecture/ownership/compatibility boundary. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. Сохраняй independence исполнителя, protected regression-test author и reviewer; Architect не утверждает и не review собственный plan/diff. Максимум три активных субагента, fork none; каждый spawn обязан явно передать model и reasoning effort согласно [model/context policy](references/model-routing.md).
+Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule и EfficiencyBudget, но не пишет production code/tests. Стандартный workflow — один Implementor на Terra и targeted verification; один Reviewer либо specialist добавляется только по конкретному риску. Отдельный Test-maker нужен лишь для protected critical baseline. Максимум три assignments на fix, 10 coordination decisions и один correction batch существующему Implementor; полный pipeline не перезапускается. Sol требует подтверждённого blocker escalation. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision.
 
 Сохраняй пользовательские изменения. Каждый `services/<name>`, `platform` и `contracts` — отдельный Go module внутри одного Git repository; module boundary не является отдельной Git history. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 

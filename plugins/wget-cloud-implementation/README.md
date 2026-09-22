@@ -1,6 +1,6 @@
 # Wget Cloud Engineering Plugin
 
-Версия 9.2.0 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
+Версия 9.2.1 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
 
 | Skill | Назначение |
 |---|---|
@@ -13,11 +13,11 @@
 
 ## Runtime policy
 
-Service tier не является quality gate и не блокирует запуск. Все роли используют явную минимально достаточную GPT-5.6 lane: Luna/low для простых bounded-задач, Terra/medium для обычной инженерной работы и orchestration Light/Standard, Sol/medium — только для Full/critical orchestration, сложной архитектуры, RCA и critical review gates. Для `gpt-5.6-sol` уровни `high`, `xhigh`, `max` и `ultra` запрещены. Каждое назначение явно задаёт `model`, `reasoning_effort` и `fork_turns=none`; `inherit` и полный fork истории не используются. Одновременно допускается максимум три субагента. DecisionSnapshot, ResumeCapsule, assignment ledger и bounded EfficiencyBudget предотвращают потерю контекста, дублирующие назначения и бесконечные wait/review циклы.
+Service tier не является quality gate. Стандартная разработка использует компактного Task Assessor и одного Implementor на Terra/medium. Третий assignment — Reviewer либо один specialist только для конкретного риска. Sol/medium допустим лишь при записанном blocker/critical escalation, а Full/large scope сам по себе его не разрешает; уровни Sol выше `medium` запрещены.
 
 ## Команды и профили
 
-Отдельный Task Assessor выбирает сложность, риск, domains, tests и required gates. Light использует одного Implementor и проверку Orchestrator. Standard выполняется короткими вертикальными slices: Implementor пишет код и обычные тесты, Reviewer работает в balanced lane, а QA запускается только при observable-risk signal. Test-maker сохраняется для bugfix regression tests и critical/protected сценариев. Full добавляет только применимые архитектурные и специализированные gates. CheckPlan назначает одного владельца дорогих T2/T3 проверок и не повторяет полный suite после каждого локального diff. Security, данные, миграции, контракты, concurrency, incident и GitOps не допускают Light. В epic оценка и gates принадлежат каждому item; Product outcome и Project reconciliation сохраняются, а HandoffCapsule переносит компактный контекст между партиями.
+TaskAssessment выполняется один раз и переиспользуется между slices. На implementation/bugfix/item slice действует default budget: максимум 3 assignments, 10 coordination decisions, один unchanged wait без анализа и один correction/recheck. Implementor пишет код и минимальные tests; correction возвращается тому же агенту. Reviewer получает единый ReviewBundle, specialist при необходимости заменяет его. Test-maker остаётся только при явном `test_ownership=protected_test_maker`. Полный pipeline после finding не перезапускается.
 
 Backend, Frontend, Site, Front-lib и GitOps — профили знаний внутри процессов, не новые skills. Data & Migration Reviewer и Reliability Reviewer дополняют существующие Browser QA, Security Reviewer и Contract QA. Domain profile не расширяет permissions роли. Новые тесты защищают конкретный invariant; existing evidence переиспользуется до релевантного изменения.
 

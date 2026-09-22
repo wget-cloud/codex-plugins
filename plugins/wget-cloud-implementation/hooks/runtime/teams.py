@@ -97,24 +97,25 @@ def required_gates(profile, task):
             gates.add('architect')
         return gates
     gates.add('implementor')
-    if mode != 'light':
+    # One risk-driven read-only gate replaces a reviewer bundle; do not fan out
+    # every matching specialist or replay a full pipeline for one slice.
+    specialist = None
+    for matching, gate in (
+        ({'security', 'money'}, 'security'),
+        ({'data', 'migration'}, 'data'),
+        ({'contract'}, 'contract'),
+        ({'concurrency', 'reliability'}, 'reliability'),
+        ({'browser'}, 'browser'),
+        ({'incident'}, 'root-cause'),
+        ({'architecture', 'cross-repo'}, 'architect'),
+    ):
+        if signals & matching:
+            specialist = gate
+            break
+    if specialist:
+        gates.add(specialist)
+    elif mode == 'full':
         gates.add('reviewer')
-    if mode == 'full':
-        gates |= {'architect', 'architecture-plan'}
-    if signals & {'architecture', 'cross-repo', 'gitops'}:
-        gates.add('architecture')
-    if mode != 'light' and signals & {'behavior', 'browser', 'security', 'money', 'contract', 'incident'}:
-        gates.add('qa')
-    if profile == 'bugfix' and (mode == 'full' or task['test_disposition'] in {'add', 'update'}):
-        gates.add('test-maker')
-    elif profile in {'implementation', 'epic-implementation'} and task['risk'] == 'critical':
-        gates.add('test-maker')
-    if profile == 'bugfix' and mode == 'full':
-        gates |= {'bug-triage', 'evidence', 'root-cause', 'root-cause-review', 'reproducer'}
-    mapping = {'security': 'security', 'contract': 'contract', 'data': 'data', 'migration': 'data', 'concurrency': 'reliability', 'reliability': 'reliability'}
-    gates |= {gate for signal, gate in mapping.items() if signal in signals}
-    if 'browser' in signals and mode != 'light':
-        gates.add('browser')
     if 'gitops' in signals or 'gitops' in task['domains']:
         gates |= {'devops', 'infrastructure'}
     if profile == 'epic-implementation':

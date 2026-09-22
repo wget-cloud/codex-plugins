@@ -1,6 +1,6 @@
 # Координация без повторной работы
 
-Этот контракт обязателен до первого назначения субагента. Он дополняет role contracts и gates, но не ослабляет независимость ролей или repository requirements.
+Этот контракт обязателен до первого назначения субагента. Стандартное поведение оптимизирует скорость поставки и расход токенов: один write-owner, targeted checks и только доказанно нужные независимые gates. Отдельного fast/startup профиля нет.
 
 ## DecisionSnapshot
 
@@ -16,7 +16,7 @@
 
 Large service или более одного независимо проверяемого behavior family разделяется на bounded vertical WorkItems/DAG slices. Один slice должен давать связный contract/provider/consumer либо законченный service behavior и собственный completion condition. Не переносить весь сервис с десятками RPC одним непрерывным assignment/turn. Следующий зависимый slice начинается после integration gate предыдущего; discovery всего сервиса не означает разрешение реализовать весь найденный scope.
 
-Для migration большого gRPC-сервиса сначала один раз собери полный service inventory и freeze-пакет, затем группируй по 5–10 связанных RPC или одной behavior family. Не запускай полный plan/test/implementation/review/guardian/QA pipeline отдельно для каждого handler, файла, документа или внутреннего scaffold-коммита. Один транш по умолчанию имеет одного write-owner и одного independent Reviewer; остальные роли добавляются только по risk signal либо invalidated concern. Service-level Architect и Guardian plan переиспользуются, пока frozen decisions не изменились.
+Для migration большого gRPC-сервиса сначала один раз собери полный service inventory и freeze-пакет, затем группируй по 5–10 связанных RPC или одной behavior family. Не запускай полный plan/test/implementation/review/guardian/QA pipeline отдельно для каждого handler, файла, документа или внутреннего scaffold-коммита. Один транш по умолчанию имеет одного write-owner; independent Reviewer добавляется только при нетривиальном risk/diff, а specialist — только вместо дополнительного общего review по наиболее важному risk signal. Service-level Architect и Guardian plan переиспользуются, пока frozen decisions не изменились.
 
 Изменение frozen auth, contract, ownership, data или compatibility решения создаёт новую revision, останавливает зависимый write slice и инвалидирует только затронутые plan/test/implementation/review evidence. Продолжать реализацию поверх `FREEZE_STATUS: pending|stale` запрещено.
 
@@ -51,9 +51,9 @@ NEXT_SERVICE_ALLOWED
 
 ## EfficiencyBudget
 
-До execution задай на WorkItem или транш: `MAX_AGENT_ASSIGNMENTS`, `MAX_COORDINATION_DECISIONS`, `MAX_UNCHANGED_WAIT_STREAK`, `MAX_PASSIVE_WAIT_MINUTES`, `MAX_EXPENSIVE_CHECKS`, `MAX_REWORK_ROUNDS` и `CHECKPOINT_BOUNDARY`. Default обычного транша: 4 assignments, 2 unchanged waits без нового анализа, 1 дорогая T2 suite, 1 correction/recheck; specialist gate по новому risk signal требует записанного budget extension. Бюджет не ослабляет обязательный safety gate и не превращает незавершённую работу в success.
+До execution задай на WorkItem или транш: `MAX_AGENT_ASSIGNMENTS`, `MAX_COORDINATION_DECISIONS`, `MAX_UNCHANGED_WAIT_STREAK`, `MAX_PASSIVE_WAIT_MINUTES`, `MAX_EXPENSIVE_CHECKS`, `MAX_REWORK_ROUNDS` и `CHECKPOINT_BOUNDARY`. Default: максимум 3 assignments, 10 coordination decisions, 1 unchanged wait без нового анализа, 10 минут passive wait, 1 дорогая T2 suite и 1 correction/recheck. Нормальный маршрут использует одного Implementor; второй assignment — Reviewer только при нетривиальном risk/diff, третий — один specialist вместо набора gates. Сложность сама по себе не разрешает полный role pipeline.
 
-Перед превышением бюджета останови новые назначения и выпусти `EfficiencyCheckpoint`: полученный diff/evidence, причина расхода, дубликаты, оставшиеся риски и решение `continue | merge-scope | split | needs_input`. Не создавай Token Auditor и не трать новый агент только на подсчёт. Если за одну checkpoint boundary нет meaningful diff/evidence, не продолжай тем же assignment бесконечно.
+Перед превышением бюджета останови новые назначения и выпусти `EfficiencyCheckpoint`: полученный diff/evidence, причина расхода, дубликаты, оставшиеся риски и решение `continue-existing | merge-scope | split | needs_input`. Correction отправляй существующему Implementor через `followup_task` компактной delta; replacement запрещён, пока текущий агент доступен. Не создавай Token Auditor и не трать новый агент только на подсчёт.
 
 ## Assignment ledger и дедупликация
 
@@ -73,23 +73,23 @@ Finding получает стабильный ключ `role + invariant + locat
 
 `FORK_TURNS: none` — норма; `all` запрещён. Положительное N допустимо только для минимального незаменимого фрагмента разговора, который нельзя безопасно выразить артефактом. Reviewer получает собственный компактный контекст и immutable diff, а не историю implementor.
 
-После назначения используй cursor-based event-driven ожидание. Первое интерактивное ожидание ограничь 45–60 секундами. Неизменившийся результат ведёт прямо к следующему пассивному wait без повторного чтения thread/plan, reasoning-цикла, `list_agents` или сообщения агенту; считай время отдельно от coordination decisions. После двух unchanged waits обнови только компактный supervision checkpoint и жди event/границу, не создавая status-only follow-up. Пользовательский progress update не является input агенту.
+После назначения используй cursor-based event-driven ожидание. После одного unchanged wait переходи к пассивному ожиданию без повторного чтения thread/plan, reasoning-цикла, `list_agents`, progress update или status-only follow-up. Второй timeout без нового evidence требует inspect partial result и решения `continue-existing | interrupt | needs_input`, а не нового polling loop.
 
 ## Вертикальные slices и freeze
 
 Implementor получает минимальный связный vertical slice, который можно собрать и проверить: contract/provider/consumer path либо законченный service behavior. Не дроби работу по слоям только ради числа агентов. Параллельные write-slices разрешены лишь без общего repository/contract owner.
 
-Implementor владеет production code и обычными unit/integration tests своего транша. Test-maker нужен отдельно только для TestAssessment и protected tests, независимость которых оправдана critical security/tenant/data/migration/public-contract/concurrency invariant или доказанным regression risk. Не защищай весь test tree и не создавай отдельного test-maker ради механического happy-path теста, который reviewer может проверить вместе с diff.
+Implementor владеет production code и минимальными unit/integration tests своего транша. Orchestrator выполняет inline `RiskMatrix`; отдельные Architect, Task Assessor, Guardian и Test-maker назначаются только когда без независимого решения нельзя безопасно продолжать. Test-maker нужен лишь для protected critical baseline, а не для обычного happy path или каждого bugfix.
 
 Orchestrator координирует и проверяет evidence, но не пишет production code или tests. Architect не выполняет plan/diff-review собственного решения. Один `Test-maker owner` владеет TestAssessment/protected paths для exact `test_plan` revision; replacement требует `REPLACEMENT_REASON`, нового `TEST_OWNER_ID` и invalidation прежнего TestAssessment/protected hashes. Эти роли нельзя объединять даже после compaction или нехватки слотов.
 
-Перед параллельными Reviewer, Architecture Guardian и conditional specialists зафиксируй `DIFF_IDENTITY` и запрети writes. Любая правка создаёт новую identity и инвалидирует только зависящие от изменённого concern результаты.
+Перед read-only gate зафиксируй `DIFF_IDENTITY`. По умолчанию bounded candidate проверяет Orchestrator. Если review оправдан, один Reviewer получает `ReviewBundle`; отдельный specialist заменяет обычного Reviewer, кроме подтверждённой необходимости независимости. Findings исправляются одним correction batch, полный pipeline не перезапускается.
 
 ## Ступени проверки и evidence cache
 
 - `T0`: узкий compile/unit check после небольшой правки.
 - `T1`: affected module/service/consumer checks после завершения slice.
-- `T2`: полные repository-required tests, race/vet/lint/build/coverage после diff freeze.
+- `T2`: полные repository-required tests, race/vet/lint/build/coverage один раз на service/release boundary, если это требует repository policy или пользователь.
 - `T3`: image/scan/contract smoke/integration и delivery evidence один раз для release candidate, если применимо.
 
 Повторяй только invalidated ступени. Cache key включает check ID, tree/diff identity, environment fingerprint, scoped paths и dependency/config identity. Failed run, неизвестная зависимость или изменение source/lock/config отменяет соответствующий cache entry. Ledger хранит только privacy-safe metadata, не raw commands/output.

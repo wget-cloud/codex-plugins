@@ -1,6 +1,6 @@
 # TaskAssessment и адаптивная команда
 
-TaskAssessment обязателен как артефакт. В task-creation и epic отдельный Task Assessor остаётся обязательным; в implementation/bugfix очевидный Light/Standard assessment выпускает Orchestrator, а отдельный агент нужен только для неоднозначного, Full, cross-repo или расширившегося scope. Несколько slices одной задачи/item переиспользуют assessment, пока route, acceptance, risk surface и path boundaries не изменились.
+TaskAssessment обязателен как компактный первый assignment и переиспользуется всеми slices, пока route, acceptance, risk surface и path boundaries не изменились. Он заменяет отдельные assessment/architect/test-planning роли для обычной работы и входит в общий лимит трёх назначений.
 
 ## Решение
 
@@ -8,13 +8,13 @@ TaskAssessment обязателен как артефакт. В task-creation и
 
 | Mode | Критерий | Роли реализации после оценщика |
 |---|---|---|
-| light | small + low, обратимая правка без изменения поведения/данных/контрактов | Implementor; финальная проверка Orchestrator |
-| standard | bounded изменение, включая локальный critical invariant без architecture/ownership/cross-repo изменения | Implementor + Reviewer; Test-maker/QA/specialist только по точечному signal |
-| full | large/multi-slice, архитектура, ownership/compatibility или cross-repo | Architect + Guardian plan; Implementor + Reviewer; остальные gates только по изменённым concerns |
+| light | small + low, обратимая правка без изменения поведения/данных/контрактов | Implementor; targeted проверка Orchestrator |
+| standard | bounded изменение, включая локальный critical invariant без architecture/ownership/cross-repo изменения | Implementor; Reviewer только для нетривиального risk/diff |
+| full | large/multi-slice, архитектура, ownership/compatibility или cross-repo | один предварительный Architect только если Orchestrator не может заморозить решение; затем Implementor и максимум один Reviewer/specialist на slice |
 
-Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical testing/concern gates, но не Full автоматически. Architecture, ownership/compatibility, cross-repo и large multi-slice scope требуют Full. Plan и незатронутые specialist approvals переиспользуются по selective invalidation. Неизвестный риск → `needs_evidence`; нерешённая семантика → `needs_input`. Light при неопределённости запрещён.
+Security/auth/RBAC/tenant, money, destructive data migration и public compatibility требуют точечной critical проверки, но не набора specialist gates и не Full автоматически. Для bounded contract/concurrency/reliability работы достаточно `RiskMatrix`, targeted test и одного подходящего Reviewer. Architecture, ownership/compatibility, cross-repo и large multi-slice scope требуют Full, но Full определяет планирование, а не автоматический состав команды. Plan и незатронутые approvals переиспользуются по selective invalidation.
 
-В task-creation все режимы требуют Task Assessor, Product/Project/Auditor, отдельного Effort Estimator (SP), независимого Backlog Reviewer и Orchestrator; full добавляет Architect. Малый объём не отменяет продуктовую проработку. Operator нужен только для явно разрешённой записи. В epic Project scope/reconcile и truthful sync общие, остальная команда выбирается для каждого item; Product outcome остаётся per-item. В bugfix full сохраняет triage/investigator/reproducer/RCA reviewer; light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
+В task-creation все режимы требуют Task Assessor, Product/Project/Auditor, отдельного Effort Estimator (SP), независимого Backlog Reviewer и Orchestrator; full добавляет Architect. Малый объём не отменяет продуктовую проработку. Operator нужен только для явно разрешённой записи. В epic Project scope/reconcile и truthful sync общие, остальная команда выбирается для каждого item; Product outcome остаётся per-item. В bugfix Full сам по себе не включает отдельную цепочку triage/investigator/reproducer/RCA reviewer: для incident или неоднозначной причины выбери один наиболее полезный root-cause concern в пределах бюджета. В light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
 
 ## Формат
 
@@ -38,9 +38,11 @@ WGC_AGENT_RESULT: {"role":"task-assessor","verdict":"assessed","phase":"","input
 
 Все downstream markers повторяют `assessment_revision`, epic — также item identity. Поля времени/планов в assignment — supervision, не разрешение объявить незавершённую задачу готовой.
 
-Для light/standard оценщик добавляет sibling `assessment` с полноценным TestAssessment по [test policy](test-assessment.md). Его paths, risk и disposition совпадают с TaskAssessment. При implementation/epic standard `add/update` он задаёт `test_ownership=implementor`, exact invariants/paths/commands, но не пишет тесты. Bugfix сохраняет независимый Test-maker для `add/update`; Full critical/protected assessment также выпускает отдельный Test-maker. В task-creation testing только provisional, execution assessment не нужен.
+Для implementation, epic и bugfix во всех modes оценщик добавляет sibling `assessment` с компактным TestAssessment по [test policy](test-assessment.md). Обычные `add/update` tests принадлежат Implementor. Отдельный Test-maker разрешён только когда assessment явно выбирает `test_ownership=protected_test_maker` для protected critical invariant; сам факт Full или bugfix не создаёт эту роль. В task-creation testing только provisional, execution assessment не нужен.
 
 ## Специалисты
+
+Выбирай максимум одного специалиста по наиболее высокому риску; не превращай несколько risk signals в fanout ролей. Приоритет: security/money, data/migration, contract, concurrency/reliability, browser, incident, architecture/cross-repo. Исключение — явно разрешённый GitOps delivery, где независимость DevOps и Infrastructure Reviewer обязательна.
 
 - security → Security Reviewer; contract → Contract QA;
 - data/migration → Data & Migration Reviewer;

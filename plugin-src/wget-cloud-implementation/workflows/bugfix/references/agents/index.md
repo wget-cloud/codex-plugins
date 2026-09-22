@@ -38,7 +38,7 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 EFFICIENCY_BUDGET: <max assignments/coordination decisions/unchanged waits/passive wait minutes/expensive checks/rework + checkpoint boundary>
 ```
 
-`TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное значение передай в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn; `balanced` допустима для Light/Standard, `frontier` нужна для Full/сложного critical route.
+`TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное значение передай в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и работает на `balanced`; `frontier` разрешена только узкому подтверждённому escalation.
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Не сохраняй raw prompt/logs/secrets/PII. Не меняй внешние данные, Git publication или deployment без приложенного разрешения. Не объявляй весь bugfix завершённым. При нехватке evidence остановись с допустимым blocker verdict».
 
@@ -56,7 +56,7 @@ EFFICIENCY_BUDGET: <max assignments/coordination decisions/unchanged waits/passi
 
 | Роль | Task prefix | Этап | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| Orchestrator | n/a | весь workflow | координационные действия | frontier | [orchestrator.md](orchestrator.md) |
+| Orchestrator | n/a | весь workflow | координационные действия | balanced | [orchestrator.md](orchestrator.md) |
 | Bug-triage | bug_triage | triage | нет | economy | [bug-triage.md](bug-triage.md) |
 | Bug-investigator | bug_investigator | evidence и RCA | нет | frontier | [bug-investigator.md](bug-investigator.md) |
 | Reproducer | reproducer | reproduction/characterization | только task-owned test data | balanced | [reproducer.md](reproducer.md) |
