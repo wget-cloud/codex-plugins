@@ -27,15 +27,15 @@ flowchart TD
     R --> D["Architect: design и DAG"]
     D --> AG1{"Architecture gate"}
     AG1 -- changes_requested --> D
-    AG1 -- approved --> T["Test-maker: TestAssessment"]
+    AG1 -- approved --> T["TestAssessment owner"]
     T --> IM["Implementor: один DAG slice"]
     IM --> V["Integrity и targeted verification"]
     V -- fail --> IM
     V -- pass --> CR["Reviewer"]
-    V -- pass --> AG2["Architecture guardian"]
+    V -- architecture concern changed --> AG2["Architecture guardian"]
     CR -- changes_requested --> IM
     AG2 -- changes_requested --> D
-    CR -- approved --> Q["QA"]
+    CR -- approved --> Q["Conditional QA / integration"]
     AG2 -- approved --> Q
     Q -- defect --> IM
     Q -- pass --> IN["Integration gate"]
@@ -66,9 +66,9 @@ flowchart TD
 | `test_assessment` | approved plan + acceptance revision | `implementation`, `blocked` |
 | `implementation` | TestAssessment и условный TestPlan/protected paths | `verification`, `blocked` |
 | `verification` | diff + command evidence | `review`, `implementation`, `blocked` |
-| `review` | verified diff | `qa`, `implementation`, `design`, `blocked` |
-| `qa` | reviewer + architecture approvals | `integration`, `implementation`, `blocked` |
-| `integration` | QA report | `implementation`, `ready`, `blocked` |
+| `review` | verified diff | `qa`, `integration`, `implementation`, `design`, `blocked` |
+| `qa` | reviewer + применимые architecture approvals | `integration`, `implementation`, `blocked` |
+| `integration` | применимые review/QA reports | `implementation`, `ready`, `blocked` |
 | `ready` | all application gates | `complete`, `devops`, `awaiting_deploy_approval` |
 | `devops` | DeploymentPlan | `infrastructure_review` |
 | `infrastructure_review` | k8s diff + validation | `devops`, `awaiting_deploy_approval`, `blocked` |
@@ -134,7 +134,7 @@ Architecture guardian проверяет план относительно те�
 
 ### 5. Test assessment
 
-Test-maker сначала выпускает описанный в [test-assessment.md](test-assessment.md) `TestAssessment`. Он проверяет существующие tests до новых и выбирает `add/update/reuse/none`; executable TestPlan создаётся только при `add/update`. Critical behavior требует максимального evidence изменённых happy/error/boundary/security branches и не допускает `none`.
+TestAssessment сначала проверяет существующие tests до новых и выбирает `add/update/reuse/none` и `test_ownership`. Обычные slice-local tests назначаются Implementor и проверяются Reviewer вместе с diff. Отдельный Test-maker пишет protected tests только для critical invariant, где независимый failing baseline действительно снижает риск. Не создавай отдельного test write-agent для каждого handler или механического happy path. Critical behavior требует доказательства изменённых happy/error/boundary/security branches и не допускает `none`.
 
 Сразу после его работы оркестратор фиксирует:
 
@@ -146,7 +146,7 @@ Test-maker сначала выпускает описанный в [test-assessm
 
 ### 6. Implementation slices
 
-Перед первым write заморозь affected behavior/RPC inventory и cross-slice решения: wire contract, tenant/auth semantics, data ownership, concurrency/idempotency/background work, compatibility, cutover и rollback. Exact plan revision должен иметь `FREEZE_STATUS: approved`. Implementor получает ровно один готовый bounded vertical DAG slice, а не искусственное деление по слоям или весь large service. Он не расширяет scope и не редактирует защищённые тесты. После минимального связного изменения он выполняет assessment-prescribed ступень evidence; полные repository gates выполняются после diff freeze согласно T0–T3. `none` не разрешает пропустить обязательные Go/CI/consumer/generation checks. Если contract или test scope изменился, write останавливается и инвалидируются только зависящие assessment/gates.
+Перед первым write заморозь affected behavior/RPC inventory и cross-slice решения: wire contract, tenant/auth semantics, data ownership, concurrency/idempotency/background work, compatibility, cutover и rollback. Exact plan revision должен иметь `FREEZE_STATUS: approved`. Для большого gRPC-сервиса этот plan/freeze создаётся один раз, после чего RPC группируются в транши по 5–10 связанных методов или одной behavior family. Implementor получает один готовый bounded vertical tranche вместе с обычными tests, а не отдельный assignment на слой/handler и не весь large service. Он не расширяет scope и не редактирует protected tests. Во время работы выполняется T0, после транша один T1, а полные T2 gates — один раз после candidate freeze. Если frozen contract/ownership/security semantics или protected-test scope изменились, write останавливается и инвалидируются только зависящие gates.
 
 После каждого write-agent оркестратор проверяет:
 
@@ -158,13 +158,13 @@ Test-maker сначала выпускает описанный в [test-assessm
 
 ### 7. Independent review
 
-Reviewer проверяет корректность, безопасность, regressions и адекватность тестов. Architecture guardian отдельно проверяет placement, dependency direction, boundaries, public API discipline и стиль проекта. Одобрение одного не заменяет другое.
+Reviewer проверяет корректность, безопасность, regressions и адекватность обычных tests. Architecture guardian отдельно проверяет diff только когда tranche меняет frozen placement, dependency direction, ownership, public API/versioning strategy или другой architecture concern. Неизменившийся service-level plan approval и прошлые незатронутые diff findings не требуют нового Guardian assignment.
 
-Если diff стабилен, зафиксируй `DIFF_IDENTITY` и только затем запускай два read-only review параллельно. После правки создай новую identity и сбрось только approvals, зависящие от изменённого concern.
+Если diff стабилен, зафиксируй `DIFF_IDENTITY` и только затем запускай применимые read-only reviews параллельно. После правки создай новую identity и сбрось только approvals, зависящие от изменённого concern.
 
 ### 8. QA и integration
 
-QA работает только после reviewer approval и post-implementation architecture approval. Он исследует поведение как внешний пользователь/интеграция и пытается найти недоказанные failure modes. Найденный product defect возвращается implementor; ошибочный/неполный тест — test-maker; архитектурная причина — architect, затем implementor.
+QA запускается после reviewer approval, когда транш меняет critical externally observable behavior, либо один раз на integrated service candidate. Для внутреннего scaffold/docs/mechanical tranche отдельный QA-agent не нужен: применимое evidence проверяет Reviewer/Orchestrator. Найденный product defect возвращается implementor; дефект protected test — test-maker; архитектурная причина — architect, затем implementor.
 
 Integration gate выполняет оркестратор:
 
@@ -175,6 +175,8 @@ Integration gate выполняет оркестратор:
 - расширенные repo-specific checks пройдены;
 - commit plan атомарен, даже если commits ещё не разрешены;
 - deployment input содержит точные immutable release identifiers.
+
+На service boundary оркестратор формирует компактный `ServiceHandoff`, закрывает assignments и check cache предыдущего сервиса и начинает следующий сервис только с inventory/revisions/remaining risks. История внутренних correction loops не передаётся следующей команде.
 
 ## Rework loops
 

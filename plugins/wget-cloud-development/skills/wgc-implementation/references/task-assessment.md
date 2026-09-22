@@ -1,6 +1,6 @@
 # TaskAssessment и адаптивная команда
 
-Отдельный Task Assessor обязателен для нового WorkItem. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы. Новое evidence в том же WorkItem сначала обрабатывается как delta: повторный полный assessment нужен только при изменении route-affecting полей, перечисленных в [coordination contract](coordination-efficiency.md).
+Отдельный Task Assessor обязателен для нового WorkItem. Несколько траншей одного service migration остаются одним WorkItem, пока route, acceptance и frozen risk surface не изменились: не запускай нового оценщика на каждый RPC family. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы. Новое evidence в том же WorkItem сначала обрабатывается как delta: повторный полный assessment нужен только при изменении route-affecting полей, перечисленных в [coordination contract](coordination-efficiency.md).
 
 ## Решение
 
@@ -10,9 +10,9 @@
 |---|---|---|
 | light | small + low, обратимая правка без изменения поведения/данных/контрактов | Implementor; финальная проверка Orchestrator |
 | standard | ограниченное изменение поведения без critical/architecture/cross-repo | Implementor, Reviewer, QA; Test-maker только add/update |
-| full | large, архитектура, cross-repo или critical | Architect, Guardian plan/diff, Test-maker, Implementor, Reviewer, QA и специалисты по сигналам |
+| full | large, архитектура, cross-repo или critical | Service-level Architect + Guardian plan один раз; на транш Implementor + Reviewer; Test-maker, Guardian diff, QA и специалисты только по critical/изменённым concerns |
 
-Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical/full. Architecture и cross-repo требуют full. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Не запускать полный штат автоматически из-за нехватки контекста. Light при неопределённости запрещён.
+Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical/full. Architecture и cross-repo требуют full. Full означает строгий набор применимых gates, а не обязательный новый агент на каждый файл или повтор всех gates после любого diff. Service-level plan и неизменившиеся specialist approvals переиспользуются по selective invalidation. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Не запускать полный штат автоматически из-за нехватки контекста. Light при неопределённости запрещён.
 
 В bugfix full сохраняет triage/investigator/reproducer/RCA reviewer; light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
 

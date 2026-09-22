@@ -6,9 +6,9 @@
 - `balanced`: `gpt-5.6-terra/medium`; fallback — `gpt-5.6-luna/high`, затем `gpt-5.6-sol/medium`. Для обычной инженерной реализации, тестирования и продуктовой проработки.
 - `frontier`: `gpt-5.6-sol/high`; fallback — `gpt-5.6-terra/high`. Для orchestration, архитектуры, независимых critical gates, сложного RCA, security, data/migration и reliability.
 
-Доступность моделей бери из активного инструмента и запиши фактически выбранные `MODEL`, `REASONING_EFFORT` и fallback basis в assignment. Не используй `inherit` как model lane или неявный fallback; если ни одна модель lane недоступна, верни blocker. Не выбирай Astra, если пользователь отдельно не запросил её.
+Доступность моделей бери из активного инструмента и запиши фактически выбранные `MODEL`, `REASONING_EFFORT` и fallback basis в assignment. До вызова `spawn_agent` выполни spawn preflight: аргументы вызова обязаны содержать exact `model` и `reasoning_effort`, совпадающие с assignment; отсутствие любого аргумента, наследование родительской модели или подмена lane считается contract violation и spawn запрещён. Не используй `inherit` как model lane или неявный fallback; если ни одна модель lane недоступна, верни blocker. Не выбирай Astra, если пользователь отдельно не запросил её.
 
-Default `FORK_TURNS: none`; `all` запрещён. Передавай узкое assignment с role file, domain profile, DecisionSnapshot revisions, scope, acceptance и ссылками на evidence. Положительное N используй только для минимального незаменимого контекста, который нельзя выразить артефактом. Не держи более трёх активных субагентов. Независимый reviewer получает собственный компактный контекст и immutable diff.
+`fork_turns` должен быть явно передан как `none`; `all` запрещён. Положительное N допустимо только с записанным `FORK_JUSTIFICATION`, когда минимальный незаменимый контекст нельзя выразить артефактом. Передавай узкое assignment с role file, domain profile, DecisionSnapshot revisions, scope, acceptance и ссылками на evidence. Не держи более трёх активных субагентов. Независимый reviewer получает собственный компактный контекст и immutable diff.
 
 Явно ограничивай проверки изменённым поведением и repository requirements. После успешных проверок не расширяй их без новых изменений, failures или unresolved risk. Делегируй только роли выбранного маршрута; не добавляй API-only параметры в spawn.
 

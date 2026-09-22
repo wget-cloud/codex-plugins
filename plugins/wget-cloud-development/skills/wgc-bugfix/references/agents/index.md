@@ -30,17 +30,20 @@ MODEL: <selected advertised model>
 REASONING_EFFORT: <selected effort>
 ROUTING_BASIS: <role lane, risk и fallback evidence>
 FORK_TURNS: <none|smallest justified positive N>
+FORK_JUSTIFICATION: <n/a for none|why an artifact cannot replace the exact N turns>
+SPAWN_PREFLIGHT: <exact model + reasoning_effort + fork_turns args verified>
 TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
 MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
+EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint boundary>
 ```
 
 `TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное итоговое значение `TASK_NAME` передай без изменений в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane.
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Не сохраняй raw prompt/logs/secrets/PII. Не меняй внешние данные, Git publication или deployment без приложенного разрешения. Не объявляй весь bugfix завершённым. При нехватке evidence остановись с допустимым blocker verdict».
 
-Перед spawn проверь assignment ledger из [coordination contract](../coordination-efficiency.md): одинаковый active key не дублируется, completed key переиспользуется, а retry требует изменённого key и явного `RETRY_REASON`. После compaction сначала восстанови и сверь `RESUME_CAPSULE_REVISION`. `FORK_TURNS: all` запрещён.
+Перед spawn проверь assignment ledger из [coordination contract](../coordination-efficiency.md): одинаковый active key не дублируется, completed key переиспользуется, а retry требует изменённого key и явного `RETRY_REASON`. После compaction сначала восстанови и сверь `RESUME_CAPSULE_REVISION`. Вызов `spawn_agent` без явных exact `model`, `reasoning_effort` и `fork_turns` запрещён; обычное значение fork — `none`, `all` запрещён.
 
 Поля времени задают bounded supervision, а не автоматическую остановку. Используй event-driven ожидание вместо частого polling. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split.
 
@@ -63,7 +66,7 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 | Architecture guardian | architecture_guardian | plan/diff gates | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
 | Test-maker | test_maker | adaptive TestAssessment; conditional regression test | tests allowlist только при add/update | balanced | [test-maker.md](test-maker.md) |
 | Implementor | implementor | minimal fix | production/docs allowlist | balanced | [implementor.md](implementor.md) |
-| Reviewer | reviewer | code review | нет | frontier | [reviewer.md](reviewer.md) |
+| Reviewer | reviewer | code review; frontier только при отдельном critical escalation | нет | balanced | [reviewer.md](reviewer.md) |
 | QA | qa | adversarial regression | нет в repository | balanced | [qa.md](qa.md) |
 
 ## Conditional roles

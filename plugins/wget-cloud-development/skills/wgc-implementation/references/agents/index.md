@@ -29,17 +29,20 @@ MODEL: <selected advertised model>
 REASONING_EFFORT: <selected effort>
 ROUTING_BASIS: <role lane, risk и fallback evidence>
 FORK_TURNS: <none|smallest justified positive N>
+FORK_JUSTIFICATION: <n/a for none|why an artifact cannot replace the exact N turns>
+SPAWN_PREFLIGHT: <exact model + reasoning_effort + fork_turns args verified>
 TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
 MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
+EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint boundary>
 ```
 
 `TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное итоговое значение `TASK_NAME` передай без изменений в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane.
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Сохраняй существующие изменения. Не выполняй commit, push, PR, merge, release или deployment без приложенного разрешения. Не объявляй всю задачу завершённой. Если scope недостаточен, верни `needs_input`».
 
-Перед spawn проверь assignment ledger из [coordination contract](../coordination-efficiency.md): одинаковый active key не дублируется, completed key переиспользуется, а retry требует изменённого key и явного `RETRY_REASON`. После compaction сначала восстанови и сверь `RESUME_CAPSULE_REVISION`. `FORK_TURNS: all` запрещён.
+Перед spawn проверь assignment ledger из [coordination contract](../coordination-efficiency.md): одинаковый active key не дублируется, completed key переиспользуется, а retry требует изменённого key и явного `RETRY_REASON`. После compaction сначала восстанови и сверь `RESUME_CAPSULE_REVISION`. Вызов `spawn_agent` без явных exact `model`, `reasoning_effort` и `fork_turns` запрещён; обычное значение fork — `none`, `all` запрещён.
 
 Поля времени задают bounded supervision, а не автоматическую остановку. Используй event-driven ожидание вместо частого polling. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split.
 
@@ -57,9 +60,9 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 | Explorer | explorer | reconnaissance | нет | economy | [explorer.md](explorer.md) |
 | Architect | architect | design и DAG | нет | frontier | [architect.md](architect.md) |
 | Architecture guardian | architecture_guardian | plan/diff architecture gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | test_maker | adaptive TestAssessment; conditional tests | только tests allowlist при add/update | balanced | [test-maker.md](test-maker.md) |
-| Implementor | implementor | один DAG slice | production/docs allowlist | balanced | [implementor.md](implementor.md) |
-| Reviewer | reviewer | code review | нет | frontier | [reviewer.md](reviewer.md) |
+| Test-maker | test_maker | TestAssessment; protected critical tests только при независимой ценности | protected tests allowlist | balanced | [test-maker.md](test-maker.md) |
+| Implementor | implementor | один vertical tranche | production/docs и обычные slice-local tests | balanced | [implementor.md](implementor.md) |
+| Reviewer | reviewer | code review; frontier только при отдельном critical escalation | нет | balanced | [reviewer.md](reviewer.md) |
 | QA | qa | adversarial behavior verification | нет в repository | balanced | [qa.md](qa.md) |
 | DevOps | devops | GitOps desired state | `k8s` allowlist | balanced | [devops.md](devops.md) |
 | Infrastructure reviewer | infrastructure_reviewer | GitOps review | нет | frontier | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
@@ -75,7 +78,7 @@ WGC_AGENT_RESULT: {"role":"<role>","verdict":"<role verdict>","phase":"<plan|dif
 
 Строка не заменяет артефакт и evidence. Оркестратор перепроверяет diff, команды, revision и допустимость role/verdict/phase по профилю `implementation`.
 
-Test-maker использует расширенный flat marker из [test-assessment.md](../test-assessment.md) и verdict `assessment_ready`; generic marker выше для него недостаточен.
+Test-maker использует расширенный flat marker из [test-assessment.md](../test-assessment.md) с обязательным `test_ownership` и verdict `assessment_ready`; generic marker выше для него недостаточен.
 
 Architect marker также обязательно добавляет `plan_revision`, `minimum_test_criticality` и принадлежащий Architect в этом профиле `acceptance_revision`; exact пример находится в [architect.md](architect.md).
 
@@ -83,7 +86,7 @@ Architecture Guardian в `phase=plan` добавляет exact текущий `p
 
 ## Независимость
 
-- Implementor не совмещается с Test-maker, Reviewer или Architecture guardian.
+- Implementor не меняет protected tests Test-maker, не совмещается с Reviewer или Architecture guardian, но владеет обычными непомеченными slice-local tests.
 - Architect не утверждает свой план.
 - Architect не выполняет Guardian plan/diff gate, а Orchestrator не пишет production code или tests.
 - Один Test-maker owner владеет exact test-plan revision; replacement требует нового `TEST_OWNER_ID` и `REPLACEMENT_REASON`.

@@ -13,6 +13,7 @@
 - До spawn вычислять `ASSIGNMENT_KEY`, переиспользовать актуальные результаты и фиксировать `RETRY_REASON` для любого повторного запуска.
 - Замораживать `DIFF_IDENTITY` перед параллельными read-only gates и проверять отсутствие active assignments перед финалом.
 - Поддерживать `ResumeCapsule`, после compaction сверять его с Git/agent state до нового назначения и не продолжать write при stale freeze.
+- Вести `EfficiencyBudget` и `CheckPlan`; до каждого spawn проверять explicit model/reasoning/fork args, а до дорогой команды — owner/cache/invalidation trigger.
 ## Запреты
 
 - Не подменять независимые review/test/architecture verdicts собственной оценкой.
@@ -22,7 +23,7 @@
 - Не писать production code или tests и не становиться временным Implementor/Test-maker при задержке либо нехватке слотов.
 ## Bounded supervision
 
-Использовать cursor-based event-driven ожидание с 45–60 секундами на первом интерактивном wait и exponential backoff, а не частый polling. На `CHECKPOINT_INTERVAL_MIN` требовать objective evidence. Extension выдавать не более `MAX_EXTENSIONS`, записывая reason, evidence и новую boundary. При первом stall — correction/rescope; при повторном stall или scope drift — interrupt и inspect partial work. Третье повторение того же finding/reason требует `ContradictionReport` и rescope/user decision, а не очередного restart.
+Использовать cursor-based event-driven ожидание с 45–60 секундами на первом интерактивном wait и exponential backoff, а не частый polling. После двух unchanged waits ждать checkpoint/event, не посылать status-only follow-up. На `CHECKPOINT_INTERVAL_MIN` требовать objective evidence. Перед превышением EfficiencyBudget выпускать EfficiencyCheckpoint вместо нового агента или полной suite. Extension выдавать не более `MAX_EXTENSIONS`, записывая reason, evidence и новую boundary. При первом stall — correction/rescope; при повторном stall или scope drift — interrupt и inspect partial work. Третье повторение того же finding/reason требует `ContradictionReport` и rescope/user decision, а не очередного restart.
 ## Результат
 
 Вести gate ledger и финальный factual report. `WGC_AGENT_RESULT` не выдавать: marker предназначен для субагентов.

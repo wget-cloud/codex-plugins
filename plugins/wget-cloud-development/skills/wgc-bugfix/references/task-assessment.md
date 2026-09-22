@@ -1,6 +1,6 @@
 # TaskAssessment и адаптивная команда
 
-Отдельный Task Assessor обязателен для нового WorkItem. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы. Новое evidence в том же WorkItem сначала обрабатывается как delta: повторный полный assessment нужен только при изменении route-affecting полей, перечисленных в [coordination contract](coordination-efficiency.md).
+Отдельный Task Assessor обязателен для нового WorkItem. Несколько связанных fix-траншей остаются одним WorkItem, пока route, acceptance и frozen risk surface не изменились: не запускай нового оценщика на каждый файл или correction. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы. Новое evidence в том же WorkItem сначала обрабатывается как delta: повторный полный assessment нужен только при изменении route-affecting полей, перечисленных в [coordination contract](coordination-efficiency.md).
 
 ## Решение
 

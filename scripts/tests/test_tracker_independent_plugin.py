@@ -14,7 +14,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest["name"], "wget-cloud-development")
-        self.assertEqual(manifest["version"], "1.0.4")
+        self.assertEqual(manifest["version"], "1.0.5")
         self.assertNotIn("mcpServers", manifest)
 
     def test_bundle_has_no_tracker_runtime_or_youtrack_knowledge(self):
@@ -133,6 +133,40 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             self.assertIn("TEST_OWNER_ID", test_maker)
             self.assertIn("bounded vertical", workflow)
             self.assertIn("ContradictionReport", workflow)
+
+    def test_lean_tranche_and_cost_controls_are_explicit(self):
+        implementation = PLUGIN / "skills" / "wgc-implementation"
+        bugfix = PLUGIN / "skills" / "wgc-bugfix"
+
+        implementation_coordination = (implementation / "references" / "coordination-efficiency.md").read_text()
+        implementation_registry = (implementation / "references" / "agents" / "index.md").read_text()
+        implementation_tests = (implementation / "references" / "test-assessment.md").read_text()
+        implementation_workflow = (implementation / "references" / "workflow.md").read_text()
+        implementation_model = (implementation / "references" / "model-routing.md").read_text()
+
+        for required in (
+            "EfficiencyBudget",
+            "MAX_AGENT_ASSIGNMENTS",
+            "MAX_WAIT_CALLS",
+            "MAX_EXPENSIVE_CHECKS",
+            "EfficiencyCheckpoint",
+            "ServiceHandoff",
+            "5–10",
+            "4 assignments, 6 wait calls, 1 дорогая T2 suite",
+        ):
+            self.assertIn(required, implementation_coordination, required)
+
+        self.assertIn("SPAWN_PREFLIGHT", implementation_registry)
+        self.assertIn("exact `model` и `reasoning_effort`", implementation_model)
+        self.assertIn("test_ownership", implementation_tests)
+        self.assertIn("Обычные slice-local unit/integration tests", implementation_tests)
+        self.assertIn("T2 gates — один раз", implementation_workflow)
+
+        for skill in (implementation, bugfix):
+            coordination = (skill / "references" / "coordination-efficiency.md").read_text()
+            orchestrator = (skill / "references" / "agents" / "orchestrator.md").read_text()
+            self.assertIn("После двух unchanged waits", coordination)
+            self.assertIn("EfficiencyBudget", orchestrator)
 
     def test_plugin_remains_skills_only_after_coordination_hardening(self):
         self.assertFalse((PLUGIN / "hooks").exists())

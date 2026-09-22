@@ -16,6 +16,8 @@
 
 Large service или более одного независимо проверяемого behavior family разделяется на bounded vertical WorkItems/DAG slices. Один slice должен давать связный contract/provider/consumer либо законченный service behavior и собственный completion condition. Не переносить весь сервис с десятками RPC одним непрерывным assignment/turn. Следующий зависимый slice начинается после integration gate предыдущего; discovery всего сервиса не означает разрешение реализовать весь найденный scope.
 
+Для большого fix scope сначала один раз собери полный affected-behavior inventory и freeze-пакет, затем группируй связанные execution paths. Не запускай полный plan/test/implementation/review/guardian/QA pipeline отдельно для каждого файла или внутреннего scaffold-коммита. Один fix-транш по умолчанию имеет одного write-owner и одного independent Reviewer; остальные роли добавляются только по risk signal либо invalidated concern. Service-level Architect и Guardian plan переиспользуются, пока frozen decisions не изменились.
+
 Изменение frozen auth, contract, ownership, data или compatibility решения создаёт новую revision, останавливает зависимый write slice и инвалидирует только затронутые plan/test/implementation/review evidence. Продолжать реализацию поверх `FREEZE_STATUS: pending|stale` запрещено.
 
 ## ResumeCapsule после compaction
@@ -35,9 +37,16 @@ DIFF_IDENTITY
 PROTECTED_TEST_HASHES
 VALID_CHECK_CACHE
 NEXT_ALLOWED_TRANSITIONS
+EFFICIENCY_BUDGET
 ```
 
 После compaction/restart сначала восстанови capsule, сверь Git tree, active agents и revisions и пометь несовпавшие артефакты `stale`. До этой сверки нельзя spawn/follow-up прежнего Explorer, Architect, Test-maker или Implementor. Свободный пересказ истории и порядковый suffix имени не восстанавливают ledger.
+
+## EfficiencyBudget
+
+До execution задай на WorkItem или fix-транш: `MAX_AGENT_ASSIGNMENTS`, `MAX_WAIT_CALLS`, `MAX_EXPENSIVE_CHECKS`, `MAX_REWORK_ROUNDS` и `CHECKPOINT_BOUNDARY`. Default compact fix: 4 assignments, 6 wait calls, 1 дорогая T2 suite, 1 correction/recheck; Full RCA route получает отдельный обоснованный budget, а specialist gate по новому risk signal требует записанного extension. Бюджет не ослабляет обязательный reproduction/RCA/safety gate и не превращает незавершённую работу в success.
+
+Перед превышением бюджета останови новые назначения и выпусти `EfficiencyCheckpoint`: полученный diff/evidence, причина расхода, дубликаты, оставшиеся риски и решение `continue | merge-scope | split | needs_input`. Не создавай Token Auditor и не трать новый агент только на подсчёт. Если за одну checkpoint boundary нет meaningful diff/evidence, не продолжай тем же assignment бесконечно.
 
 ## Assignment ledger и дедупликация
 
@@ -55,7 +64,7 @@ Finding получает стабильный ключ `role + invariant + locat
 
 `FORK_TURNS: none` — норма; `all` запрещён. Положительное N допустимо только для минимального незаменимого фрагмента разговора, который нельзя безопасно выразить артефактом. Reviewer получает собственный компактный контекст и immutable diff, а не историю implementor.
 
-После назначения используй cursor-based event-driven ожидание. Первое интерактивное ожидание ограничь 45–60 секундами; при неизменившемся состоянии не отправляй агенту сообщение и увеличивай следующую границу exponential backoff до supervision boundary. Не делай фиксированный 30-секундный polling, повторный `list_agents` без нового сигнала или status-only follow-up. Checkpoint нужен при `needs_attention`, завершении, изменении revision, достижении supervision boundary или доказанном stall. Пользовательский progress update не является input агенту.
+После назначения используй cursor-based event-driven ожидание. Первое интерактивное ожидание ограничь 45–60 секундами; при неизменившемся состоянии не отправляй агенту сообщение и увеличивай следующую границу exponential backoff до supervision boundary. После двух unchanged waits не опрашивай тот же assignment снова до следующей checkpoint boundary или события. Не делай фиксированный 30-секундный polling, повторный `list_agents` без нового сигнала или status-only follow-up. Checkpoint нужен при `needs_attention`, завершении, изменении revision, достижении supervision boundary или доказанном stall. Пользовательский progress update не является input агенту.
 
 ## Вертикальные slices и freeze
 
@@ -73,6 +82,8 @@ Orchestrator координирует и проверяет evidence, но не 
 - `T3`: image/scan/contract smoke/integration и delivery evidence один раз для release candidate, если применимо.
 
 Повторяй только invalidated ступени. Cache key включает check ID, tree/diff identity, environment fingerprint, scoped paths и dependency/config identity. Failed run, неизвестная зависимость или изменение source/lock/config отменяет соответствующий cache entry. Ledger хранит только privacy-safe metadata, не raw commands/output.
+
+Для одной `DIFF_IDENTITY` назначь одного owner каждой дорогой команды. Идентичную успешную T2/T3 команду в том же environment не повторяют Reviewer, Guardian и QA. Docs-only или test-comment diff не запускает Go race/build заново без доказанной executable dependency. Immutable snapshot/tree identity создаётся один раз на candidate, а не перед каждым read-only gate. Для large fix предпочитай чистый отдельный worktree; если это невозможно, один раз зафиксируй baseline и не пересобирай архив после каждого чтения.
 
 ## Selective invalidation
 
