@@ -14,7 +14,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest["name"], "wget-cloud-development")
-        self.assertEqual(manifest["version"], "1.0.6")
+        self.assertEqual(manifest["version"], "1.0.7")
         self.assertNotIn("mcpServers", manifest)
 
     def test_bundle_has_no_tracker_runtime_or_youtrack_knowledge(self):
@@ -168,19 +168,20 @@ class TrackerIndependentPluginTests(unittest.TestCase):
         for required in (
             "EfficiencyBudget",
             "MAX_AGENT_ASSIGNMENTS",
-            "MAX_WAIT_CALLS",
+                "MAX_UNCHANGED_WAIT_STREAK",
+                "MAX_PASSIVE_WAIT_MINUTES",
             "MAX_EXPENSIVE_CHECKS",
             "EfficiencyCheckpoint",
             "ServiceHandoff",
             "5–10",
-            "4 assignments, 6 wait calls, 1 дорогая T2 suite",
+            "4 assignments, 2 unchanged waits без нового анализа, 1 дорогая T2 suite",
         ):
             self.assertIn(required, implementation_coordination, required)
 
         self.assertIn("SPAWN_PREFLIGHT", implementation_registry)
         self.assertIn("exact `model` и `reasoning_effort`", implementation_model)
         self.assertIn("test_ownership", implementation_tests)
-        self.assertIn("Обычные slice-local unit/integration tests", implementation_tests)
+        self.assertIn("обычные `add/update` tests принадлежат Implementor", implementation_tests)
         self.assertIn("T2 gates — один раз", implementation_workflow)
 
         for skill in (implementation, bugfix):
@@ -192,6 +193,25 @@ class TrackerIndependentPluginTests(unittest.TestCase):
     def test_plugin_remains_skills_only_after_coordination_hardening(self):
         self.assertFalse((PLUGIN / "hooks").exists())
         self.assertFalse((PLUGIN / ".mcp.json").exists())
+
+    def test_compact_routes_do_not_force_full_pipeline(self):
+        for skill_name in ("wgc-bugfix", "wgc-implementation"):
+            skill = PLUGIN / "skills" / skill_name
+            assessment = (skill / "references" / "task-assessment.md").read_text()
+            coordination = (skill / "references" / "coordination-efficiency.md").read_text()
+            self.assertIn("не Full автоматически", assessment)
+            self.assertIn("FREEZE_STATUS: n/a", coordination)
+            self.assertIn("STOP_AFTER_SERVICE", coordination)
+
+    def test_backend_specific_contracts_follow_service_registry(self):
+        corpus = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in PLUGIN.rglob("*")
+            if path.is_file()
+        ).casefold()
+        self.assertIn("services.json.coveragemin", corpus)
+        for residue in ("responsive/a11y", "service-worker", "state v4", "владелец в v7"):
+            self.assertNotIn(residue, corpus)
 
 
 if __name__ == "__main__":

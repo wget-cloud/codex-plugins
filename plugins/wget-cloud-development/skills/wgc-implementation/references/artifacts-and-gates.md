@@ -1,4 +1,4 @@
-> V7: набор обязательных role gates выбирает [TaskAssessment](task-assessment.md); фиксированные pipeline-списки ниже относятся к Full. В Light/Standard plan/floor задаёт Assessor; независимые проверки применяются по маршруту. V2/v3 approvals не переносятся в v4.
+> Набор role gates выбирает [TaskAssessment](task-assessment.md); фиксированные pipeline-списки ниже относятся только к Full. В Light/Standard независимые проверки применяются по фактическому risk signal.
 
 # Артефакты и quality gates
 
@@ -323,7 +323,7 @@ residual_risks: []
 
 | Repository | Минимум для production change | Дополнительно по риску |
 | --- | --- | --- |
-| `services/<name>` | `go test -race ./...`, `go vet ./...`, `golangci-lint run`, coverage ≥90%, `go build ./cmd/...` из service module | contract/integration tests, image build, Trivy, smoke/load/soak по риску |
+| `services/<name>` | `go test -race ./...`, `go vet ./...`, `golangci-lint run`, exact `coverageMin`/CI command, `go build ./cmd/...` из service module | contract/integration tests, image build, Trivy, smoke/load/soak по риску |
 | `platform` | те же Go gates из module и тесты public API | affected-service matrix и consumer builds/tests |
 | `contracts` | `buf lint`, reproducible `buf generate`, clean generated diff | `buf breaking` against correct base и consumer contract tests |
 | `services.json` / CI tooling | JSON/planner validation и affected/unaffected matrix fixtures | scheduled/`force_all`, per-service image/release/delivery guard paths |

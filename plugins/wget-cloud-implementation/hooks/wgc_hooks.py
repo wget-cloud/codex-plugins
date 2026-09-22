@@ -2281,11 +2281,17 @@ def required_checks_for_state(classification: Dict[str, Any], state: Dict[str, A
 
 
 def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    marker = "WGC_AGENT_RESULT:"
+    marker = "WGC_AGENT_RESULT"
     raw = None
     for line in reversed(message.splitlines()):
-        if marker in line:
-            raw = line.split(marker, 1)[1].strip().strip("`")
+        candidate = line.strip().strip("`").strip()
+        if not candidate.startswith(marker):
+            continue
+        candidate = candidate[len(marker):].lstrip()
+        if candidate.startswith(":"):
+            candidate = candidate[1:].lstrip()
+        if candidate.startswith("{") and candidate.endswith("}"):
+            raw = candidate
             break
     if not raw:
         return None, "missing WGC_AGENT_RESULT marker"

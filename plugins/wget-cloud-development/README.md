@@ -1,6 +1,6 @@
 # Wget Cloud Development Plugin
 
-Версия 1.0.6 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
+Версия 1.0.7 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
 
 | Skill | Назначение |
 |---|---|
@@ -11,15 +11,15 @@
 
 ## Runtime policy
 
-Роли используют минимально достаточную GPT-5.6 lane из registry. Для `gpt-5.6-sol` действует жёсткий предел `medium`: уровни `high`, `xhigh`, `max` и `ultra` запрещены для оркестратора и субагентов. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`, а полный fork истории запрещён. DecisionSnapshot и ResumeCapsule переживают compaction, assignment ledger исключает дубли, а immutable diff review, selective invalidation и ступени T0–T3 сокращают повторный анализ и дорогие проверки без ослабления независимых gates.
+Роли используют минимально достаточную GPT-5.6 lane из registry. Terra/medium допустима для Light/Standard orchestration, Sol/medium — для Full и сложных critical routes; effort выше `medium` не используется без явного запроса пользователя. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`, а полный fork истории запрещён. DecisionSnapshot и ResumeCapsule переживают compaction, assignment ledger исключает дубли, а immutable diff review, selective invalidation и ступени T0–T3 сокращают повторный анализ и дорогие проверки без ослабления независимых gates.
 
 Перед первым production write Full workflow один раз на сервис замораживает cross-slice contracts, auth/tenant semantics, ownership и compatibility. Большие сервисы выполняются траншами связанных RPC/behavior families, а не отдельным полным role pipeline на каждый handler. Implementor пишет production code и обычные slice-local tests; отдельный Test-maker владеет только действительно независимыми protected regression/contract/security tests. Дорогие T2/T3 проверки, immutable snapshot и independent gates повторяются только после релевантной invalidation.
 
-Каждое назначение проходит spawn preflight с явными `model` и `reasoning_effort`; наследование модели и `fork_turns: all` считаются contract violation. EfficiencyBudget ограничивает число назначений, ожиданий, дорогих проверок и rework на транш. На границе сервиса workflow выпускает компактный ServiceHandoff, чтобы следующий сервис не наследовал длинную историю исполнения.
+Каждое назначение проходит spawn preflight с явными `model` и `reasoning_effort`; наследование модели и `fork_turns: all` считаются contract violation. EfficiencyBudget отдельно считает назначения, retries, coordination decisions, unchanged waits, passive wait time, дорогие проверки и rework. Неизменившийся wait не запускает повторный анализ или status-only follow-up. На границе сервиса workflow выпускает компактный ServiceHandoff и выполняет явный `STOP_AFTER_SERVICE`.
 
-Task Assessor выбирает Light/Standard/Full по риску и сложности. Профили соответствуют фактическим границам репозитория: отдельный Go service module, `contracts`, `platform`, CI/service registry и GitOps. Security, данные, миграции, публичные Protobuf-контракты, concurrency, background work и GitOps не допускают Light. Независимость protected-test author, reviewer и архитектурных gates сохраняется там, где риск оправдывает отдельную роль.
+Orchestrator выбирает Light/Standard/Full и вызывает отдельного Task Assessor только при неоднозначном, Full, cross-module/cross-repo или расширившемся scope. Criticality тестов не переводит задачу автоматически в Full: bounded critical change использует Standard-critical с точечными specialist gates. Профили соответствуют фактическим границам репозитория: отдельный Go service module, `contracts`, `platform`, CI/service registry и GitOps.
 
-Базовые проверки production-кода: `go test -race ./...`, `go vet ./...`, `golangci-lint run`, `go build ./cmd/...` и coverage ≥90%. Contract changes дополнительно требуют Buf lint/breaking/generation и consumer evidence. `services.json` остаётся source of truth для состава, image и delivery capability каждого сервиса.
+Базовые проверки production-кода берутся из актуальных `AGENTS.md`, workflows и строки сервиса в `services.json`: `go test -race ./...`, `go vet ./...`, `golangci-lint run`, `go build ./cmd/...` и exact `coverageMin`/ratchet. Contract changes дополнительно требуют Buf lint/breaking/generation и consumer evidence. `services.json` остаётся source of truth для состава, coverage, image и delivery capability каждого сервиса.
 
 Commit, push, PR, merge, release и deployment требуют отдельного явного разрешения. Kubernetes меняется только через approved GitOps. Skill сообщает фактический Git/delivery status и не подменяет недоступные проверки успешными verdicts.
 

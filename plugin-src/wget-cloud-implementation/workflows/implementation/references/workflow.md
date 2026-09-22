@@ -159,7 +159,7 @@ Implementor получает bounded vertical slice вместе с обычны
 
 Reviewer проверяет correctness, regressions и обычные tests. Architecture Guardian проверяет diff только когда slice меняет frozen placement, dependency direction, ownership, public API/versioning strategy или другой architecture concern. Service-level plan approval переиспользуется.
 
-Если diff стабилен, один раз зафиксируй `DIFF_IDENTITY` и запускай только применимые read-only reviews. Правка инвалидирует verdict только затронутого concern и downstream evidence.
+Если diff стабилен, один раз зафиксируй `DIFF_IDENTITY` и запускай только применимые read-only reviews. Совместимые concerns объединяй в `ReviewBundle` одного независимого reviewer с отдельными verdicts; отдельный specialist нужен при требуемой независимости или особом evidence boundary. Правка инвалидирует verdict только затронутого concern.
 
 ### 8. QA и integration
 

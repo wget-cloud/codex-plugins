@@ -1,6 +1,6 @@
 # TaskAssessment и адаптивная команда
 
-Отдельный Task Assessor обязателен для нового WorkItem. Несколько траншей одного service migration остаются одним WorkItem, пока route, acceptance и frozen risk surface не изменились: не запускай нового оценщика на каждый RPC family. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы. Новое evidence в том же WorkItem сначала обрабатывается как delta: повторный полный assessment нужен только при изменении route-affecting полей, перечисленных в [coordination contract](coordination-efficiency.md).
+TaskAssessment обязателен как артефакт, но не как отдельный агент. Для очевидного Light/Standard route его выпускает Orchestrator; отдельный Task Assessor нужен только при неоднозначном, Full, cross-module/cross-repo или расширившемся scope. Несколько траншей одного service migration остаются одним WorkItem, пока route, acceptance и frozen risk surface не изменились. Новое evidence сначала обрабатывается как delta; повторный полный assessment нужен только при изменении route-affecting полей из [coordination contract](coordination-efficiency.md).
 
 ## Решение
 
@@ -9,10 +9,10 @@
 | Mode | Критерий | Роли реализации после оценщика |
 |---|---|---|
 | light | small + low, обратимая правка без изменения поведения/данных/контрактов | Implementor; финальная проверка Orchestrator |
-| standard | ограниченное изменение поведения без critical/architecture/cross-repo | Implementor, Reviewer, QA; Test-maker только add/update |
-| full | large, архитектура, cross-repo или critical | Service-level Architect + Guardian plan один раз; на транш Implementor + Reviewer; Test-maker, Guardian diff, QA и специалисты только по critical/изменённым concerns |
+| standard | bounded изменение, включая локальный critical invariant без architecture/ownership/cross-repo изменения | Implementor, Reviewer; Test-maker, QA и specialist только по точечному risk signal |
+| full | large/multi-slice, архитектура, ownership/compatibility или cross-repo | Service-level Architect + Guardian plan один раз; на транш Implementor + Reviewer; остальные gates только по изменённым concerns |
 
-Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical/full. Architecture и cross-repo требуют full. Full означает строгий набор применимых gates, а не обязательный новый агент на каждый файл или повтор всех gates после любого diff. Service-level plan и неизменившиеся specialist approvals переиспользуются по selective invalidation. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Не запускать полный штат автоматически из-за нехватки контекста. Light при неопределённости запрещён.
+Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical testing/concern gates, но не Full автоматически. Architecture, ownership/compatibility, cross-repo и large multi-slice scope требуют Full. Service-level plan и неизменившиеся specialist approvals переиспользуются по selective invalidation. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Light при неопределённости запрещён.
 
 В bugfix full сохраняет triage/investigator/reproducer/RCA reviewer; light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
 
@@ -35,9 +35,9 @@ WGC_AGENT_RESULT: {"role":"task-assessor","verdict":"assessed","phase":"","input
 - `rationale`: до 500 символов; `evidence_refs`: 1–100 redacted IDs/путей до 200 символов, без raw logs/prompts;
 - `assessment_revision`: SHA-256 от UTF-8 JSON остальных полей с `ensure_ascii=False, sort_keys=True, separators=(',', ':')`;
 
-Все downstream markers повторяют `assessment_revision`. Поля времени/планов в assignment — supervision, не разрешение объявить незавершённую задачу готовой.
+Downstream assignment фиксирует `assessment_revision` в ledger; marker привязывается через exact `input_revision` и `ASSIGNMENT_KEY`, поэтому не дублирует revision-поля без необходимости.
 
-Для light/standard `none|reuse` оценщик добавляет sibling `assessment` с полноценным TestAssessment по [test policy](test-assessment.md). Его paths, risk и disposition совпадают с TaskAssessment. Для `add/update` и full оценщик не пишет тесты: отдельный Test-maker выпускает TestAssessment.
+Для Light/Standard TestAssessment выпускает тот же assessment owner. Обычные implementor-owned `add/update` tests не требуют отдельного Test-maker; он нужен только для protected critical invariants. Full использует отдельного Test-maker только когда independence действительно требуется.
 
 ## Специалисты
 

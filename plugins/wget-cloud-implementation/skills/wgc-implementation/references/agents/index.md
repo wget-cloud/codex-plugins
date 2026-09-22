@@ -34,10 +34,10 @@ TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
 MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
-EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint boundary>
+EFFICIENCY_BUDGET: <max assignments/coordination decisions/unchanged waits/passive wait minutes/expensive checks/rework + checkpoint boundary>
 ```
 
-`TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное итоговое значение `TASK_NAME` передай без изменений в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane.
+`TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное значение передай в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn; `balanced` допустима для Light/Standard, `frontier` нужна для Full/сложного critical route.
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Сохраняй существующие изменения. Не выполняй commit, push, PR, merge, release или deployment без приложенного разрешения. Не объявляй всю задачу завершённой. Если scope недостаточен, верни `needs_input`».
 
@@ -47,7 +47,7 @@ EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint b
 
 ## Model routing policy
 
-Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/high. Fallback и service-tier ограничения: [model policy](../model-routing.md).
+Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/medium. Любой Sol effort выше `medium` запрещён. Fallback и ограничения: [model policy](../model-routing.md).
 
 ## Роли
 

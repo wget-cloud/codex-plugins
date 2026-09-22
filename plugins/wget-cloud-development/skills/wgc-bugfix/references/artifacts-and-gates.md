@@ -1,4 +1,4 @@
-> V7: набор обязательных role gates выбирает [TaskAssessment](task-assessment.md); фиксированные pipeline-списки ниже относятся к Full. В Light/Standard plan/floor задаёт Assessor; независимые проверки применяются по маршруту. V2/v3 approvals не переносятся в v4.
+> Набор role gates выбирает [TaskAssessment](task-assessment.md); фиксированные pipeline-списки ниже относятся только к Full. В Light/Standard независимые проверки применяются по фактическому risk signal.
 
 # Артефакты и gates
 

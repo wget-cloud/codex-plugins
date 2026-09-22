@@ -87,7 +87,7 @@ EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint b
 WGC_AGENT_RESULT: {"role":"<role>","verdict":"<role verdict>","phase":"<role-required-phase-or-empty>","input_revision":"<exact-input-revision>"}
 ```
 
-Оркестратор проверяет role/verdict/phase по профилю `bugfix`, сам артефакт, evidence и актуальность revision.
+Оркестратор связывает marker с ledger по exact `input_revision`/`ASSIGNMENT_KEY`, проверяет role/verdict/phase, артефакт и evidence. Однозначный marker без двоеточия перед валидным JSON можно локально нормализовать; неоднозначный JSON требует correction.
 
 Test-maker использует расширенный flat marker из [test-assessment.md](../test-assessment.md) и единый verdict `assessment_ready`; generic marker выше недостаточен.
 
@@ -109,4 +109,4 @@ Architecture Guardian в `phase=plan` добавляет exact текущий Fi
 
 ## Выбор команды
 
-[TaskAssessment](../task-assessment.md) определяет применимость ролей; таблица — каталог, не требование запускать всех. Каждый downstream marker повторяет `assessment_revision`. Skills не передают control друг другу: Orchestrator сохраняет единый WorkItem и выбирает процесс/профили.
+[TaskAssessment](../task-assessment.md) определяет применимость ролей; таблица — каталог, не требование запускать всех. Assessment revision хранится в assignment ledger и не обязана повторяться в marker. Skills не передают control друг другу.

@@ -8,7 +8,6 @@
 
 ```text
 reported
-  -> triaged
   -> evidence_ready
   -> reproduced | characterized_with_waiver
   -> root_cause_supported
@@ -30,16 +29,15 @@ reported
 | Этап | Владелец | Вход | Выход | Gate |
 |---|---|---|---|---|
 | Intake | orchestrator | комментарий пользователя | `BugCase` | кейс не содержит выдуманных фактов |
-| Triage | bug-triage | `BugCase` | `TriageReport` | `triaged` |
-| Evidence | bug-investigator `phase=evidence` | кейс и triage | `EvidenceBundle` | `evidence_ready` |
+| Evidence | bug-investigator `phase=evidence` | `BugCase`; включает bounded triage | `EvidenceBundle` | `evidence_ready` |
 | Reproduction | reproducer | кейс и evidence | `ReproductionReport` | `reproduced`, либо `characterized` с human waiver |
 | RCA | bug-investigator `phase=rca` | reproduction + evidence | `RootCauseAnalysis` | `root_cause_supported` |
 | RCA review | root-cause-reviewer | RCA + evidence | `RootCauseReviewReport` | `approved` |
-| Design | architect | RCA | `FixPlan` | `approved` guardian |
-| Test assessment | test-maker | RCA + approved plan | `TestAssessment` + conditional TestPlan | `assessment_ready` |
+| Design | architect только при architecture/ownership/compatibility/multi-slice signal; иначе investigator/orchestrator | RCA | bounded `FixPlan` | Guardian только для Full architecture concern |
+| Test assessment | assessment owner; Test-maker для regression add/update/protected critical | RCA + plan | `TestAssessment` + conditional TestPlan | `assessment_ready` |
 | Fix | implementor | approved plan + protected tests | `ImplementationReport` | `implemented` |
-| Review | reviewer + guardian | current diff | reports | оба `approved` |
-| QA | qa + conditional specialists | reviewed revision | QA reports | все `pass/approved` |
+| Review | reviewer; guardian только при изменённом architecture concern | current diff | reports | применимые `approved` |
+| QA | conditional QA/specialists | reviewed revision | concern reports | только выбранные gates `pass/approved` |
 | Delivery | orchestrator | complete ledger | `BugfixReport` | `ready` |
 
 ## Маршруты и conditional gates
@@ -54,7 +52,7 @@ reported
 
 WebSocket event schema, event ordering/replay и reconnect protocol считаются contract boundary и активируют Contract QA.
 
-Incident route не отменяет основной поток. Сначала стабилизируй понимание blast radius и release identity; emergency mitigation или rollback требует отдельного разрешения, а постоянное исправление всё равно проходит regression и review.
+Compact localized route не создаёт отдельные Triage, Architect, Guardian или QA assignments без соответствующего signal. Incident route требует доказательства причины и regression, но не означает автоматический запуск всего каталога ролей.
 
 При возможной активной cross-tenant/PII утечке немедленно сообщи пользователю о security-incident risk и необходимости назначить human incident owner. Не отправляй внешние сообщения и не меняй систему без полномочий. Никогда не воспроизводи утечку чтением реальных foreign-tenant данных; используй synthetic canary tenants или уже существующие redacted evidence handles.
 

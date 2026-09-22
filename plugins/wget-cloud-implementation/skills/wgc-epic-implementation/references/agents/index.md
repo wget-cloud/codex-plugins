@@ -36,7 +36,7 @@ TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
 MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
-EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint boundary>
+EFFICIENCY_BUDGET: <max assignments/coordination decisions/unchanged waits/passive wait minutes/expensive checks/rework + checkpoint boundary>
 INPUT_REVISION: <exact current workflow revision>
 ```
 
@@ -46,7 +46,7 @@ INPUT_REVISION: <exact current workflow revision>
 
 ## Model routing policy
 
-Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/high. Fallback и service-tier ограничения: [model policy](../model-routing.md).
+Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/medium. Любой Sol effort выше `medium` запрещён. Fallback и ограничения: [model policy](../model-routing.md).
 
 ## Роли
 

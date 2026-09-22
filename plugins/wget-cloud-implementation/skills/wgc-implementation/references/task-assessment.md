@@ -1,6 +1,6 @@
 # TaskAssessment и адаптивная команда
 
-Отдельный Task Assessor обязателен для каждой задачи; в epic — для каждого frozen item. Несколько slices одной задачи/item переиспользуют assessment, пока route, acceptance, risk surface и path boundaries не изменились. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы.
+TaskAssessment обязателен как артефакт. В task-creation и epic отдельный Task Assessor остаётся обязательным; в implementation/bugfix очевидный Light/Standard assessment выпускает Orchestrator, а отдельный агент нужен только для неоднозначного, Full, cross-repo или расширившегося scope. Несколько slices одной задачи/item переиспользуют assessment, пока route, acceptance, risk surface и path boundaries не изменились.
 
 ## Решение
 
@@ -9,10 +9,10 @@
 | Mode | Критерий | Роли реализации после оценщика |
 |---|---|---|
 | light | small + low, обратимая правка без изменения поведения/данных/контрактов | Implementor; финальная проверка Orchestrator |
-| standard | ограниченное изменение поведения без critical/architecture/cross-repo | Implementor + Reviewer; QA по observable-risk signal; обычные tests пишет Implementor |
-| full | large, архитектура, cross-repo или critical | Architect + Guardian plan; Implementor + Reviewer; Test-maker/Guardian diff/QA/специалисты только по critical или изменённым concerns |
+| standard | bounded изменение, включая локальный critical invariant без architecture/ownership/cross-repo изменения | Implementor + Reviewer; Test-maker/QA/specialist только по точечному signal |
+| full | large/multi-slice, архитектура, ownership/compatibility или cross-repo | Architect + Guardian plan; Implementor + Reviewer; остальные gates только по изменённым concerns |
 
-Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical/full. Architecture и cross-repo требуют full. Full означает строгий набор применимых gates, а не новый агент для каждого файла или повтор всех gates после любого diff. Plan и незатронутые specialist approvals переиспользуются по selective invalidation. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Не запускать полный штат автоматически из-за нехватки контекста. Light при неопределённости запрещён.
+Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical testing/concern gates, но не Full автоматически. Architecture, ownership/compatibility, cross-repo и large multi-slice scope требуют Full. Plan и незатронутые specialist approvals переиспользуются по selective invalidation. Неизвестный риск → `needs_evidence`; нерешённая семантика → `needs_input`. Light при неопределённости запрещён.
 
 В task-creation все режимы требуют Task Assessor, Product/Project/Auditor, отдельного Effort Estimator (SP), независимого Backlog Reviewer и Orchestrator; full добавляет Architect. Малый объём не отменяет продуктовую проработку. Operator нужен только для явно разрешённой записи. В epic Project scope/reconcile и truthful sync общие, остальная команда выбирается для каждого item; Product outcome остаётся per-item. В bugfix full сохраняет triage/investigator/reproducer/RCA reviewer; light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
 

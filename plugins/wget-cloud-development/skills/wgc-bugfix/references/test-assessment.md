@@ -27,7 +27,7 @@ Formal `reproduction_waiver` разрешает `characterized` только п�
 
 Артефакт содержит `plan_revision`, `acceptance_revision`, `scope_fingerprint`, bounded exact `assessed_paths`, criticality/disposition, original regression и tested invariants, existing tests, `coverage_mode`, alternative evidence, residual risks/follow-up и disposition-specific proof. `add/update` создают условный `TestPlan` с matching action, непустыми bounded exact runnable `commands`, `expected_baseline`, `actual_baseline`, exact test paths и `protected_hashes`: canonical keysets обязаны точно совпадать, каждый файл уже существует, а объявленный SHA-256 равен фактическому. Boolean/string handshake hashes не заменяет. `reuse` содержит полный `reuse_proof`. `none` содержит только evidence plan и не создаёт искусственный test commit.
 
-`none` не отменяет repository/CI suites и module gates: `go test -race ./...`, `go vet ./...`, `golangci-lint run`, coverage ≥90%, `go build ./cmd/...`, применимые Buf generation/breaking, consumer, affected-matrix, image/security и GitOps checks, reproduction, RCA review, Reviewer, Architecture Guardian, QA или conditional Security/Contract QA.
+`none` не отменяет repository/CI suites и module gates: `go test -race ./...`, `go vet ./...`, `golangci-lint run`, exact coverage command/threshold из workflows и `services.json`, `go build ./cmd/...`, применимые Buf/consumer/affected-matrix checks и только выбранные route gates.
 
 ## Машинный marker Test-maker
 
@@ -37,10 +37,8 @@ WGC_AGENT_RESULT: {"role":"test-maker","verdict":"assessment_ready","phase":"","
 
 Добавь `reuse_proof` либо `rationale`, `disproportionate_cost`, `stronger_alternative_evidence`, `follow_up`. Nested `assessment` поддерживается только для migration compatibility.
 
-## State v4 и invalidation
+## Invalidation и владелец
 
-V2/v3 мигрируются в v4 с сохранением безопасного baseline и сбросом прежних approvals/verification: нужна новая TaskAssessment. Повреждённый state требует repository audit. Scope expansion отменяет маршрут. In-scope write сохраняет маршрут, но отменяет затронутые проверки и approvals. Contract/migration/test изменения сохраняют прежние строгие TestAssessment invalidation rules.
-
-## Владелец в v7
+Scope expansion отменяет маршрут. In-scope write сохраняет assessment, но отменяет только затронутые проверки и approvals. Contract/migration/test изменения применяют selective invalidation.
 
 В Light/Standard none/reuse TestAssessment выпускает Task Assessor вместе с TaskAssessment, используя те же evidence fields. Он задаёт plan/acceptance revision и floor для компактного маршрута. Full floor принадлежит Architect. Add/update всегда принадлежат Test-maker. [Команда](task-assessment.md), [повторное использование проверок](verification.md).

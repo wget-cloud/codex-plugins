@@ -12,7 +12,7 @@ description: Coordinate tracker-independent, evidence-driven diagnosis and repai
 ## Intake и выбор команды
 
 1. Прочитай root/затронутые AGENTS.md и обязательные project docs; проверь Git baseline и фактический execution path.
-2. Прочитай [coordination contract](references/coordination-efficiency.md), [TaskAssessment](references/task-assessment.md) и [registry](references/agents/index.md). Создай DecisionSnapshot и назначь отдельного Task Assessor с узким scope, только если актуальный assessment нельзя переиспользовать.
+2. Прочитай [coordination contract](references/coordination-efficiency.md), [TaskAssessment](references/task-assessment.md) и [registry](references/agents/index.md). Создай DecisionSnapshot. Переиспользуй актуальный assessment; для очевидного Light/Standard route выпусти его как Orchestrator, а отдельного Task Assessor назначай только при неоднозначном, Full, cross-module/cross-repo или расширившемся scope.
 3. По verdict выбери Light/Standard/Full. Всегда прочитай [repository profile](references/domains/repository.md), затем загружай только выбранные [Service](references/domains/service.md), [Contracts](references/domains/contracts.md), [Platform](references/domains/platform.md), [CI](references/domains/ci.md) и [GitOps](references/domains/gitops.md). Role file — перед конкретным назначением.
 4. Перед execution прочитай [test policy](references/test-assessment.md) и [verification](references/verification.md). [Full workflow](references/workflow.md) — только Full; [gates](references/artifacts-and-gates.md) — когда нужен формат артефакта.
 
@@ -22,7 +22,7 @@ description: Coordinate tracker-independent, evidence-driven diagnosis and repai
 
 ## Исполнение и готовность
 
-Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget, assignment/gate ledger и transitions, но не пишет production code/tests. После compaction сначала восстанавливается ledger; Full fix начинается только после freeze exact plan revision. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. Сохраняй independence исполнителя, protected regression-test author и reviewer; Architect не утверждает и не review собственный plan/diff. Максимум три активных субагента, fork none; каждый spawn обязан явно передать model и reasoning effort согласно [model/context policy](references/model-routing.md).
+Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget, assignment/gate ledger и transitions, но не пишет production code/tests. После compaction сначала восстанавливается ledger; независимый Guardian freeze нужен только для Full, multi-slice или изменённой architecture/ownership/compatibility boundary. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. Сохраняй independence исполнителя, protected regression-test author и reviewer; Architect не утверждает и не review собственный plan/diff. Максимум три активных субагента, fork none; каждый spawn обязан явно передать model и reasoning effort согласно [model/context policy](references/model-routing.md).
 
 Сохраняй пользовательские изменения. Каждый `services/<name>`, `platform` и `contracts` — отдельный Go module внутри одного Git repository; module boundary не является отдельной Git history. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 

@@ -1,6 +1,6 @@
 # Адаптивная политика тестирования
 
-Test-maker обязателен для Full critical invariants и для `add/update`, когда тест должен быть protected и независим от Implementor; Light/Standard none/reuse оценивает Task Assessor. Обычные slice-local unit/integration tests пишет Implementor и их независимо читает Reviewer. Новый protected test не является обязательным результатом. До production implementation владелец assessment выпускает `TestAssessment`, выбирая `add | update | reuse | none` и `test_ownership: implementor | protected_test_maker`; после изменения scope, плана, acceptance, protected tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
+TestAssessment обязателен, но отдельный Test-maker нужен только для protected critical invariants, где независимость от Implementor даёт реальную regression value. Light/Standard assessment выпускает Orchestrator либо назначенный Assessor; обычные `add/update` tests принадлежат Implementor и независимо читаются Reviewer. После изменения scope, плана, acceptance, protected tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
 
 ## Критичность
 
@@ -36,7 +36,7 @@ Architect указывает `minimum_test_criticality` и `plan_revision`. Test
 - для `add/update` — `TestPlan` с matching action, `test_ownership`, непустыми bounded exact runnable `commands`, expected/actual baseline и exact test paths; при `protected_test_maker` обязательны фактически совпавшие `protected_hashes` с identical canonical keyset, а при `implementor` protected keyset пуст и Reviewer проверяет добавленный тест в общей `DIFF_IDENTITY`;
 - для `none` — только evidence plan; искусственный `TestPlan` и test commit не создаются.
 
-`none` не отменяет repository/CI suites и module gates: `go test -race ./...`, `go vet ./...`, `golangci-lint run`, coverage ≥90%, `go build ./cmd/...`, а также применимые Buf generation/breaking, consumer, affected-matrix, image/security и GitOps checks. Команды выполняются в затронутом module; contracts/platform/tooling дополнительно требуют repository-wide consumer evidence.
+`none` не отменяет repository/CI suites и module gates: `go test -race ./...`, `go vet ./...`, `golangci-lint run`, exact coverage command/threshold из workflows и `services.json`, `go build ./cmd/...`, а также применимые Buf generation/breaking, consumer, affected-matrix, image/security и GitOps checks.
 
 ## Машинный marker Test-maker
 
@@ -48,10 +48,8 @@ WGC_AGENT_RESULT: {"role":"test-maker","verdict":"assessment_ready","phase":"","
 
 Добавь disposition-specific `reuse_proof` либо поля `rationale`, `disproportionate_cost`, `stronger_alternative_evidence`, `follow_up`. Role contract использует flat marker.
 
-## State v4 и invalidation
+## Invalidation и владелец
 
-V2/v3 мигрируются в v4 с сохранением безопасного baseline и сбросом прежних approvals/verification: нужна новая TaskAssessment. Повреждённый state требует repository audit. Scope expansion отменяет маршрут. In-scope write сохраняет маршрут, но отменяет затронутые проверки и approvals. Contract/migration/test изменения сохраняют прежние строгие TestAssessment invalidation rules.
-
-## Владелец в v7
+Scope expansion отменяет маршрут. In-scope write сохраняет assessment, но отменяет только затронутые проверки и approvals. Contract/migration/test изменения применяют selective invalidation.
 
 В Light/Standard none/reuse TestAssessment выпускает Task Assessor вместе с TaskAssessment, используя те же evidence fields. Он задаёт plan/acceptance revision и floor для компактного маршрута. Full floor принадлежит Architect. Assessment для Full critical и protected add/update принадлежит Test-maker; обычные implementor-owned tests остаются частью одного implementation diff. [Команда](task-assessment.md), [повторное использование проверок](verification.md).

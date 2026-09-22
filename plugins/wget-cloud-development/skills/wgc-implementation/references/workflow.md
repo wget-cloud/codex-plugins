@@ -100,7 +100,7 @@ flowchart TD
 
 ### 2. Reconnaissance
 
-Explorer находит реальную подключённую цепочку исполнения: routes/controllers, application use case, domain invariants, ports/adapters, schema/proto, persistence, clients, state, UI, tests, CI, deployment values. Он отдельно помечает legacy, mock, prototype, dead/unwired и generated code.
+Explorer находит реальную подключённую цепочку исполнения: transport handlers, application use case, domain invariants, ports/adapters, schema/proto, persistence, clients, runtime state, tests, CI и deployment values. Он отдельно помечает legacy, mock, prototype, dead/unwired и generated code.
 
 Для cross-repo задачи запускай независимое исследование проектов параллельно, но оркестратор сам сверяет ключевые точки входа. Результат — evidence map с `file:line`, не общий обзор.
 
@@ -160,7 +160,7 @@ TestAssessment сначала проверяет существующие tests 
 
 Reviewer проверяет корректность, безопасность, regressions и адекватность обычных tests. Architecture guardian отдельно проверяет diff только когда tranche меняет frozen placement, dependency direction, ownership, public API/versioning strategy или другой architecture concern. Неизменившийся service-level plan approval и прошлые незатронутые diff findings не требуют нового Guardian assignment.
 
-Если diff стабилен, зафиксируй `DIFF_IDENTITY` и только затем запускай применимые read-only reviews параллельно. После правки создай новую identity и сбрось только approvals, зависящие от изменённого concern.
+Если diff стабилен, один раз зафиксируй `DIFF_IDENTITY` и запусти применимые read-only reviews параллельно. Совместимые code/architecture/security/contract/data concerns можно объединить в один `ReviewBundle` независимого reviewer с отдельным verdict по каждому concern; отдельный specialist нужен только при требуемой независимости или особом evidence boundary. После правки создай новую identity и сбрось только approvals, зависящие от изменённого concern.
 
 ### 8. QA и integration
 

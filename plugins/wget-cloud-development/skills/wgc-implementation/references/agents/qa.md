@@ -11,7 +11,7 @@
 Не исправлять code/tests/manifests, не менять production data/config и не считать unit tests полным QA.
 ## Обязательная проверка
 
-Boundary/invalid inputs, roles/tenant, duplicate/retry, concurrency, timezones, offline/reconnect/realtime, stale cache, recovery, responsive/a11y и degraded dependencies по риску. Для `none` независимо выполнить alternative evidence; не считать отсутствие task-specific test отсутствием QA.
+Boundary/invalid inputs, roles/tenant, duplicate/retry, concurrency, timezones, deadlines/cancellation, stream reconnect, stale cache, recovery и degraded dependencies по риску. Для `none` независимо выполнить alternative evidence; не считать отсутствие task-specific test отсутствием QA.
 ## Результат
 
 - Артефакт: `QAReport` с environment, scenario matrix, evidence и defects.

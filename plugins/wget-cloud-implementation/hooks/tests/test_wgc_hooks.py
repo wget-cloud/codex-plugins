@@ -68,7 +68,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
-        self.assertEqual(version, "9.1.0")
+        self.assertEqual(version, "9.2.0")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -991,6 +991,17 @@ contexts:
         state_path = next((self.data / "hook-state").glob("*.json"))
         state = json.loads(state_path.read_text(encoding="utf-8"))
         self.assertEqual(state["subagent_results"][-1]["role"], "reviewer")
+
+    def test_agent_result_accepts_unambiguous_missing_colon(self):
+        spec = importlib.util.spec_from_file_location("wgc_hooks_marker", SCRIPT)
+        hooks = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(hooks)
+        marker, error = hooks.parse_agent_result(
+            'WGC_AGENT_RESULT {"role":"reviewer","verdict":"approved","phase":"","input_revision":"abc"}',
+            "implementation",
+        )
+        self.assertIsNone(error)
+        self.assertEqual(marker["role"], "reviewer")
 
     def test_subagent_verdicts_are_scoped_to_active_profile(self):
         cwd = self.projects["backend"]

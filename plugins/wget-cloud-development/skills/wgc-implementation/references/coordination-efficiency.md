@@ -12,7 +12,7 @@
 
 ## Freeze gate и размер WorkItem
 
-Перед первым production write установи `FREEZE_STATUS: approved` только после независимого Architecture Guardian approval для exact `plan_revision`. Freeze-пакет содержит полный affected behavior/RPC inventory, data model и ownership, auth/tenant matrix, contracts/events, compatibility/migration, background/retry semantics, acceptance revision и DAG. Missing либо unresolved cross-slice поле оставляет `FREEZE_STATUS: pending`; Test-maker и Implementor не запускаются.
+Для Full, multi-slice или изменённой architecture/ownership/compatibility boundary перед первым production write установи `FREEZE_STATUS: approved` только после независимого Architecture Guardian approval exact `plan_revision`. Для bounded Light/Standard без таких изменений используй `FREEZE_STATUS: n/a`; TaskAssessment и exact acceptance остаются обязательными. Missing либо unresolved cross-slice поле оставляет Full freeze `pending`; Test-maker и Implementor не запускаются.
 
 Large service или более одного независимо проверяемого behavior family разделяется на bounded vertical WorkItems/DAG slices. Один slice должен давать связный contract/provider/consumer либо законченный service behavior и собственный completion condition. Не переносить весь сервис с десятками RPC одним непрерывным assignment/turn. Следующий зависимый slice начинается после integration gate предыдущего; discovery всего сервиса не означает разрешение реализовать весь найденный scope.
 
@@ -38,15 +38,20 @@ PROTECTED_TEST_HASHES
 VALID_CHECK_CACHE
 NEXT_ALLOWED_TRANSITIONS
 EFFICIENCY_BUDGET
+SERVICE_TARGET
+REMAINING_SERVICE_SCOPE
+STOP_AFTER_SERVICE
+SERVICE_COMPLETION_CONDITION
+NEXT_SERVICE_ALLOWED
 ```
 
 После compaction/restart сначала восстанови capsule, сверь Git tree, active agents и revisions и пометь несовпавшие артефакты `stale`. До этой сверки нельзя spawn/follow-up прежнего Explorer, Architect, Test-maker или Implementor. Свободный пересказ истории и порядковый suffix имени не восстанавливают ledger.
 
-На завершении сервиса выпусти `ServiceHandoff`: outcome, commit/tree identity, remaining RPC/risks, valid evidence и следующий service input. Если пользователь разрешил отдельные задачи, следующий сервис начинается в новой задаче только с этим handoff; иначе очисти active ledger и продолжай из capsule, не пересказывая историю предыдущего сервиса агентам.
+На завершении сервиса выпусти `ServiceHandoff`: outcome, commit/tree identity, remaining RPC/risks, valid evidence и следующий service input. При `STOP_AFTER_SERVICE=true` после completion condition очисти active ledger, установи `NEXT_SERVICE_ALLOWED=false`, не создавай новых назначений и верни управление пользователю. Иначе следующий сервис получает только handoff, без истории correction loops.
 
 ## EfficiencyBudget
 
-До execution задай на WorkItem или транш: `MAX_AGENT_ASSIGNMENTS`, `MAX_WAIT_CALLS`, `MAX_EXPENSIVE_CHECKS`, `MAX_REWORK_ROUNDS` и `CHECKPOINT_BOUNDARY`. Default обычного транша: 4 assignments, 6 wait calls, 1 дорогая T2 suite, 1 correction/recheck; specialist gate по новому risk signal требует записанного budget extension. Бюджет не ослабляет обязательный safety gate и не превращает незавершённую работу в success.
+До execution задай на WorkItem или транш: `MAX_AGENT_ASSIGNMENTS`, `MAX_COORDINATION_DECISIONS`, `MAX_UNCHANGED_WAIT_STREAK`, `MAX_PASSIVE_WAIT_MINUTES`, `MAX_EXPENSIVE_CHECKS`, `MAX_REWORK_ROUNDS` и `CHECKPOINT_BOUNDARY`. Default обычного транша: 4 assignments, 2 unchanged waits без нового анализа, 1 дорогая T2 suite, 1 correction/recheck; specialist gate по новому risk signal требует записанного budget extension. Бюджет не ослабляет обязательный safety gate и не превращает незавершённую работу в success.
 
 Перед превышением бюджета останови новые назначения и выпусти `EfficiencyCheckpoint`: полученный diff/evidence, причина расхода, дубликаты, оставшиеся риски и решение `continue | merge-scope | split | needs_input`. Не создавай Token Auditor и не трать новый агент только на подсчёт. Если за одну checkpoint boundary нет meaningful diff/evidence, не продолжай тем же assignment бесконечно.
 
@@ -64,9 +69,11 @@ Finding получает стабильный ключ `role + invariant + locat
 
 ## Контекст и ожидание
 
+Между supervision boundaries применяй exponential backoff.
+
 `FORK_TURNS: none` — норма; `all` запрещён. Положительное N допустимо только для минимального незаменимого фрагмента разговора, который нельзя безопасно выразить артефактом. Reviewer получает собственный компактный контекст и immutable diff, а не историю implementor.
 
-После назначения используй cursor-based event-driven ожидание. Первое интерактивное ожидание ограничь 45–60 секундами; при неизменившемся состоянии не отправляй агенту сообщение и увеличивай следующую границу exponential backoff до supervision boundary. После двух unchanged waits не опрашивай тот же assignment снова до следующей checkpoint boundary или события. Не делай фиксированный 30-секундный polling, повторный `list_agents` без нового сигнала или status-only follow-up. Checkpoint нужен при `needs_attention`, завершении, изменении revision, достижении supervision boundary или доказанном stall. Пользовательский progress update не является input агенту.
+После назначения используй cursor-based event-driven ожидание. Первое интерактивное ожидание ограничь 45–60 секундами. Неизменившийся результат ведёт прямо к следующему пассивному wait без повторного чтения thread/plan, reasoning-цикла, `list_agents` или сообщения агенту; считай время отдельно от coordination decisions. После двух unchanged waits обнови только компактный supervision checkpoint и жди event/границу, не создавая status-only follow-up. Пользовательский progress update не является input агенту.
 
 ## Вертикальные slices и freeze
 

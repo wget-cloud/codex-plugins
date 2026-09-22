@@ -60,7 +60,7 @@
 
 Не патчить код по интуиции. Выполни последовательно:
 
-1. Сверь release/config/feature flags/cache/service-worker и tenant/role.
+1. Сверь release/config/feature flags/cache/runtime и tenant/role.
 2. Сверь часовой пояс, locale, clock, retry и concurrency условия.
 3. Уменьши сценарий до ближайшего стабильного failing observable.
 4. Запроси конкретный недостающий identifier или временной диапазон.

@@ -1,6 +1,6 @@
 # Wget Cloud Engineering Plugin
 
-Версия 9.1.0 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
+Версия 9.2.0 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
 
 | Skill | Назначение |
 |---|---|
@@ -13,7 +13,7 @@
 
 ## Runtime policy
 
-Service tier не является quality gate и не блокирует запуск. Все роли используют явную минимально достаточную GPT-5.6 lane: Luna/low для простых bounded-задач, Terra/medium для обычной инженерной работы и Sol/high для orchestration, сложной архитектуры, RCA и critical review gates. Каждое назначение явно задаёт `model`, `reasoning_effort` и `fork_turns=none`; `inherit` и полный fork истории не используются. Одновременно допускается максимум три субагента. DecisionSnapshot, ResumeCapsule, assignment ledger и bounded EfficiencyBudget предотвращают потерю контекста, дублирующие назначения и бесконечные wait/review циклы.
+Service tier не является quality gate и не блокирует запуск. Все роли используют явную минимально достаточную GPT-5.6 lane: Luna/low для простых bounded-задач, Terra/medium для обычной инженерной работы и orchestration Light/Standard, Sol/medium — только для Full/critical orchestration, сложной архитектуры, RCA и critical review gates. Для `gpt-5.6-sol` уровни `high`, `xhigh`, `max` и `ultra` запрещены. Каждое назначение явно задаёт `model`, `reasoning_effort` и `fork_turns=none`; `inherit` и полный fork истории не используются. Одновременно допускается максимум три субагента. DecisionSnapshot, ResumeCapsule, assignment ledger и bounded EfficiencyBudget предотвращают потерю контекста, дублирующие назначения и бесконечные wait/review циклы.
 
 ## Команды и профили
 

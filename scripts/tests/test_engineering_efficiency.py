@@ -10,7 +10,7 @@ PLUGIN = ROOT / "plugins" / "wget-cloud-implementation"
 class EngineeringEfficiencyTests(unittest.TestCase):
     def test_version_and_service_tier_policy(self):
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
-        self.assertEqual(manifest["version"], "9.1.0")
+        self.assertEqual(manifest["version"], "9.2.0")
 
         hook = (PLUGIN / "hooks" / "wgc_hooks.py").read_text()
         for obsolete_gate in (
@@ -44,6 +44,26 @@ class EngineeringEfficiencyTests(unittest.TestCase):
             self.assertIn("`all` запрещён", routing)
             self.assertIn("Service tier не является quality gate", routing)
 
+    def test_sol_reasoning_is_capped_at_medium(self):
+        forbidden_routes = (
+            "gpt-5.6-sol/high",
+            "gpt-5.6-sol/xhigh",
+            "gpt-5.6-sol/max",
+            "gpt-5.6-sol/ultra",
+            "Sol/high",
+        )
+
+        for skill in sorted((PLUGIN / "skills").iterdir()):
+            routing = (skill / "references" / "model-routing.md").read_text()
+            registry = (skill / "references" / "agents" / "index.md").read_text()
+
+            self.assertIn("gpt-5.6-sol/medium", routing)
+            self.assertIn("`high`, `xhigh`, `max` и `ultra`", routing)
+            self.assertIn("Любой Sol effort выше `medium` запрещён", registry)
+            for forbidden in forbidden_routes:
+                self.assertNotIn(forbidden, routing)
+                self.assertNotIn(forbidden, registry)
+
     def test_test_ownership_keeps_implementation_lean_and_bugfix_independent(self):
         for name in ("wgc-implementation", "wgc-epic-implementation"):
             skill = PLUGIN / "skills" / name
@@ -56,6 +76,15 @@ class EngineeringEfficiencyTests(unittest.TestCase):
 
         bugfix = (PLUGIN / "skills" / "wgc-bugfix" / "references" / "task-assessment.md").read_text()
         self.assertIn("Bugfix сохраняет независимый Test-maker", bugfix)
+
+    def test_compact_coordination_routes_are_explicit(self):
+        source = ROOT / "plugin-src" / "wget-cloud-implementation" / "policies"
+        policy = (source / "coordination-efficiency.md").read_text()
+        assessment = (source / "task-assessment.md").read_text()
+        self.assertIn("MAX_UNCHANGED_WAIT_STREAK", policy)
+        self.assertIn("ReviewBundle", policy)
+        self.assertIn("STOP_AFTER_BOUNDARY", policy)
+        self.assertIn("не Full автоматически", assessment)
 
 
 if __name__ == "__main__":
