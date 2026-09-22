@@ -14,11 +14,11 @@
 
 1. Verify issue/Project revision и dependencies.
 2. Product acceptance gate.
-3. Architecture slice с minimum criticality и per-item TestAssessment.
-4. Implementor diff.
+3. Architecture slice с minimum criticality и per-item TestAssessment; обычные tests принадлежат Implementor.
+4. Implementor vertical diff + targeted T0/T1.
 5. Orchestrator integrity check.
-6. Reviewer + Architecture Guardian diff gate.
-7. QA.
+6. Reviewer + conditional Architecture Guardian diff gate.
+7. Conditional QA либо одна integrated candidate QA.
 8. Integration/delivery/status reconciliation.
 
 ## Invalidation

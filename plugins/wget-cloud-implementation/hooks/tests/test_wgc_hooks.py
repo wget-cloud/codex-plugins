@@ -68,7 +68,7 @@ class HooksConfigTest(unittest.TestCase):
             r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*)?$"
         )
         version = manifest["version"]
-        self.assertEqual(version, "9.0.2")
+        self.assertEqual(version, "9.1.0")
         self.assertNotIn("+", version, "plugin version must not contain build metadata")
         self.assertIsNotNone(plain_semver.fullmatch(version), f"invalid plain SemVer: {version}")
 
@@ -157,13 +157,12 @@ class WgcHooksTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout) if result.stdout else None
 
-    def test_fast_and_unverifiable_service_tiers_refuse_skill_activation(self):
+    def test_service_tier_does_not_gate_skill_activation(self):
         prompt = {"hook_event_name": "UserPromptSubmit", "turn_id": "tier-test", "prompt": "$wgc-implementation do it"}
         for tier in ("fast", "priority", "ultrafast"):
             with self.subTest(tier=tier):
                 result = self.raw_call("prompt-submit", {**prompt, "service_tier": tier})
-                self.assertEqual(2, result.returncode)
-                self.assertIn("WGC_FAST_MODE_FORBIDDEN", result.stderr)
+                self.assertEqual(0, result.returncode, result.stderr)
 
         for config in (
             '[features]\nfast_mode = false\n',
@@ -174,8 +173,7 @@ class WgcHooksTest(unittest.TestCase):
             with self.subTest(config=config):
                 (self.codex_home / "config.toml").write_text(config, encoding="utf-8")
                 result = self.raw_call("prompt-submit", prompt)
-                self.assertEqual(2, result.returncode)
-                self.assertIn("WGC_SERVICE_TIER_UNVERIFIABLE", result.stderr)
+                self.assertEqual(0, result.returncode, result.stderr)
         (self.codex_home / "config.toml").write_text(
             'service_tier = "default"\n\n[features]\nfast_mode = false\n', encoding="utf-8"
         )

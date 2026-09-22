@@ -15,6 +15,11 @@ ALLOW_PATHS: <разрешённые paths>
 DENY_PATHS: <запрещённые paths>
 PROTECTED_TESTS: <paths и hashes>
 INPUT_ARTIFACTS: <upstream plans/reports/findings>
+DECISION_SNAPSHOT: <актуальные item/plan/acceptance revisions и dependency map>
+RESUME_CAPSULE_REVISION: <exact restored capsule revision|n/a>
+ASSIGNMENT_KEY: <stable role+phase+item+slice+scope+revisions+artifact ID>
+RETRY_REASON: <n/a|new evidence|invalidated revision|failed result|contract correction>
+DIFF_IDENTITY: <immutable reviewed tree ID|n/a>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <targeted checks>
 ASSESSMENT_REVISION: <current TaskAssessment revision; n/a only during assessment/intake>
@@ -24,15 +29,20 @@ MODEL_ROUTE: <economy|balanced|frontier>
 MODEL: <selected advertised model>
 REASONING_EFFORT: <selected effort>
 ROUTING_BASIS: <role lane, risk и fallback evidence>
-FORK_TURNS: <none|smallest justified positive N|all>
+FORK_TURNS: <none|smallest justified positive N>
+FORK_JUSTIFICATION: <n/a for none|why artifact cannot replace exact N turns>
+SPAWN_PREFLIGHT: <exact model + reasoning_effort + fork_turns args verified>
 TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
 MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
+EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint boundary>
 INPUT_REVISION: <exact current workflow revision>
 ```
 
 `TASK_NAME` строится из prefix и snake_case item slice. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane. Каждый субагент работает только в slice, сохраняет чужие изменения, не commit/push/PR/merge/release/deploy без приложенного разрешения и не меняет YouTrack, кроме Operator с exact sync plan.
+
+Перед spawn сверь [coordination contract](../coordination-efficiency.md): active/completed `ASSIGNMENT_KEY`, ResumeCapsule и EfficiencyBudget. Вызов без явных exact `model`, `reasoning_effort` и `fork_turns` запрещён; обычный fork — `none`, `all` запрещён.
 
 ## Model routing policy
 
@@ -48,9 +58,9 @@ INPUT_REVISION: <exact current workflow revision>
 | Explorer | explorer | repository mapping | нет | economy | [explorer.md](explorer.md) |
 | Architect | architect | ImplementationDAG | нет | frontier | [architect.md](architect.md) |
 | Architecture Guardian | architecture_guardian | plan/diff gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | test_maker | per-item adaptive TestAssessment | tests allowlist при add/update | balanced | [test-maker.md](test-maker.md) |
-| Implementor | implementor | one atomic slice | production/docs allowlist | balanced | [implementor.md](implementor.md) |
-| Reviewer | reviewer | independent review | нет | frontier | [reviewer.md](reviewer.md) |
+| Test-maker | test_maker | per-item protected critical TestAssessment/tests | protected tests allowlist | balanced | [test-maker.md](test-maker.md) |
+| Implementor | implementor | one vertical item slice | production/docs и обычные item-local tests | balanced | [implementor.md](implementor.md) |
+| Reviewer | reviewer | independent review; frontier только при critical escalation | нет | balanced | [reviewer.md](reviewer.md) |
 | QA | qa | behavior verification | нет в repository | balanced | [qa.md](qa.md) |
 | YouTrack Operator | youtrack_operator | exact status sync | selected item/status allowlist | economy | [youtrack-operator.md](youtrack-operator.md) |
 | DevOps | devops | GitOps desired state | k8s allowlist | balanced | [devops.md](devops.md) |
@@ -69,7 +79,7 @@ Architecture Guardian `phase=plan` также всегда item-facing: marker �
 
 ## Независимость
 
-- Implementor не совмещается с Test-maker, Reviewer, QA или Architecture Guardian.
+- Implementor не меняет protected tests Test-maker и не совмещается с Reviewer, QA или Architecture Guardian; обычные item-local tests принадлежат Implementor.
 - Architect не утверждает свой plan; DevOps не является Infrastructure Reviewer.
 - Product/Project Manager и Operator не объявляют delivery результата без repository evidence.
 - Два write-агента не работают одновременно в одном repository или contract boundary.

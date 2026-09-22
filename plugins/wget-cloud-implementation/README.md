@@ -1,6 +1,6 @@
 # Wget Cloud Engineering Plugin
 
-Версия 9.0.2 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
+Версия 9.1.0 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
 
 | Skill | Назначение |
 |---|---|
@@ -13,11 +13,11 @@
 
 ## Runtime policy
 
-WGC skills работают только при `service_tier = "default"` и `[features].fast_mode = false`. Hooks отклоняют Fast/priority/ultrafast и непроверяемую конфигурацию. Все роли используют явную минимально достаточную GPT-5.6 lane: Luna/low для простых bounded-задач, Terra/medium для обычной инженерной работы и Sol/high для orchestration, сложной архитектуры, RCA и critical review gates. Orchestrator требует запуска основной задачи на Sol/high; `main-only` и `inherit` не являются допустимыми lanes. Priority-only инструмент означает blocker, настройки пользователя не меняются. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`.
+Service tier не является quality gate и не блокирует запуск. Все роли используют явную минимально достаточную GPT-5.6 lane: Luna/low для простых bounded-задач, Terra/medium для обычной инженерной работы и Sol/high для orchestration, сложной архитектуры, RCA и critical review gates. Каждое назначение явно задаёт `model`, `reasoning_effort` и `fork_turns=none`; `inherit` и полный fork истории не используются. Одновременно допускается максимум три субагента. DecisionSnapshot, ResumeCapsule, assignment ledger и bounded EfficiencyBudget предотвращают потерю контекста, дублирующие назначения и бесконечные wait/review циклы.
 
 ## Команды и профили
 
-Отдельный Task Assessor выбирает сложность, риск, domains, tests и required gates. Light использует одного Implementor и проверку Orchestrator; Standard — Implementor/Reviewer/QA и Test-maker при add/update; Full — архитектурные и test gates плюс специалисты по сигналам. Security, данные, миграции, контракты, concurrency, incident и GitOps не допускают Light. В epic оценка и gates принадлежат каждому item; Product outcome и Project reconciliation сохраняются.
+Отдельный Task Assessor выбирает сложность, риск, domains, tests и required gates. Light использует одного Implementor и проверку Orchestrator. Standard выполняется короткими вертикальными slices: Implementor пишет код и обычные тесты, Reviewer работает в balanced lane, а QA запускается только при observable-risk signal. Test-maker сохраняется для bugfix regression tests и critical/protected сценариев. Full добавляет только применимые архитектурные и специализированные gates. CheckPlan назначает одного владельца дорогих T2/T3 проверок и не повторяет полный suite после каждого локального diff. Security, данные, миграции, контракты, concurrency, incident и GitOps не допускают Light. В epic оценка и gates принадлежат каждому item; Product outcome и Project reconciliation сохраняются, а HandoffCapsule переносит компактный контекст между партиями.
 
 Backend, Frontend, Site, Front-lib и GitOps — профили знаний внутри процессов, не новые skills. Data & Migration Reviewer и Reliability Reviewer дополняют существующие Browser QA, Security Reviewer и Contract QA. Domain profile не расширяет permissions роли. Новые тесты защищают конкретный invariant; existing evidence переиспользуется до релевантного изменения.
 

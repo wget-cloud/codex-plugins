@@ -1,6 +1,6 @@
 # TaskAssessment и адаптивная команда
 
-Отдельный Task Assessor обязателен для каждой задачи; в epic — для каждого frozen item. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы.
+Отдельный Task Assessor обязателен для каждой задачи; в epic — для каждого frozen item. Несколько slices одной задачи/item переиспользуют assessment, пока route, acceptance, risk surface и path boundaries не изменились. Оркестратор передаёт цель, acceptance, Git baseline и минимальный scoped context. Оценщик read-only; он не становится исполнителем или reviewer собственной работы.
 
 ## Решение
 
@@ -9,10 +9,10 @@
 | Mode | Критерий | Роли реализации после оценщика |
 |---|---|---|
 | light | small + low, обратимая правка без изменения поведения/данных/контрактов | Implementor; финальная проверка Orchestrator |
-| standard | ограниченное изменение поведения без critical/architecture/cross-repo | Implementor, Reviewer, QA; Test-maker только add/update |
-| full | large, архитектура, cross-repo или critical | Architect, Guardian plan/diff, Test-maker, Implementor, Reviewer, QA и специалисты по сигналам |
+| standard | ограниченное изменение поведения без critical/architecture/cross-repo | Implementor + Reviewer; QA по observable-risk signal; обычные tests пишет Implementor |
+| full | large, архитектура, cross-repo или critical | Architect + Guardian plan; Implementor + Reviewer; Test-maker/Guardian diff/QA/специалисты только по critical или изменённым concerns |
 
-Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical/full. Architecture и cross-repo требуют full. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Не запускать полный штат автоматически из-за нехватки контекста. Light при неопределённости запрещён.
+Security/auth/RBAC/tenant, money, data, migration, contract, concurrency, incident, GitOps и reliability требуют critical/full. Architecture и cross-repo требуют full. Full означает строгий набор применимых gates, а не новый агент для каждого файла или повтор всех gates после любого diff. Plan и незатронутые specialist approvals переиспользуются по selective invalidation. Неизвестный риск → `needs_evidence`: одно ограниченное исследование; нерешённая семантика → `needs_input`. Не запускать полный штат автоматически из-за нехватки контекста. Light при неопределённости запрещён.
 
 В task-creation все режимы требуют Task Assessor, Product/Project/Auditor, отдельного Effort Estimator (SP), независимого Backlog Reviewer и Orchestrator; full добавляет Architect. Малый объём не отменяет продуктовую проработку. Operator нужен только для явно разрешённой записи. В epic Project scope/reconcile и truthful sync общие, остальная команда выбирается для каждого item; Product outcome остаётся per-item. В bugfix full сохраняет triage/investigator/reproducer/RCA reviewer; light/standard исходную репродукцию и причину независимо проверяет Orchestrator перед правкой и после неё. Неподтверждённая причина требует rescope/усиления, не догадки.
 
@@ -38,7 +38,7 @@ WGC_AGENT_RESULT: {"role":"task-assessor","verdict":"assessed","phase":"","input
 
 Все downstream markers повторяют `assessment_revision`, epic — также item identity. Поля времени/планов в assignment — supervision, не разрешение объявить незавершённую задачу готовой.
 
-Для light/standard `none|reuse` оценщик добавляет sibling `assessment` с полноценным TestAssessment по [test policy](test-assessment.md). Его paths, risk и disposition совпадают с TaskAssessment. Для `add/update` и full оценщик не пишет тесты: отдельный Test-maker выпускает TestAssessment. В task-creation testing только provisional, execution assessment не нужен.
+Для light/standard оценщик добавляет sibling `assessment` с полноценным TestAssessment по [test policy](test-assessment.md). Его paths, risk и disposition совпадают с TaskAssessment. При implementation/epic standard `add/update` он задаёт `test_ownership=implementor`, exact invariants/paths/commands, но не пишет тесты. Bugfix сохраняет независимый Test-maker для `add/update`; Full critical/protected assessment также выпускает отдельный Test-maker. В task-creation testing только provisional, execution assessment не нужен.
 
 ## Специалисты
 

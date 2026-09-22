@@ -27,15 +27,15 @@ flowchart TD
     R --> D["Architect: design и DAG"]
     D --> AG1{"Architecture gate"}
     AG1 -- changes_requested --> D
-    AG1 -- approved --> T["Test-maker: TestAssessment"]
-    T --> IM["Implementor: один DAG slice"]
+    AG1 -- approved --> T["TestAssessment owner"]
+    T --> IM["Implementor: vertical slice"]
     IM --> V["Integrity и targeted verification"]
     V -- fail --> IM
     V -- pass --> CR["Reviewer"]
-    V -- pass --> AG2["Architecture guardian"]
+    V -- architecture concern changed --> AG2["Architecture guardian"]
     CR -- changes_requested --> IM
     AG2 -- changes_requested --> D
-    CR -- approved --> Q["QA"]
+    CR -- approved --> Q["Conditional QA / integration"]
     AG2 -- approved --> Q
     Q -- defect --> IM
     Q -- pass --> IN["Integration gate"]
@@ -66,9 +66,9 @@ flowchart TD
 | `test_assessment` | approved plan + acceptance revision | `implementation`, `blocked` |
 | `implementation` | TestAssessment и условный TestPlan/protected paths | `verification`, `blocked` |
 | `verification` | diff + command evidence | `review`, `implementation`, `blocked` |
-| `review` | verified diff | `qa`, `implementation`, `design`, `blocked` |
-| `qa` | reviewer + architecture approvals | `integration`, `implementation`, `blocked` |
-| `integration` | QA report | `implementation`, `ready`, `blocked` |
+| `review` | verified diff | `qa`, `integration`, `implementation`, `design`, `blocked` |
+| `qa` | reviewer + применимые architecture approvals | `integration`, `implementation`, `blocked` |
+| `integration` | применимые review/QA reports | `implementation`, `ready`, `blocked` |
 | `ready` | all application gates | `complete`, `devops`, `awaiting_deploy_approval` |
 | `devops` | DeploymentPlan | `infrastructure_review` |
 | `infrastructure_review` | k8s diff + validation | `devops`, `awaiting_deploy_approval`, `blocked` |
@@ -133,7 +133,7 @@ Architecture guardian проверяет план относительно те�
 
 ### 5. Test assessment
 
-Test-maker сначала выпускает описанный в [test-assessment.md](test-assessment.md) `TestAssessment`. Он проверяет существующие tests до новых и выбирает `add/update/reuse/none`; executable TestPlan создаётся только при `add/update`. Critical behavior требует максимального evidence изменённых happy/error/boundary/security branches и не допускает `none`.
+TestAssessment сначала проверяет existing tests и выбирает disposition/ownership. Обычные slice-local tests назначаются Implementor и проверяются Reviewer вместе с diff. Отдельный Test-maker пишет protected tests только для critical invariant, где независимый baseline снижает риск. Не создавай test write-agent для каждого handler или механического happy path.
 
 Сразу после его работы оркестратор фиксирует:
 
@@ -145,7 +145,7 @@ Test-maker сначала выпускает описанный в [test-assessm
 
 ### 6. Implementation slices
 
-Implementor получает ровно один готовый узел DAG. Он не расширяет scope и не редактирует защищённые тесты. После минимального связного изменения он выполняет assessment-prescribed evidence и все repository gates; `none` не разрешает пропустить typecheck/lint/build/CI thresholds/consumer/generation checks. Если contract или test scope изменился, assessment инвалидируется и решение возвращается Test-maker.
+Implementor получает bounded vertical slice вместе с обычными tests, а не отдельный assignment на слой/handler. Во время работы выполняется T0, после slice один T1, полная T2 suite — один раз после candidate freeze. Он не расширяет scope и не редактирует protected tests. Изменение frozen contract/security/ownership или protected scope инвалидирует только зависимые gates.
 
 После каждого write-agent оркестратор проверяет:
 
@@ -157,13 +157,13 @@ Implementor получает ровно один готовый узел DAG. О
 
 ### 7. Independent review
 
-Reviewer проверяет корректность, безопасность, regressions и адекватность тестов. Architecture guardian отдельно проверяет placement, dependency direction, boundaries, public API discipline и стиль проекта. Одобрение одного не заменяет другое.
+Reviewer проверяет correctness, regressions и обычные tests. Architecture Guardian проверяет diff только когда slice меняет frozen placement, dependency direction, ownership, public API/versioning strategy или другой architecture concern. Service-level plan approval переиспользуется.
 
-Если diff стабилен, два read-only review можно делать параллельно. После любой правки оба approval, затронутые этой правкой, сбрасываются.
+Если diff стабилен, один раз зафиксируй `DIFF_IDENTITY` и запускай только применимые read-only reviews. Правка инвалидирует verdict только затронутого concern и downstream evidence.
 
 ### 8. QA и integration
 
-QA работает только после reviewer approval и post-implementation architecture approval. Он исследует поведение как внешний пользователь/интеграция и пытается найти недоказанные failure modes. Найденный product defect возвращается implementor; ошибочный/неполный тест — test-maker; архитектурная причина — architect, затем implementor.
+QA запускается после reviewer approval для critical externally observable behavior либо один раз на integrated candidate. Для scaffold/docs/mechanical slice отдельный QA-agent не нужен. Product defect возвращается Implementor; protected-test defect — Test-maker; architecture cause — Architect.
 
 Integration gate выполняет оркестратор:
 

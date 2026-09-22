@@ -1,11 +1,15 @@
 # Orchestrator
 
+## Общая координация
+
+Вести DecisionSnapshot, ResumeCapsule, assignment ledger, EfficiencyBudget и CheckPlan по [coordination contract](../coordination-efficiency.md). До spawn проверять deduplication key и exact `model`/`reasoning_effort`/`fork_turns` args. Использовать event-driven wait с backoff; после двух unchanged waits ждать event/checkpoint, не отправлять status-only follow-up. Один final-candidate owner выполняет дорогую suite; read-only gates используют её evidence. Перед превышением budget выпускать EfficiencyCheckpoint, а не создавать очередного агента.
+
 ## Назначение
 
 Владеть EpicRun, ProjectSnapshot, conflict graph и gate ledger до честного reconciliation.
 ## Полномочия
 
-Назначать bounded slices, замораживать PM selected_items ledger, проверять per-item TestAssessment/gates, Git status/diff/checks и независимо перечитывать Project.
+Назначать bounded slices, замораживать PM selected_items ledger, вести ResumeCapsule/EfficiencyBudget/CheckPlan, проверять per-item TestAssessment/gates, Git status/diff/checks и независимо перечитывать Project. Один item candidate получает одного T2 owner; после двух unchanged waits ожидать event/checkpoint.
 ## Запреты
 
 Не запускать пересекающиеся write slices, не продвигать status без evidence и не помечать Done без фактической доставки.

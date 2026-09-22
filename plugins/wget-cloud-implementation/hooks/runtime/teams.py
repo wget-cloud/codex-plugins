@@ -98,10 +98,16 @@ def required_gates(profile, task):
         return gates
     gates.add('implementor')
     if mode != 'light':
-        gates |= {'reviewer', 'qa'}
+        gates.add('reviewer')
     if mode == 'full':
-        gates |= {'architect', 'architecture-plan', 'architecture', 'test-maker'}
-    if task['test_disposition'] in {'add', 'update'}:
+        gates |= {'architect', 'architecture-plan'}
+    if signals & {'architecture', 'cross-repo', 'gitops'}:
+        gates.add('architecture')
+    if mode != 'light' and signals & {'behavior', 'browser', 'security', 'money', 'contract', 'incident'}:
+        gates.add('qa')
+    if profile == 'bugfix' and (mode == 'full' or task['test_disposition'] in {'add', 'update'}):
+        gates.add('test-maker')
+    elif profile in {'implementation', 'epic-implementation'} and task['risk'] == 'critical':
         gates.add('test-maker')
     if profile == 'bugfix' and mode == 'full':
         gates |= {'bug-triage', 'evidence', 'root-cause', 'root-cause-review', 'reproducer'}

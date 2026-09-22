@@ -13,6 +13,10 @@ REPOSITORIES: <разрешённые repositories>
 ALLOW_PATHS: <разрешённые paths или read-only>
 DENY_PATHS: <запрещённые paths>
 INPUT_ARTIFACTS: <TaskRequest, evidence и upstream artifacts>
+DECISION_SNAPSHOT: <актуальные scope/product/project revisions и dependency map>
+RESUME_CAPSULE_REVISION: <exact restored capsule revision|n/a>
+ASSIGNMENT_KEY: <stable role+phase+slice+scope+revisions+artifact ID>
+RETRY_REASON: <n/a|new evidence|invalidated revision|failed result|contract correction>
 PROJECT_SCOPE: <exact instance URL/project key/issue IDs и mutation allowlist>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <read-only или verification checks>
@@ -23,15 +27,20 @@ MODEL_ROUTE: <economy|balanced|frontier>
 MODEL: <selected advertised model>
 REASONING_EFFORT: <selected effort>
 ROUTING_BASIS: <role lane, risk и fallback evidence>
-FORK_TURNS: <none|smallest justified positive N|all>
+FORK_TURNS: <none|smallest justified positive N>
+FORK_JUSTIFICATION: <n/a for none|why artifact cannot replace exact N turns>
+SPAWN_PREFLIGHT: <exact model + reasoning_effort + fork_turns args verified>
 TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
 MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
+EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint boundary>
 INPUT_REVISION: <exact current workflow revision>
 ```
 
 `TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет YouTrack scope и не объявляет весь backlog готовым.
+
+Перед spawn сверь [coordination contract](../coordination-efficiency.md): active/completed `ASSIGNMENT_KEY`, ResumeCapsule и EfficiencyBudget. Вызов без явных exact `model`, `reasoning_effort` и `fork_turns` запрещён; обычный fork — `none`, `all` запрещён.
 
 ## Model routing policy
 

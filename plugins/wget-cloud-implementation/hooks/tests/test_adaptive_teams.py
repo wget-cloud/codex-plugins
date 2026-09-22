@@ -23,6 +23,7 @@ def task(**changes):
 def assessment(t):
     return dict(plan_revision=t['plan_revision'], acceptance_revision=t['acceptance_revision'],
                 test_criticality=t['risk'], test_disposition=t['test_disposition'], scope_fingerprint='fixture',
+                test_ownership='n/a',
                 assessed_paths=t['assessed_paths'], tested_invariants=['copy only'], existing_tests=['no_relevant_tests'],
                 coverage_mode='none', alternative_evidence=['synthetic-visual-check'], residual_risks=['none-observed'],
                 rationale='no behavioral change')
@@ -37,7 +38,9 @@ class TeamPolicyTests(unittest.TestCase):
                 t = task(mode='full', risk='critical', risk_signals=[signal], test_disposition='reuse')
                 hooks.teams.normalize(t)
                 gates = hooks.teams.required_gates('implementation', t)
-                self.assertTrue({'test-maker', 'architect', 'architecture-plan', 'architecture', 'reviewer', 'qa'} <= gates)
+                self.assertTrue({'test-maker', 'architect', 'architecture-plan', 'reviewer'} <= gates)
+                self.assertEqual('architecture' in gates, signal == 'gitops')
+                self.assertEqual('qa' in gates, signal in {'security', 'money', 'contract', 'incident'})
                 expected = {'security':'security', 'data':'data', 'migration':'data', 'contract':'contract', 'concurrency':'reliability', 'reliability':'reliability', 'gitops':'infrastructure'}.get(signal)
                 if expected:
                     self.assertIn(expected, gates)
@@ -47,12 +50,15 @@ class TeamPolicyTests(unittest.TestCase):
             with self.subTest(changes=changes), self.assertRaises(ValueError):
                 hooks.teams.normalize(task(**changes))
 
-    def test_standard_reuses_tests_without_test_maker_but_add_requires_it(self):
+    def test_standard_implementation_keeps_ordinary_tests_with_implementor(self):
         t = task(mode='standard', risk='standard', risk_signals=['behavior'], test_disposition='reuse')
         hooks.teams.normalize(t)
         self.assertEqual(hooks.teams.required_gates('implementation', t), {'task-assessor', 'implementor', 'reviewer', 'qa'})
         t['test_disposition'] = 'add'
+        self.assertNotIn('test-maker', hooks.teams.required_gates('implementation', t))
+        t = task(mode='full', risk='critical', risk_signals=['security'], test_disposition='add')
         self.assertIn('test-maker', hooks.teams.required_gates('implementation', t))
+        self.assertIn('test-maker', hooks.teams.required_gates('bugfix', task(mode='standard', risk='standard', risk_signals=['behavior'], test_disposition='add')))
 
     def test_v3_migration_cannot_reuse_approvals_and_malformed_v4_is_unhealthy(self):
         v = hooks.migrate_state_v4({'version':3, 'baseline_dirty':{'backend':{}}, 'subagent_results':[{'role':'qa','verdict':'pass'}], 'verification':{'test':{}}, 'task_assessments':[]})
@@ -142,6 +148,35 @@ class TeamLifecycleTests(unittest.TestCase):
         self.assertIsNone(self.finish(t))
         self.assertNotIn('test-maker',{r['role'] for r in self.h.adaptive_state()['subagent_results']})
         self.assertEqual(list((self.cwd/'tests').iterdir()),[existing])
+
+    def test_standard_implementation_keeps_assessment_while_implementor_authors_planned_test(self):
+        self.h.activate()
+        t = task(
+            mode='standard', risk='standard', risk_signals=['behavior'], test_disposition='add',
+            assessed_paths=['backend:src/app.ts', 'backend:tests/app.test.ts'],
+        )
+        a = assessment(t)
+        a.update(
+            test_ownership='implementor',
+            coverage_mode='targeted',
+            test_plan={
+                'action':'add', 'tests':['backend:tests/app.test.ts'], 'commands':['npm test -- tests/app.test.ts'],
+                'expected_baseline':'missing regression coverage', 'actual_baseline':'missing regression coverage',
+            },
+        )
+        t = self.h.record_task(self.cwd, t, a)
+        self.post('tests/app.test.ts', "it('covers the change', () => {});")
+        state = self.h.adaptive_state()
+        self.assertEqual(len(state['test_assessments']), 1)
+        self.assertEqual(state['test_assessments'][0]['test_ownership'], 'implementor')
+        self.assertNotIn('test-maker', hooks.teams.required_gates('implementation', t))
+
+    def test_standard_bugfix_add_update_requires_separate_test_maker(self):
+        self.h.activate_bugfix()
+        t = task(mode='standard', risk='standard', risk_signals=['behavior'], test_disposition='add')
+        self.h.record_task(self.cwd, t)
+        self.assertEqual(self.h.adaptive_state()['test_assessments'], [])
+        self.assertIn('test-maker', hooks.teams.required_gates('bugfix', t))
 
     def test_compact_bugfix_requires_before_after_and_independent_rca_evidence(self):
         self.h.activate_bugfix(prompt='Use $wgc-bugfix to fix a typo')

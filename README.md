@@ -46,7 +46,7 @@ Plugin `wget-cloud-development` публикует только `$wgc-implementa
 
 ## Проверка
 
-Engineering 9.0.2 редактируется через `plugin-src/wget-cloud-implementation`: `roles/` содержит общие части контрактов, `workflows/` — отличия процессов и локальные references, `domains/` — профильные знания, `policies/` — общие правила. `composition.json` явно перечисляет каждый выходной файл и его источники. `make skills-build` обновляет deployable skills, а `make validate` проверяет отсутствие расхождений и переносимость. Generated files хранятся в Git; runtime не обращается к `plugin-src` или соседним skills.
+Engineering 9.1.0 редактируется через `plugin-src/wget-cloud-implementation`: `roles/` содержит общие части контрактов, `workflows/` — отличия процессов и локальные references, `domains/` — профильные знания, `policies/` — общие правила. `composition.json` явно перечисляет каждый выходной файл и его источники. `make skills-build` обновляет deployable skills, а `make validate` проверяет отсутствие расхождений и переносимость. Generated files хранятся в Git; runtime не обращается к `plugin-src` или соседним skills.
 
 Перед проверкой нужен Python с PyYAML для официальных validators (CI использует PyYAML 6.0.2). Собственные hooks/сборщик используют только stdlib. При нескольких Python передай `make validate PYTHON=/absolute/path/to/python3`.
 

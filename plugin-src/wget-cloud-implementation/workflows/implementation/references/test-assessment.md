@@ -1,6 +1,6 @@
 # Адаптивная политика тестирования
 
-Test-maker обязателен для Full и add/update; Light/Standard none/reuse оценивает отдельный Task Assessor. Новый тест не является обязательным результатом. До production implementation он выпускает `TestAssessment`, выбирая `add | update | reuse | none`; после изменения scope, плана, acceptance, тестов, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
+Test-maker обязателен для Full critical/protected invariants; Light/Standard оценивает Task Assessor. Обычные slice-local tests пишет Implementor и Reviewer проверяет их вместе с diff. До production implementation владелец assessment выпускает `TestAssessment`, выбирая `add | update | reuse | none` и `test_ownership: implementor | protected_test_maker | n/a`; после изменения scope, плана, acceptance, protected tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
 
 ## Критичность
 
@@ -17,8 +17,8 @@ Architect указывает `minimum_test_criticality` и `plan_revision`. Test
 ## Disposition
 
 - `reuse`: существующий тест прямо доказывает изменяемый invariant. `reuse_proof` обязан содержать exact `test_id`, `test_path`, `invariant_mapping`, `successful_run: true`, актуальный `file_sha256`; для `critical` также `critical_branch_evidence` и успешный coverage evidence.
-- `update`: существующий полезный тест должен отражать новую семантику. Test-maker обновляет его и защищает SHA-256.
-- `add`: новый устойчивый тест даёт реальную regression value. Test-maker создаёт его и защищает SHA-256.
+- `update`: существующий полезный test должен отражать новую семантику. Critical/protected test обновляет Test-maker; обычный — Implementor.
+- `add`: новый устойчивый test даёт regression value. Critical/protected test создаёт Test-maker; обычный — Implementor вместе с slice.
 - `none`: task-specific автоматический тест не создаётся. `critical + none` запрещён. `standard + none` требует одновременно `rationale`, `disproportionate_cost: true`, непустые `stronger_alternative_evidence`, `residual_risks` и `follow_up`.
 
 Для сдвига логотипа на 5 px типичный результат — `low/none`: заданный viewport, browser/visual smoke, screenshot и дешёвые static checks. Это не разрешает пропускать обязательные repository suites.
@@ -33,7 +33,7 @@ Architect указывает `minimum_test_criticality` и `plan_revision`. Test
 - `coverage_mode` и требуемые branch/security/consumer checks;
 - alternative evidence, residual risks и follow-up;
 - для `reuse` — полный `reuse_proof`;
-- для `add/update` — `TestPlan` с matching action, непустыми bounded exact runnable `commands`, `expected_baseline`, `actual_baseline`, exact test paths и `protected_hashes`: canonical keysets обязаны точно совпадать, каждый файл уже существует, а объявленный SHA-256 равен фактическому; для feature/refactor baseline описывает отсутствующий или падающий до implementation invariant и наблюдённый результат;
+- для `add/update` — `TestPlan` с matching action, непустыми bounded exact runnable `commands`, expected/actual baseline и exact test paths; при `protected_test_maker` обязательны существующие файлы и matching `protected_hashes`, при `implementor` protected hashes отсутствуют и test проверяется в общей `DIFF_IDENTITY`;
 - для `none` — только evidence plan; искусственный `TestPlan` и test commit не создаются.
 
 `none` не отменяет CI suites, repository coverage thresholds, typecheck, lint, build, proto/Prisma generation, consumer/contract/security/GitOps checks, применимые по TaskAssessment Reviewer, Architecture Guardian или QA. Backend сохраняет текущие 90%+ thresholds; около 80% — лишь необязательный ориентир для измеримого noncritical code, не новый CI floor.
@@ -43,7 +43,7 @@ Architect указывает `minimum_test_criticality` и `plan_revision`. Test
 Поля assessment передаются плоско в одной последней строке:
 
 ```text
-WGC_AGENT_RESULT: {"role":"test-maker","verdict":"assessment_ready","phase":"","input_revision":"<exact-input-revision>","plan_revision":"<revision>","acceptance_revision":"<revision>","test_criticality":"<critical|standard|low>","test_disposition":"<add|update|reuse|none>","scope_fingerprint":"<fingerprint>","assessed_paths":["<exact path>"],"tested_invariants":["<invariant>"],"existing_tests":["<test id/path>"],"coverage_mode":"<mode>","alternative_evidence":["<evidence>"],"residual_risks":["<risk>"]}
+WGC_AGENT_RESULT: {"role":"test-maker","verdict":"assessment_ready","phase":"","input_revision":"<exact-input-revision>","plan_revision":"<revision>","acceptance_revision":"<revision>","test_criticality":"<critical|standard|low>","test_disposition":"<add|update|reuse|none>","test_ownership":"<implementor|protected_test_maker|n/a>","scope_fingerprint":"<fingerprint>","assessed_paths":["<exact path>"],"tested_invariants":["<invariant>"],"existing_tests":["<test id/path>"],"coverage_mode":"<mode>","alternative_evidence":["<evidence>"],"residual_risks":["<risk>"]}
 ```
 
 Добавь disposition-specific `reuse_proof` либо поля `rationale`, `disproportionate_cost`, `stronger_alternative_evidence`, `follow_up`. Hooks принимают nested `assessment` только для совместимости; role contract использует flat marker.
@@ -54,4 +54,4 @@ V2/v3 мигрируются в v4 с сохранением безопасно�
 
 ## Владелец в v7
 
-В Light/Standard none/reuse TestAssessment выпускает Task Assessor вместе с TaskAssessment, используя те же evidence fields. Он задаёт plan/acceptance revision и floor для компактного маршрута. Full floor принадлежит Architect. Add/update всегда принадлежат Test-maker. В task-creation политика provisional. [Команда](task-assessment.md), [повторное использование проверок](verification.md).
+В Light/Standard TestAssessment выпускает Task Assessor вместе с TaskAssessment; add/update используют `test_ownership=implementor`. Full floor принадлежит Architect, а critical/protected add/update — Test-maker. В task-creation политика provisional. [Команда](task-assessment.md), [повторное использование проверок](verification.md).

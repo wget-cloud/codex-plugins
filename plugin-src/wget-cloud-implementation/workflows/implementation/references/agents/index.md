@@ -13,6 +13,11 @@ REPOSITORIES: <разрешённые repo>
 ALLOW_PATHS: <разрешённые пути>
 DENY_PATHS: <запрещённые пути, включая protected tests>
 INPUT_ARTIFACTS: <план, findings, acceptance criteria>
+DECISION_SNAPSHOT: <актуальные revision IDs и dependency map>
+RESUME_CAPSULE_REVISION: <exact restored capsule revision|n/a>
+ASSIGNMENT_KEY: <stable role+phase+slice+scope+revisions+artifact ID>
+RETRY_REASON: <n/a|new evidence|invalidated revision|failed result|contract correction>
+DIFF_IDENTITY: <immutable reviewed tree ID|n/a>
 LOCAL_INSTRUCTIONS: <AGENTS.md и обязательные docs>
 EXPECTED_COMMANDS: <проверки>
 ASSESSMENT_REVISION: <current TaskAssessment revision; n/a only during assessment/intake>
@@ -22,16 +27,21 @@ MODEL_ROUTE: <economy|balanced|frontier>
 MODEL: <selected advertised model>
 REASONING_EFFORT: <selected effort>
 ROUTING_BASIS: <role lane, risk и fallback evidence>
-FORK_TURNS: <none|smallest justified positive N|all>
+FORK_TURNS: <none|smallest justified positive N>
+FORK_JUSTIFICATION: <n/a for none|why artifact cannot replace exact N turns>
+SPAWN_PREFLIGHT: <exact model + reasoning_effort + fork_turns args verified>
 TIME_BUDGET_MIN: <positive supervision budget in minutes>
 CHECKPOINT_INTERVAL_MIN: <positive checkpoint interval in minutes>
 MAX_EXTENSIONS: <non-negative extension limit>
 PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
+EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint boundary>
 ```
 
 `TASK_NAME` строится как `<Task prefix>_<snake_case task slice>[_<positive ordinal>]`: prefix берётся из таблицы, slice обязателен, ordinal добавляй только при collision/restart sibling-задачи. Полное итоговое значение `TASK_NAME` передай без изменений в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и требует запуска основной задачи на своей `frontier` lane.
 
 Каждому субагенту добавляй: «Работай только в выданном scope. Сохраняй существующие изменения. Не выполняй commit, push, PR, merge, release или deployment без приложенного разрешения. Не объявляй всю задачу завершённой. Если scope недостаточен, верни `needs_input`».
+
+Перед spawn сверь [coordination contract](../coordination-efficiency.md): active/completed `ASSIGNMENT_KEY`, ResumeCapsule и EfficiencyBudget. Вызов без явных exact `model`, `reasoning_effort` и `fork_turns` запрещён; обычный fork — `none`, `all` запрещён.
 
 Поля времени задают bounded supervision, а не автоматическую остановку. На checkpoint оркестратор сравнивает objective evidence с `PROGRESS_CRITERIA`. Extension допускается только в пределах `MAX_EXTENSIONS` и логируется с reason, evidence и новой boundary. Первый stall требует correction или rescope; повторный stall либо scope drift — interrupt, inspection partial work и restart/split. Hooks не являются таймерами и не подтверждают соблюдение этих границ.
 
@@ -49,9 +59,9 @@ PROGRESS_CRITERIA: <objective evidence required at checkpoints and completion>
 | Explorer | explorer | reconnaissance | нет | economy | [explorer.md](explorer.md) |
 | Architect | architect | design и DAG | нет | frontier | [architect.md](architect.md) |
 | Architecture guardian | architecture_guardian | plan/diff architecture gate | нет | frontier | [architecture-guardian.md](architecture-guardian.md) |
-| Test-maker | test_maker | adaptive TestAssessment; conditional tests | только tests allowlist при add/update | balanced | [test-maker.md](test-maker.md) |
-| Implementor | implementor | один DAG slice | production/docs allowlist | balanced | [implementor.md](implementor.md) |
-| Reviewer | reviewer | code review | нет | frontier | [reviewer.md](reviewer.md) |
+| Test-maker | test_maker | protected critical TestAssessment/tests | protected tests allowlist | balanced | [test-maker.md](test-maker.md) |
+| Implementor | implementor | один vertical slice | production/docs и обычные slice-local tests | balanced | [implementor.md](implementor.md) |
+| Reviewer | reviewer | code review; frontier только при critical escalation | нет | balanced | [reviewer.md](reviewer.md) |
 | QA | qa | adversarial behavior verification | нет в repository | balanced | [qa.md](qa.md) |
 | DevOps | devops | GitOps desired state | `k8s` allowlist | balanced | [devops.md](devops.md) |
 | Infrastructure reviewer | infrastructure_reviewer | GitOps review | нет | frontier | [infrastructure-reviewer.md](infrastructure-reviewer.md) |
@@ -75,7 +85,7 @@ Architecture Guardian в `phase=plan` добавляет exact текущий `p
 
 ## Независимость
 
-- Implementor не совмещается с Test-maker, Reviewer или Architecture guardian.
+- Implementor не меняет protected tests Test-maker и не совмещается с Reviewer или Architecture guardian; обычные slice-local tests принадлежат Implementor.
 - Architect не утверждает свой план.
 - DevOps не является Infrastructure reviewer.
 - Deployment agent не пишет application-код или manifests.

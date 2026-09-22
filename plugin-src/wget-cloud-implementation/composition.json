@@ -188,6 +188,12 @@
         ]
       },
       {
+        "target": "references/coordination-efficiency.md",
+        "sources": [
+          "policies/coordination-efficiency.md"
+        ]
+      },
+      {
         "target": "references/task-assessment.md",
         "sources": [
           "policies/task-assessment.md"
@@ -471,6 +477,12 @@
         ]
       },
       {
+        "target": "references/coordination-efficiency.md",
+        "sources": [
+          "policies/coordination-efficiency.md"
+        ]
+      },
+      {
         "target": "references/project-routing.md",
         "sources": [
           "workflows/bugfix/references/project-routing.md"
@@ -668,6 +680,12 @@
         "target": "references/model-routing.md",
         "sources": [
           "policies/model-routing.md"
+        ]
+      },
+      {
+        "target": "references/coordination-efficiency.md",
+        "sources": [
+          "policies/coordination-efficiency.md"
         ]
       },
       {
@@ -942,6 +960,12 @@
         "target": "references/model-routing.md",
         "sources": [
           "policies/model-routing.md"
+        ]
+      },
+      {
+        "target": "references/coordination-efficiency.md",
+        "sources": [
+          "policies/coordination-efficiency.md"
         ]
       },
       {

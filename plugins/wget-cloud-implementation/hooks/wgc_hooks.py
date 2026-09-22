@@ -22,61 +22,6 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Set, Tuple
 
 
-class ServiceTierPolicyError(RuntimeError):
-    """Raised when a WGC workflow cannot prove that Codex Fast mode is off."""
-
-
-FORBIDDEN_SERVICE_TIERS = {"fast", "priority", "ultrafast"}
-
-
-def _codex_policy_values(payload: Dict[str, Any]) -> Tuple[Optional[str], Optional[bool]]:
-    direct = payload.get("service_tier")
-    if isinstance(direct, str) and direct.strip():
-        tier: Optional[str] = direct.strip().lower()
-    else:
-        tier = None
-    fast_mode: Optional[bool] = None
-    codex_home = Path(os.environ.get("CODEX_HOME") or (Path.home() / ".codex"))
-    config = codex_home / "config.toml"
-    try:
-        lines = config.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        lines = []
-    section = ""
-    for raw_line in lines:
-        line = raw_line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        if line.startswith("[") and line.endswith("]"):
-            section = line[1:-1].strip()
-            continue
-        match = re.fullmatch(r"([A-Za-z0-9_.-]+)\s*=\s*(.+)", line)
-        if not match:
-            continue
-        key, raw_value = match.groups()
-        value = raw_value.strip().strip('"\'').lower()
-        if tier is None and section == "" and key == "service_tier":
-            tier = value
-        elif section == "features" and key == "fast_mode":
-            if value in {"true", "false"}:
-                fast_mode = value == "true"
-    return tier, fast_mode
-
-
-def require_standard_service_tier(payload: Dict[str, Any]) -> None:
-    tier, fast_mode = _codex_policy_values(payload)
-    if tier in FORBIDDEN_SERVICE_TIERS or fast_mode is True:
-        raise ServiceTierPolicyError(
-            "WGC_FAST_MODE_FORBIDDEN: WGC skills cannot run in Codex Fast mode; "
-            "use service_tier=default with features.fast_mode=false."
-        )
-    if tier != "default" or fast_mode is not False:
-        raise ServiceTierPolicyError(
-            "WGC_SERVICE_TIER_UNVERIFIABLE: refusing to start because service_tier=default "
-            "and features.fast_mode=false are not both verifiable."
-        )
-
-
 PROJECTS: Dict[str, Dict[str, Any]] = {
     "frontend": {
         "docs": ["AGENTS.md", "README.md", "BUSINESS_LOGIC.md", "ARCHITECTURE.md"],
@@ -1891,6 +1836,48 @@ def assessment_reuse_path_is_unchanged(
     return file_path is not None and file_sha256(file_path) == digest
 
 
+def assessment_implementor_test_path_is_planned(
+    assessment: Dict[str, Any],
+    changed_path: str,
+    context: Dict[str, Any],
+) -> bool:
+    """Keep an implementor-owned assessment while its declared ordinary test is authored."""
+    if (
+        assessment.get("test_ownership") != "implementor"
+        or assessment.get("test_disposition") not in {"add", "update"}
+    ):
+        return False
+    plan = assessment.get("test_plan")
+    if not isinstance(plan, dict):
+        return False
+    planned = {
+        canonical_scope_path(str(path), context)
+        for path in plan.get("tests", [])
+        if isinstance(path, str)
+    }
+    scoped = {
+        canonical_scope_path(str(path), context)
+        for path in assessment.get("assessed_paths", [])
+        if isinstance(path, str)
+    }
+    return changed_path in planned and changed_path in scoped
+
+
+def implementor_test_changes_are_planned(
+    changed_paths: Set[str],
+    state: Dict[str, Any],
+    context: Dict[str, Any],
+) -> bool:
+    test_paths = {path for path in changed_paths if TEST_PATH.search(path.partition(":")[2])}
+    if not test_paths:
+        return False
+    assessments = [value for value in state.get("test_assessments", []) if isinstance(value, dict)]
+    return all(
+        any(assessment_implementor_test_path_is_planned(assessment, path, context) for assessment in assessments)
+        for path in test_paths
+    )
+
+
 def bounded_text(value: Any, field: str, *, limit: int = ADAPTIVE_TEXT_LIMIT) -> Tuple[Optional[str], Optional[str]]:
     if not isinstance(value, str) or not value.strip() or len(value.strip()) > limit:
         return None, f"{field} must be a non-empty string of at most {limit} characters"
@@ -1928,7 +1915,7 @@ def normalize_exact_paths(value: Any, field: str, context: Dict[str, Any]) -> Tu
     return [str(path) for path in canonical], None
 
 
-def normalize_test_plan(value: Any, disposition: str, context: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def normalize_test_plan(value: Any, disposition: str, ownership: str, context: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     if not isinstance(value, dict):
         return None, f"{disposition} TestAssessment requires a bounded test_plan"
     allowed = {
@@ -1953,8 +1940,14 @@ def normalize_test_plan(value: Any, disposition: str, context: Dict[str, Any]) -
     normalized: Dict[str, Any] = {"action": disposition, "tests": tests}
     hashes = value.get("protected_hashes")
     normalized_hashes: Dict[str, str] = {}
-    if not isinstance(hashes, dict) or not hashes or len(hashes) > ADAPTIVE_LEDGER_LIMIT:
-        return None, f"test_plan.protected_hashes must be a non-empty object bounded to {ADAPTIVE_LEDGER_LIMIT} paths"
+    if ownership == "implementor":
+        if hashes not in (None, {}):
+            return None, "implementor-owned test_plan must not declare protected_hashes"
+        normalized["protected_hashes"] = {}
+    elif not isinstance(hashes, dict) or not hashes or len(hashes) > ADAPTIVE_LEDGER_LIMIT:
+        return None, f"protected test_plan.protected_hashes must be a non-empty object bounded to {ADAPTIVE_LEDGER_LIMIT} paths"
+    if ownership == "implementor":
+        hashes = {}
     for raw_path, raw_digest in hashes.items():
         paths, error = normalize_exact_paths([raw_path], "test_plan.protected_hashes", context)
         digest = str(raw_digest or "").lower()
@@ -1971,7 +1964,7 @@ def normalize_test_plan(value: Any, disposition: str, context: Dict[str, Any]) -
         if actual_digest is None or actual_digest != digest:
             return None, f"test_plan protected hash does not match the existing file: {canonical}"
         normalized_hashes[canonical] = digest
-    if set(tests) != set(normalized_hashes):
+    if ownership == "protected_test_maker" and set(tests) != set(normalized_hashes):
         return None, "test_plan.tests and test_plan.protected_hashes must have the same exact canonical keyset"
     normalized["protected_hashes"] = normalized_hashes
     commands, error = bounded_text_list(value.get("commands"), "test_plan.commands")
@@ -2077,12 +2070,22 @@ def normalize_test_assessment(
         normalized[field] = text
     criticality = str(assessment.get("test_criticality") or "").lower().strip()
     disposition = str(assessment.get("test_disposition") or "").lower().strip()
+    ownership = str(assessment.get("test_ownership") or ("protected_test_maker" if disposition in {"add", "update"} else "n/a")).lower().strip()
     if criticality not in TEST_CRITICALITIES:
         return None, "Unknown or ambiguous test criticality is critical and requires a new critical TestAssessment"
     if disposition not in TEST_DISPOSITIONS:
         return None, f"invalid test disposition: {disposition or '<empty>'}"
+    if ownership not in TEST_OWNERSHIPS:
+        return None, f"invalid test ownership: {ownership or '<empty>'}"
+    if disposition in {"reuse", "none"} and ownership != "n/a":
+        return None, "reuse/none TestAssessment requires test_ownership=n/a"
+    if disposition in {"add", "update"} and ownership == "n/a":
+        return None, "add/update TestAssessment requires implementor or protected_test_maker ownership"
+    if criticality == "critical" and disposition in {"add", "update"} and ownership != "protected_test_maker":
+        return None, "critical add/update requires protected_test_maker ownership"
     normalized["test_criticality"] = criticality
     normalized["test_disposition"] = disposition
+    normalized["test_ownership"] = ownership
     assessed_paths, error = normalize_exact_paths(assessment.get("assessed_paths"), "assessed_paths", context)
     if error:
         return None, error
@@ -2132,7 +2135,7 @@ def normalize_test_assessment(
                 "stronger_alternative_evidence and residual_risks lists, and follow_up"
             )
     if disposition in {"add", "update"}:
-        plan, error = normalize_test_plan(assessment.get("test_plan"), disposition, context)
+        plan, error = normalize_test_plan(assessment.get("test_plan"), disposition, ownership, context)
         if error:
             return None, error
         normalized["test_plan"] = plan
@@ -2355,6 +2358,7 @@ def parse_agent_result(message: str, profile: str) -> Tuple[Optional[Dict[str, A
         "minimum_test_criticality",
         "test_criticality",
         "test_disposition",
+        "test_ownership",
         "scope_fingerprint",
         "tested_invariants",
         "existing_tests",
@@ -2830,8 +2834,6 @@ def handle_session_start(payload: Dict[str, Any], context: Dict[str, Any]) -> Di
     prior = read_state(state_path)
     if not prior.get("active"):
         return additional_context("SessionStart", context_text(context))
-    require_standard_service_tier(payload)
-
     def updater(state: Dict[str, Any]) -> None:
         state["last_start_source"] = payload.get("source")
         state.setdefault("started_at", int(time.time()))
@@ -2849,7 +2851,6 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     selected = workflow_profile(prompt, active_profile)
     if not selected:
         return None
-    require_standard_service_tier(payload)
     profile, activation = selected
     routes = bugfix_routes(prompt) if profile == "bugfix" else {}
     project = project_routes(prompt, profile)
@@ -2943,7 +2944,6 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> O
     state_path, _ = state_paths(payload, context)
     if not read_state(state_path).get("active"):
         return None
-    require_standard_service_tier(payload)
     revision = workspace_identity(context)
     agent_id = str(payload.get("agent_id") or "")
 
@@ -2998,7 +2998,7 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> O
                 else ""
             )
         )
-    message += ' In v7 inherit the chat model and reasoning effort; never substitute another model. Task Assessor returns task_assessment; every assigned downstream result repeats its assessment_revision. Load only assigned role/domain references. Priority-only availability is a blocker.'
+    message += " Use the assignment's explicit model, reasoning effort and fork_turns; never inherit implicitly. Task Assessor returns task_assessment; every assigned downstream result repeats its assessment_revision. Load only assigned role/domain references."
     return additional_context("SubagentStart", message)
 
 
@@ -3075,8 +3075,17 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
                         raise ValueError('TaskAssessment disagrees with frozen ' + field)
             elif normalized_task.get('item_id'):
                 raise ValueError('item identity is only valid for epic work')
-            # Evidence-producing assessor may reuse tests, but never author them.
-            if profile != 'task-creation' and normalized_task['mode'] != 'full' and normalized_task['test_disposition'] in {'none', 'reuse'}:
+            # The assessor may plan ordinary implementation tests but never author them.
+            # Bugfix add/update remains independently owned by Test-maker.
+            assessor_owns_test_plan = (
+                profile != 'task-creation'
+                and normalized_task['mode'] != 'full'
+                and not (
+                    profile == 'bugfix'
+                    and normalized_task['test_disposition'] in {'add', 'update'}
+                )
+            )
+            if assessor_owns_test_plan:
                 test_state = json.loads(json.dumps(state))
                 bind_task_plan(test_state, normalized_task)
                 assessor_test, test_error = normalize_test_assessment(result.get('assessment'), test_state, profile, context)
@@ -3084,6 +3093,8 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
                     raise ValueError(test_error)
                 if assessor_test['test_disposition'] != normalized_task['test_disposition'] or assessor_test['test_criticality'] != normalized_task['risk'] or assessor_test['assessed_paths'] != normalized_task['assessed_paths']:
                     raise ValueError('TaskAssessment and TestAssessment disagree')
+                if normalized_task['test_disposition'] in {'add', 'update'} and assessor_test['test_ownership'] != 'implementor':
+                    raise ValueError('standard add/update TaskAssessment requires implementor-owned tests')
             elif result.get('assessment') is not None:
                 raise ValueError('this route requires a separate Test-maker or no execution tests')
             result = {k: result[k] for k in ('role', 'verdict', 'phase', 'input_revision')}
@@ -3505,8 +3516,6 @@ def handle_subagent_stop(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
 
 def handle_pre_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     state_path, _ = state_paths(payload, context)
-    if read_state(state_path).get("active"):
-        require_standard_service_tier(payload)
     tool = str(payload.get("tool_name") or "")
     command = tool_command(payload)
     if tool == "Bash":
@@ -3634,6 +3643,8 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                             continue
                         if assessment_reuse_path_is_unchanged(assessment, path, context):
                             keep_assessment.add(item_id)
+                        elif assessment_implementor_test_path_is_planned(assessment, path, context):
+                            keep_assessment.add(item_id)
                         else:
                             drop_assessment.add(item_id)
                 for path in sensitive_paths - production_paths - test_paths:
@@ -3651,11 +3662,20 @@ def handle_post_tool(payload: Dict[str, Any], context: Dict[str, Any]) -> Option
                     state,
                     context,
                 )
+                planned_implementor_tests = implementor_test_changes_are_planned(
+                    changed_paths,
+                    state,
+                    context,
+                )
                 production_in_scope = bool(production_paths) and production_paths.issubset(scoped_paths)
                 invalidate_assessment = bool(
                     sensitive_paths
                     or (incremental_classification["production"] and not production_in_scope)
-                    or (incremental_classification["tests"] and not protected_reuse_unchanged)
+                    or (
+                        incremental_classification["tests"]
+                        and not protected_reuse_unchanged
+                        and not planned_implementor_tests
+                    )
                 )
                 invalidate = {
                     "implementor",
@@ -3963,9 +3983,6 @@ def main(argv: Sequence[str]) -> int:
             return 0
         emit(HANDLERS[argv[1]](payload, context))
         return 0
-    except ServiceTierPolicyError as error:
-        sys.stderr.write(f"{type(error).__name__}: {error}\n")
-        return 2
     except Exception as error:  # Safety fails closed; advisory bookkeeping fails open.
         if argv[1] == "pre-tool":
             emit(deny_tool(f"WGC safety hook failed internally ({type(error).__name__}); the tool call is blocked until the hook is healthy."))

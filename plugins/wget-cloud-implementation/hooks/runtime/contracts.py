@@ -59,6 +59,7 @@ STATE_VERSION = 4
 TEST_CRITICALITIES = {"critical", "standard", "low"}
 TEST_CRITICALITY_RANK = {"low": 0, "standard": 1, "critical": 2}
 TEST_DISPOSITIONS = {"add", "update", "reuse", "none"}
+TEST_OWNERSHIPS = {"implementor", "protected_test_maker", "n/a"}
 ADAPTIVE_LEDGER_LIMIT = 100
 RESULT_LEDGER_LIMIT = 1000
 ADAPTIVE_TEXT_LIMIT = 500
@@ -77,6 +78,7 @@ TEST_ASSESSMENT_FIELDS = {
     "acceptance_revision",
     "test_criticality",
     "test_disposition",
+    "test_ownership",
     "scope_fingerprint",
     "assessed_paths",
     "tested_invariants",
