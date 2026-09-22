@@ -7,7 +7,7 @@ description: Create or refine product-quality Wget Cloud tasks, epics, bug/refac
 
 ## Preflight
 
-Spawned-роли получают минимальную достаточную GPT-5.6 lane из registry: Luna для простых, Terra для обычных, Sol для сложных задач. Service tier не блокирует workflow.
+Spawned-роли получают минимальную достаточную GPT-6 lane из registry: Luna для economy/focused, Sol/low для balanced, Sol/medium только для Architect. Service tier не блокирует workflow.
 
 ## YouTrack и продуктовая готовность
 
@@ -24,7 +24,7 @@ Spawned-роли получают минимальную достаточную 
 
 ## Этот процесс
 
-Не реализуй application code. Для создания задачи/эпика всегда назначь Product Manager, Implementation Auditor, Project Manager, отдельного Effort Estimator и независимого Backlog Reviewer; Architect — для декомпозиции/технических вариантов и Full. Проведи раунды интервью до/после исследования. Найди project keys и дубли через MCP. Эпик создаётся поэтапно: ранняя карточка и Research на Исследовании; полная декомпозиция и задачи разработки — только на Декомпозиции после груминга. Не форсируй подготовку всего backlog до раннего создания. Завершение хода в ожидании пользователя не означает завершённый эпик. Публикуй только после решений пользователя и review по exact MutationPlan; запрос «создай» уже даёт authority в своём scope. Read-after-write обязателен. Test policy остаётся provisional.
+Не реализуй application code. Для создания задачи/эпика всегда назначь Product Manager, Implementation Auditor, Project Manager, отдельного Effort Estimator и независимого Backlog Reviewer. Architect назначается только для boundary/ownership/contracts/compatibility/migration/DAG решения; Full сам по себе его не включает. Проведи раунды интервью до/после исследования. Найди project keys и дубли через MCP. Эпик создаётся поэтапно: ранняя карточка и Research на Исследовании; полная декомпозиция и задачи разработки — только на Декомпозиции после груминга. Не форсируй подготовку всего backlog до раннего создания. Завершение хода в ожидании пользователя не означает завершённый эпик. Публикуй только после решений пользователя и review по exact MutationPlan; запрос «создай» уже даёт authority в своём scope. Read-after-write обязателен. Test policy остаётся provisional.
 
 ## Исполнение и готовность
 

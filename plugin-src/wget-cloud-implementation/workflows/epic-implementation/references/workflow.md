@@ -1,6 +1,6 @@
 # Full workflow details
 
-Этот reference загружается только для Full. Full меняет глубину item planning, но не default execution team: один Terra Implementor, а Reviewer либо один specialist только по конкретному риску. Лимит 3 assignments и один correction batch на item slice из [coordination contract](coordination-efficiency.md) имеет приоритет; полный pipeline после finding не перезапускается.
+Этот reference загружается только для Full. Full меняет глубину item planning, но не default execution team: один Sol/low Implementor, а Reviewer либо один specialist только по конкретному риску. Лимит 3 assignments и один correction batch на item slice из [coordination contract](coordination-efficiency.md) имеет приоритет; полный pipeline после finding не перезапускается.
 
 # Epic implementation workflow
 

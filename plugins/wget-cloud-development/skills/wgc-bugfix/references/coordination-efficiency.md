@@ -47,6 +47,10 @@ NEXT_SERVICE_ALLOWED
 
 После compaction/restart сначала восстанови capsule, сверь Git tree, active agents и revisions и пометь несовпавшие артефакты `stale`. До этой сверки нельзя spawn/follow-up прежнего Explorer, Architect, Test-maker или Implementor. Свободный пересказ истории и порядковый suffix имени не восстанавливают ledger.
 
+## Неоднозначные решения и UI
+
+После сбора evidence не угадывай expected behavior, product semantics, ownership или несовместимые architecture alternatives дорогой моделью. Субагент возвращает root `DECISION_REQUIRED` с `decision_id`, 2–3 взаимоисключающими вариантами, recommended первым, tradeoffs, scope и evidence refs. Только root спрашивает пользователя: через нативный `request_user_input` в Plan mode, если инструмент доступен, иначе одним компактным plain-text вопросом. Не переключай mode и не повторяй `decision_id` без нового evidence. Продолжай независимые fix-транши и блокируй только зависимый.
+
 ## EfficiencyBudget
 
 До execution задай на WorkItem или fix-транш: `MAX_AGENT_ASSIGNMENTS`, `MAX_COORDINATION_DECISIONS`, `MAX_UNCHANGED_WAIT_STREAK`, `MAX_PASSIVE_WAIT_MINUTES`, `MAX_EXPENSIVE_CHECKS`, `MAX_REWORK_ROUNDS` и `CHECKPOINT_BOUNDARY`. Default: максимум 3 assignments, 10 coordination decisions, 1 unchanged wait без нового анализа, 10 минут passive wait, 1 дорогая T2 suite и 1 correction/recheck. Нормальный маршрут использует одного Implementor; второй assignment — Reviewer только при нетривиальном risk/diff, третий — один specialist вместо набора gates. Full RCA и сложность сами по себе не разрешают полный role pipeline.
@@ -87,6 +91,8 @@ Implementor пишет production code и минимальные regression test
 - `T1`: affected module/service/consumer checks после завершения slice.
 - `T2`: полные repository-required tests, race/vet/lint/build/coverage один раз на service/release boundary, если это требует repository policy или пользователь.
 - `T3`: image/scan/contract smoke/integration и delivery evidence один раз для release candidate, если применимо.
+
+Минимум готовности: meaningful regression test для исправленного поведения; contract/proto check при изменении контракта; auth/tenant negative case при таком риске; race check при concurrency. Full repository suite, image/deploy checks, максимизация coverage и exhaustive edge cases не запускаются по умолчанию. Некритичные findings становятся residual risk/follow-up и не перезапускают pipeline.
 
 Повторяй только invalidated ступени. Cache key включает check ID, tree/diff identity, environment fingerprint, scoped paths и dependency/config identity. Failed run, неизвестная зависимость или изменение source/lock/config отменяет соответствующий cache entry. Ledger хранит только privacy-safe metadata, не raw commands/output.
 

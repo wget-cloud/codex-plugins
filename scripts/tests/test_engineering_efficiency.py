@@ -10,7 +10,7 @@ PLUGIN = ROOT / "plugins" / "wget-cloud-implementation"
 class EngineeringEfficiencyTests(unittest.TestCase):
     def test_version_and_service_tier_policy(self):
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
-        self.assertEqual(manifest["version"], "9.2.1")
+        self.assertEqual(manifest["version"], "10.0.0")
 
         hook = (PLUGIN / "hooks" / "wgc_hooks.py").read_text()
         for obsolete_gate in (
@@ -44,12 +44,15 @@ class EngineeringEfficiencyTests(unittest.TestCase):
             self.assertIn("`all` запрещён", routing)
             self.assertIn("Service tier не является quality gate", routing)
 
-    def test_sol_reasoning_is_capped_at_medium(self):
+    def test_gpt6_routing_is_bounded_and_astra_is_forbidden(self):
         forbidden_routes = (
-            "gpt-5.6-sol/high",
-            "gpt-5.6-sol/xhigh",
-            "gpt-5.6-sol/max",
-            "gpt-5.6-sol/ultra",
+            "gpt-6-sol/high",
+            "gpt-6-sol/xhigh",
+            "gpt-6-sol/max",
+            "gpt-6-sol/ultra",
+            "gpt-6-astra",
+            "gpt-5.6",
+            "Terra",
             "Sol/high",
         )
 
@@ -57,12 +60,20 @@ class EngineeringEfficiencyTests(unittest.TestCase):
             routing = (skill / "references" / "model-routing.md").read_text()
             registry = (skill / "references" / "agents" / "index.md").read_text()
 
-            self.assertIn("gpt-5.6-sol/medium", routing)
+            self.assertIn("gpt-6-luna/low", routing)
+            self.assertIn("gpt-6-luna/medium", routing)
+            self.assertIn("gpt-6-sol/low", routing)
+            self.assertIn("gpt-6-sol/medium", routing)
             self.assertIn("`high`, `xhigh`, `max` и `ultra`", routing)
-            self.assertIn("Любой Sol effort выше `medium` запрещён", registry)
+            self.assertIn("Astra и Sol выше `medium` запрещены", registry)
+            self.assertIn("MEDIUM_ESCALATION_REASON", registry)
+            self.assertIn("DECISION_REQUIRED", (skill / "references" / "coordination-efficiency.md").read_text())
             for forbidden in forbidden_routes:
-                self.assertNotIn(forbidden, routing)
-                self.assertNotIn(forbidden, registry)
+                if forbidden == "gpt-6-astra":
+                    self.assertIn("gpt-6-astra` полностью запрещена", routing)
+                else:
+                    self.assertNotIn(forbidden, routing)
+                    self.assertNotIn(forbidden, registry)
 
     def test_test_ownership_keeps_implementation_lean_and_bugfix_independent(self):
         for name in ("wgc-implementation", "wgc-epic-implementation"):
@@ -94,7 +105,7 @@ class EngineeringEfficiencyTests(unittest.TestCase):
         self.assertIn("10 coordination decisions", coordination)
         self.assertIn("одним correction batch", coordination)
         self.assertIn("полный pipeline не перезапускается", coordination)
-        self.assertIn("размер задачи сам по себе не разрешает Sol", routing)
+        self.assertIn("Размер задачи, режим Full и длительность работы сами по себе не повышают модель", routing)
         self.assertNotIn("Startup/Fast", coordination)
 
 

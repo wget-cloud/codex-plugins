@@ -39,6 +39,10 @@ Downstream assignment фиксирует `assessment_revision` в ledger; marker
 
 Для Light/Standard TestAssessment выпускает тот же assessment owner. Обычные implementor-owned `add/update` tests не требуют отдельного Test-maker; он нужен только для protected critical invariants. Full использует отдельного Test-maker только когда independence действительно требуется.
 
+## Граница Architect
+
+Назначай Architect только при выборе service/module boundaries, ownership, public contracts, package/file map, invariants, compatibility, migration/cutover/rollback либо межмодульного DAG. Large/Full/долгая задача без такого решения не достаточна. Architect выпускает один `ArchitecturePacket` на `architecture_revision` и переиспользуется до изменения boundary. Он не пишет production code, не выполняет RCA/security verdict и не задаёт function-level design. При material alternative верни root `DECISION_REQUIRED`.
+
 ## Специалисты
 
 Выбирай максимум одного специалиста по наиболее высокому риску; не превращай несколько risk signals в fanout ролей. Исключение — явно разрешённый GitOps delivery, где независимость DevOps и Infrastructure Reviewer обязательна.

@@ -1,15 +1,31 @@
 # Модель чата и контекст
 
-Маршрутизируй все роли по минимальной достаточной GPT-5.6 lane. Стандартная разработка, включая Full по размеру, остаётся на Terra; размер задачи сам по себе не разрешает Sol. Для spawned-роли передавай явные `model`/`reasoning_effort` overrides. Orchestrator использует `balanced`; активная задача не переключает модель задним числом.
+Маршрутизируй каждую роль по минимальной достаточной GPT-6 lane. Размер задачи, режим Full и длительность работы сами по себе не повышают модель. Для spawned-роли передавай явные `model`/`reasoning_effort` overrides. Orchestrator использует `balanced`; активная задача не переключает модель задним числом.
 
-- `economy`: `gpt-5.6-luna/low`; fallback — `gpt-5.6-terra/low`. Для bounded reconnaissance, точных операций и механической проверки.
-- `balanced`: `gpt-5.6-terra/medium`; fallback — `gpt-5.6-luna/medium`, затем `gpt-5.6-sol/medium`. Для обычной инженерной реализации, тестирования и продуктовой проработки.
-- `frontier`: `gpt-5.6-sol/medium`; fallback — `gpt-5.6-terra/medium`. Только для подтверждённого сложного blocker, неразрешимого Terra архитектурного решения либо одного critical security/data/migration/RCA gate. Implementor, Test-maker, обычный Reviewer и Task Assessor не получают frontier автоматически.
+Service tier не является quality gate и не меняет lane.
 
-Доступность моделей бери из активного инструмента и запиши фактически выбранные `MODEL`, `REASONING_EFFORT` и fallback basis в assignment. Для `gpt-5.6-sol` разрешены только поддерживаемые уровни `low` и `medium`; `high`, `xhigh`, `max` и `ultra` считаются contract violation для основной задачи и любого spawn. До вызова `spawn_agent` выполни preflight: аргументы вызова обязаны содержать exact `model` и `reasoning_effort`, совпадающие с assignment и этим пределом; отсутствие аргумента, наследование родительской модели, превышение Sol-cap или подмена lane запрещают spawn. Не используй `inherit` как model lane или неявный fallback; если ни одна допустимая комбинация недоступна, верни blocker. Не выбирай Astra, если пользователь отдельно не запросил её. Service tier не является quality gate: используй доступный режим и контролируй качество role/evidence contracts.
+- `economy`: `gpt-6-luna/low`. Bounded reconnaissance, точные операции и механическая проверка.
+- `focused`: `gpt-6-luna/medium`. Product/project work, assessment, estimation, routine review и routine QA без сложного технического решения.
+- `balanced`: `gpt-6-sol/low`. Реализация, RCA, protected tests, GitOps preparation и технические gates с нетривиальным риском.
+- `architecture`: `gpt-6-sol/medium`. Только Architect и только для реального изменения boundaries, ownership, contracts, compatibility, migration/cutover или межмодульного DAG.
 
-Явно передавай `fork_turns: none`; `all` запрещён. Положительное N допустимо только с `FORK_JUSTIFICATION`, когда минимальный незаменимый контекст нельзя выразить artifact/capsule. Передавай узкое assignment с role file, domain profile, task/assessment revisions, scope, acceptance и ссылками на evidence. Не держи более трёх активных субагентов. Независимый reviewer получает собственный компактный контекст и immutable diff.
+`gpt-6-astra` полностью запрещена: не выбирай её по просьбе, как fallback или для эскалации. Для Sol разрешены только `low` и `medium`; `high`, `xhigh`, `max` и `ultra` запрещены основной задаче и любому spawn. До `spawn_agent` проверь, что exact `model`, `reasoning_effort` и lane совпадают с assignment. Отсутствие override, наследование родительской модели, недопустимый effort или подмена lane запрещают spawn. Если допустимая комбинация недоступна, верни blocker.
 
-Явно ограничивай проверки изменённым поведением и repository requirements. После успешных проверок не расширяй их без новых изменений, failures или unresolved risk. Если Terra-агент вернул конкретный blocker, сначала передай ему компактную correction delta; Sol escalation допустим только с записанными `BLOCKER_EVIDENCE` и `SOL_ESCALATION_REASON`, не как общий fallback команды. Делегируй только роли выбранного маршрута; не добавляй API-only параметры в spawn.
+Автоматический fallback разрешён только из Luna в `gpt-6-sol/low` с записанным `FALLBACK_REASON`. Обратный fallback для write-owner или critical specialist запрещён. Architect на `gpt-6-sol/medium` не понижается автоматически. Недоступность Sol для critical specialist означает blocker.
+
+Штатный `gpt-6-sol/medium` принадлежит только Architect. Для другого специалиста допустима одна одноразовая medium-эскалация на WorkItem без смены роли, если одновременно:
+
+- есть риск потери данных, tenant/security bypass, несовместимого public contract, необратимой migration либо опасной concurrency;
+- завершена попытка на `gpt-6-sol/low`;
+- targeted evidence, test или decomposition не сняли blocker;
+- assignment содержит `MEDIUM_ESCALATION_ROLE`, `MEDIUM_ESCALATION_REASON`, `BLOCKER_EVIDENCE`, `FAILED_LOW_EFFORT_ATTEMPT`, `CRITICAL_INVARIANT`, `EXPECTED_DECISION`.
+
+Full/large scope, стиль, coverage, обычная неопределённость и большой diff не являются основанием. Эскалация разрешена одному агенту один раз и не распространяется на команду. Если medium не решил blocker, создай blocker/follow-up; effort выше medium запрещён.
+
+Reviewer и QA используют `focused` для routine evidence. Переводи конкретное назначение в `balanced` только при техническом риске, записанном в `ROUTING_BASIS`. Architect не пишет production code, не выполняет RCA/security verdict и не проектирует функции: он выпускает один `ArchitecturePacket` на `architecture_revision` и переиспользует его до изменения boundaries.
+
+Явно передавай `fork_turns: none`; `all` запрещён. Положительное N допустимо только с `FORK_JUSTIFICATION`, когда минимальный незаменимый контекст нельзя выразить artifact/capsule. Передавай узкое assignment с role file, domain profile, revisions, scope, acceptance и evidence handles. Не держи более трёх активных субагентов.
+
+Ограничивай проверки изменённым поведением и repository requirements. После успешных проверок не расширяй их без новых изменений, failures или unresolved critical risk. Делегируй только роли выбранного маршрута.
 
 Источник рекомендаций GPT-6: https://developers.openai.com/api/docs/guides/latest-model

@@ -7,7 +7,7 @@ description: Coordinate evidence-driven diagnosis and repair of Wget Cloud defec
 
 ## Preflight
 
-Spawned-роли получают минимальную достаточную GPT-5.6 lane: Luna для механических операций, Terra для диагностики, исправления и review. Sol допустим только по подтверждённому blocker/critical escalation.
+Spawned-роли получают минимальную достаточную GPT-6 lane: Luna для economy/focused, Sol/low для диагностики, исправления и technical review. Sol/medium штатно разрешён только Architect и однократно specialist по critical escalation.
 
 ## YouTrack и продуктовая готовность
 
@@ -28,7 +28,7 @@ Spawned-роли получают минимальную достаточную 
 
 ## Исполнение и готовность
 
-Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget и transitions. Стандартный workflow — компактный Task Assessor и один Implementor на Terra; третий assignment — Reviewer либо specialist только по конкретному риску. Отдельный Test-maker нужен лишь при `test_ownership=protected_test_maker`. Максимум три assignments на slice, один correction batch существующему Implementor и никакого полного restart pipeline. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. [Model/context policy](references/model-routing.md).
+Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget и transitions. Стандартный workflow — компактный Task Assessor и один Implementor на Sol/low; третий assignment — Reviewer либо specialist только по конкретному риску. Отдельный Test-maker нужен лишь при `test_ownership=protected_test_maker`. Максимум три assignments на slice, один correction batch существующему Implementor и никакого полного restart pipeline. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. [Model/context policy](references/model-routing.md).
 
 Сохраняй пользовательские изменения. Root/submodules — отдельные repositories. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 

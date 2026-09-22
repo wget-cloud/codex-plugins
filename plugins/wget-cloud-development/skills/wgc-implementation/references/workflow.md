@@ -1,6 +1,6 @@
 # Full workflow details
 
-Этот reference загружается только для Full. Full меняет глубину планирования, но не default team: на tranche остаётся один Terra Implementor, а Reviewer либо один specialist добавляется только по конкретному риску. Diagram ниже — каталог возможных переходов, не обязательная последовательность. Лимит 3 assignments и один correction batch из [coordination contract](coordination-efficiency.md) имеет приоритет; полный pipeline после finding не перезапускается.
+Этот reference загружается только для Full. Full меняет глубину планирования, но не default team: на tranche остаётся один Sol/low Implementor, а Reviewer либо один specialist добавляется только по конкретному риску. Diagram ниже — каталог возможных переходов, не обязательная последовательность. Лимит 3 assignments и один correction batch из [coordination contract](coordination-efficiency.md) имеет приоритет; полный pipeline после finding не перезапускается.
 
 # Конвейер реализации
 

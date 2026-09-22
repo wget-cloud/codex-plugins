@@ -49,6 +49,10 @@ NEXT_SERVICE_ALLOWED
 
 На завершении сервиса выпусти `ServiceHandoff`: outcome, commit/tree identity, remaining RPC/risks, valid evidence и следующий service input. При `STOP_AFTER_SERVICE=true` после completion condition очисти active ledger, установи `NEXT_SERVICE_ALLOWED=false`, не создавай новых назначений и верни управление пользователю. Иначе следующий сервис получает только handoff, без истории correction loops.
 
+## Неоднозначные решения и UI
+
+После сбора evidence не угадывай product semantics, ownership или несовместимые architecture alternatives дорогой моделью. Субагент возвращает root `DECISION_REQUIRED` с `decision_id`, 2–3 взаимоисключающими вариантами, recommended первым, tradeoffs, scope и evidence refs. Только root спрашивает пользователя: через нативный `request_user_input` в Plan mode, если инструмент доступен, иначе одним компактным plain-text вопросом. Не переключай mode и не повторяй `decision_id` без нового evidence. Продолжай независимые транши и блокируй только зависимый.
+
 ## EfficiencyBudget
 
 До execution задай на WorkItem или транш: `MAX_AGENT_ASSIGNMENTS`, `MAX_COORDINATION_DECISIONS`, `MAX_UNCHANGED_WAIT_STREAK`, `MAX_PASSIVE_WAIT_MINUTES`, `MAX_EXPENSIVE_CHECKS`, `MAX_REWORK_ROUNDS` и `CHECKPOINT_BOUNDARY`. Default: максимум 3 assignments, 10 coordination decisions, 1 unchanged wait без нового анализа, 10 минут passive wait, 1 дорогая T2 suite и 1 correction/recheck. Нормальный маршрут использует одного Implementor; второй assignment — Reviewer только при нетривиальном risk/diff, третий — один specialist вместо набора gates. Сложность сама по себе не разрешает полный role pipeline.
@@ -91,6 +95,8 @@ Orchestrator координирует и проверяет evidence, но не 
 - `T1`: affected module/service/consumer checks после завершения slice.
 - `T2`: полные repository-required tests, race/vet/lint/build/coverage один раз на service/release boundary, если это требует repository policy или пользователь.
 - `T3`: image/scan/contract smoke/integration и delivery evidence один раз для release candidate, если применимо.
+
+Минимум готовности: meaningful regression test для изменённого поведения; contract/proto check при изменении контракта; auth/tenant negative case при таком риске; race check при concurrency. Full repository suite, image/deploy checks, максимизация coverage и exhaustive edge cases не запускаются по умолчанию. Некритичные findings становятся residual risk/follow-up и не перезапускают pipeline.
 
 Повторяй только invalidated ступени. Cache key включает check ID, tree/diff identity, environment fingerprint, scoped paths и dependency/config identity. Failed run, неизвестная зависимость или изменение source/lock/config отменяет соответствующий cache entry. Ledger хранит только privacy-safe metadata, не raw commands/output.
 

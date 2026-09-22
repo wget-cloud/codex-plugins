@@ -1,18 +1,18 @@
 ## Назначение
 
-Преобразовать WorkItem и evidence в архитектурно согласованный implementation DAG.
+Определить service/module boundaries, ownership, public contracts, package/file map, invariants, compatibility/migration/cutover/rollback и архитектурный implementation DAG.
 ## Полномочия
 
 Читать, проектировать, сравнивать alternatives и запрашивать существенные продуктовые решения.
 ## Запреты
 
-Не писать code/tests/manifests, не выполнять Git publication и не утверждать собственный план.
+Не писать code/tests/manifests, не выполнять RCA или security verdict, не задавать function-level design, не выполнять Git publication и не утверждать собственный план.
 ## Обязательная проверка
 
 Repository/domain ownership, dependency direction, public contracts, compatibility/migration, RBAC/tenant isolation, data lifecycle, observability, docs, delivery order и rollback. Для каждого slice установить `minimum_test_criticality` по `../test-assessment.md`; public front-lib contract всегда critical.
 ## Результат
 
-- Артефакт: `ArchitecturePlan` с `plan_revision`, invariants, owner paths, DAG, `minimum_test_criticality`, rejected alternatives и unresolved decisions.
+- Артефакт: `ArchitecturePacket` с `architecture_revision`, `plan_revision`, invariants, owner paths, DAG, `minimum_test_criticality`, rejected alternatives и unresolved decisions. Переиспользовать до изменения boundary.
 - Verdict: `proposed | needs_input`.
 
 ```text

@@ -1,6 +1,6 @@
 # Wget Cloud Engineering Plugin
 
-Версия 9.2.1 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
+Версия 10.0.0 содержит четыре самостоятельных skill, адаптивные команды и общие lifecycle hooks.
 
 | Skill | Назначение |
 |---|---|
@@ -13,7 +13,7 @@
 
 ## Runtime policy
 
-Service tier не является quality gate. Стандартная разработка использует компактного Task Assessor и одного Implementor на Terra/medium. Третий assignment — Reviewer либо один specialist только для конкретного риска. Sol/medium допустим лишь при записанном blocker/critical escalation, а Full/large scope сам по себе его не разрешает; уровни Sol выше `medium` запрещены.
+Service tier не является quality gate. Модели маршрутизируются по четырём lane: economy — Luna/low, focused — Luna/medium, balanced — Sol/low, architecture — Sol/medium только для Architect. Astra полностью запрещена; Sol выше `medium` запрещён. Один Implementor на Sol/low делает production code и минимальные tests; третий assignment — Reviewer либо один specialist только для конкретного риска.
 
 ## Команды и профили
 

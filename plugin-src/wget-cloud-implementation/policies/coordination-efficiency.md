@@ -10,6 +10,12 @@
 
 После compaction сначала восстанови `ResumeCapsule`: current phase, revisions, active/completed assignments, blocking findings, diff identity, protected hashes, valid check cache и next transitions. Сверь capsule с Git, agent и tracker state до нового spawn/follow-up.
 
+## Неоднозначные решения и UI
+
+После сбора доступного evidence не трать дорогую модель на угадывание product semantics, UX preference, ownership или несовместимых architecture alternatives. Субагент возвращает root-оркестратору `DECISION_REQUIRED` с `decision_id`, 2–3 взаимоисключающими вариантами, первым recommended вариантом, краткими tradeoffs, затронутым scope и evidence refs. Только root задаёт вопрос пользователю.
+
+Если нативный `request_user_input` доступен в Plan mode, root использует его для кликабельного выбора. В Default mode или при отсутствии инструмента задай один компактный plain-text вопрос с теми же вариантами. Плагин не переключает mode и не имитирует UI директивами. Не повторяй тот же `decision_id` без нового evidence или изменившихся вариантов. Пока решение ожидается, продолжай независимые slices и блокируй только зависимую часть.
+
 ## EfficiencyBudget
 
 До execution задай `MAX_AGENT_ASSIGNMENTS`, `MAX_COORDINATION_DECISIONS`, `MAX_UNCHANGED_WAIT_STREAK`, `MAX_PASSIVE_WAIT_MINUTES`, `MAX_EXPENSIVE_CHECKS`, `MAX_REWORK_ROUNDS` и `CHECKPOINT_BOUNDARY`. Default implementation/bugfix/item slice: максимум 3 assignments, 10 coordination decisions, 1 unchanged wait без нового анализа, 10 минут passive wait, 1 дорогая final suite и 1 correction/recheck. Нормальный маршрут использует компактного Task Assessor и одного Implementor; третий assignment — один Reviewer либо specialist вместо набора gates. Product discovery и подтверждённый новый critical risk могут получить записанное расширение, но сложность сама по себе не разрешает полный role pipeline.
@@ -29,5 +35,7 @@
 Перед read-only gate один раз зафиксируй `DIFF_IDENTITY`. По умолчанию Orchestrator сам проверяет bounded candidate. Если независимый review оправдан, один Reviewer получает единый `ReviewBundle` для correctness, contract, security, data и architecture concerns в пределах своей компетенции. Отдельный specialist заменяет, а не дополняет обычного Reviewer, кроме подтверждённой необходимости независимости. Findings исправляются одним correction batch существующим Implementor и получают один targeted recheck; полный pipeline не перезапускается.
 
 `CheckPlan` задаёт T0/T1/T2/T3 command IDs, owner, trigger и cache key. Write-owner выполняет targeted compile/unit T0 и один affected-scope T1. T2 выполняется один раз только перед service/release boundary, когда его требует repository policy либо пользователь; T3 — только в явно разрешённом delivery scope. Reviewer/Guardian/QA не повторяют успешную идентичную suite. Coverage improvement, полный race/lint/build matrix и дополнительные happy-path tests не блокируют обычный startup slice, если repository gate прямо этого не требует.
+
+Минимум готовности для изменённого поведения: один meaningful regression test; contract/proto check при изменении контракта; auth/tenant negative case при соответствующем риске; race check при concurrency. Full repository suite, image build, deployment check, максимизация coverage и exhaustive edge cases не запускаются по умолчанию. Некритичные findings фиксируются как residual risk или follow-up, а не перезапускают pipeline.
 
 На границе большого сервиса, epic batch или длительного этапа выпусти компактный `HandoffCapsule`: outcome, tree/item/tracker revisions, remaining scope/risks, valid evidence, next input, `STOP_AFTER_BOUNDARY` и `NEXT_SCOPE_ALLOWED`. При stop=true после completion не создавай новых назначений и верни управление пользователю. Следующий этап не получает историю внутренних correction loops.

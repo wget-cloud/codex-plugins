@@ -2928,7 +2928,7 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
         enabled = ", ".join(name for name, value in routes.items() if value) or "local"
         return additional_context(
             "UserPromptSubmit",
-            f"WGC bugfix workflow activated {mode}; routes={enabled}. Build a redacted BugCase, run one compact Terra Task Assessor, reproduce before patching with minimal scoped evidence, then use one Terra Implementor for fix plus regression test. Use the third assignment only for one risk-driven Reviewer or specialist; protected Test-maker is exceptional. Runtime inspection is read-only and deployment still requires explicit human approval.",
+            f"WGC bugfix workflow activated {mode}; routes={enabled}. Build a redacted BugCase, run one compact Luna/medium Task Assessor, reproduce before patching with minimal scoped evidence, then use one Sol/low Implementor for fix plus regression test. Use the third assignment only for one risk-driven Reviewer or specialist; protected Test-maker is exceptional. Runtime inspection is read-only and deployment still requires explicit human approval.",
         )
     if profile == "task-creation":
         mutation = "publish only through an exact MutationPlan" if project.get("mutation_requested") else "remain read-only until publication is requested"
@@ -2939,11 +2939,11 @@ def handle_prompt_submit(payload: Dict[str, Any], context: Dict[str, Any]) -> Op
     if profile == "epic-implementation":
         return additional_context(
             "UserPromptSubmit",
-            f"WGC epic-implementation workflow activated {mode}. Research the full YouTrack epic and plan every task before execution; freeze batches of up to 100 issue IDs, then execute each item slice with one Terra Implementor and at most one risk-driven Reviewer or specialist. Do not restart a full role pipeline after findings; synchronize statuses only after evidence.",
+            f"WGC epic-implementation workflow activated {mode}. Research the full YouTrack epic and plan every task before execution; freeze batches of up to 100 issue IDs, then execute each item slice with one Sol/low Implementor and at most one risk-driven Reviewer or specialist. Do not restart a full role pipeline after findings; synchronize statuses only after evidence.",
         )
     return additional_context(
         "UserPromptSubmit",
-        f"WGC implementation workflow activated {mode}. Build a WorkItem, preserve baseline dirty paths, run one compact Terra Task Assessor, then one Terra Implementor. Use the third assignment only for one risk-driven Reviewer or specialist; do not restart the full role pipeline after a finding.",
+        f"WGC implementation workflow activated {mode}. Build a WorkItem, preserve baseline dirty paths, run one compact Luna/medium Task Assessor, then one Sol/low Implementor. Use the third assignment only for one risk-driven Reviewer or specialist; do not restart the full role pipeline after a finding.",
     )
 
 
@@ -3005,7 +3005,7 @@ def handle_subagent_start(payload: Dict[str, Any], context: Dict[str, Any]) -> O
                 else ""
             )
         )
-    message += " Use the assignment's explicit model, reasoning effort and fork_turns; never inherit implicitly. Default development agents use Terra; Sol requires recorded blocker evidence and an escalation reason. Reuse the current agent for one correction batch instead of spawning a replacement. Task Assessor returns task_assessment; every assigned downstream result repeats its assessment_revision. Load only assigned role/domain references."
+    message += " Use the assignment's explicit model, reasoning effort and fork_turns; never inherit implicitly. GPT-6 Astra and Sol effort above medium are forbidden. Default write agents use Sol/low; Sol/medium is reserved for Architect or one documented critical escalation. Reuse the current agent for one correction batch instead of spawning a replacement. Task Assessor returns task_assessment; every assigned downstream result repeats its assessment_revision. Load only assigned role/domain references."
     return additional_context("SubagentStart", message)
 
 

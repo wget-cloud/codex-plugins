@@ -13,7 +13,7 @@
 - До spawn вычислять `ASSIGNMENT_KEY`, переиспользовать актуальные результаты и фиксировать `RETRY_REASON` для любого повторного запуска.
 - Замораживать `DIFF_IDENTITY` перед параллельными read-only gates и проверять отсутствие active assignments перед финалом.
 - Поддерживать `ResumeCapsule`, после compaction сверять его с Git/agent state до нового назначения и не продолжать write при stale freeze.
-- Вести `EfficiencyBudget` и `CheckPlan`; стандартный tranche ограничить одним Terra Implementor. Reviewer либо specialist добавлять только по risk signal. Не превышать 3 assignments, 10 coordination decisions и один correction/recheck без EfficiencyCheckpoint; correction отправлять существующему Implementor компактной delta.
+- Вести `EfficiencyBudget` и `CheckPlan`; стандартный tranche ограничить одним Sol/low Implementor. Reviewer либо specialist добавлять только по risk signal. Не превышать 3 assignments, 10 coordination decisions и один correction/recheck без EfficiencyCheckpoint; correction отправлять существующему Implementor компактной delta.
 ## Запреты
 
 - Не подменять независимые review/test/architecture verdicts собственной оценкой.

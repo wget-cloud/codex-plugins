@@ -40,6 +40,12 @@ WGC_AGENT_RESULT: {"role":"task-assessor","verdict":"assessed","phase":"","input
 
 Для implementation, epic и bugfix во всех modes оценщик добавляет sibling `assessment` с компактным TestAssessment по [test policy](test-assessment.md). Обычные `add/update` tests принадлежат Implementor. Отдельный Test-maker разрешён только когда assessment явно выбирает `test_ownership=protected_test_maker` для protected critical invariant; сам факт Full или bugfix не создаёт эту роль. В task-creation testing только provisional, execution assessment не нужен.
 
+## Граница Architect
+
+Назначай Architect только при реальном выборе service/module boundaries, ownership, public contracts, package/file map, invariants, compatibility, migration/cutover/rollback либо межмодульного slice DAG. Large/Full/долгая задача без такого решения не достаточна. Architect выпускает один компактный `ArchitecturePacket` на `architecture_revision`; все slices переиспользуют его, пока boundary не изменился. Architect не пишет production code, не исследует root cause, не выносит security verdict и не задаёт детальный function-level design.
+
+Если несколько допустимых вариантов зависят от product semantics, стоимости миграции или предпочтения пользователя, Architect возвращает `DECISION_REQUIRED`, а не расходует medium на угадывание.
+
 ## Специалисты
 
 Выбирай максимум одного специалиста по наиболее высокому риску; не превращай несколько risk signals в fanout ролей. Приоритет: security/money, data/migration, contract, concurrency/reliability, browser, incident, architecture/cross-repo. Исключение — явно разрешённый GitOps delivery, где независимость DevOps и Infrastructure Reviewer обязательна.

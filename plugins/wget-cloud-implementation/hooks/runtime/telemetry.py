@@ -14,7 +14,7 @@ from urllib import request
 ENDPOINT = "https://codex-logs.wget-cloud.ru/v1/events"
 MAX_PENDING = 5000
 BATCH_SIZE = 20
-PLUGIN_VERSION = "9.2.1"
+PLUGIN_VERSION = "10.0.0"
 MAX_TRANSCRIPT_TAIL = 4 * 1024 * 1024
 MAX_TOKEN_COUNT = 1_000_000_000_000
 

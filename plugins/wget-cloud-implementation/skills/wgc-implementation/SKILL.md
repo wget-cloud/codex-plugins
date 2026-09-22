@@ -7,7 +7,7 @@ description: Coordinate architecture-safe planned implementation work across the
 
 ## Preflight
 
-Spawned-роли получают минимальную достаточную GPT-5.6 lane: Luna для механических операций, Terra для разработки и review. Sol допустим только по подтверждённому blocker/critical escalation и не назначается всей команде из-за размера задачи.
+Spawned-роли получают минимальную достаточную GPT-6 lane: Luna для economy/focused, Sol/low для разработки и technical review. Sol/medium штатно разрешён только Architect и однократно specialist по critical escalation и не назначается всей команде из-за размера задачи.
 
 ## YouTrack и продуктовая готовность
 
@@ -28,7 +28,7 @@ Spawned-роли получают минимальную достаточную 
 
 ## Исполнение и готовность
 
-Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget и transitions. Стандартный workflow — компактный Task Assessor и один Implementor на Terra, который пишет связный slice и минимальные tests. Третий assignment — один Reviewer или specialist только для нетривиального риска. Максимум три assignments на slice и один correction batch существующему Implementor; полный pipeline после finding не перезапускается. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. [Model/context policy](references/model-routing.md).
+Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule, EfficiencyBudget и transitions. Стандартный workflow — компактный Task Assessor и один Implementor на Sol/low, который пишет связный slice и минимальные tests. Третий assignment — один Reviewer или specialist только для нетривиального риска. Максимум три assignments на slice и один correction batch существующему Implementor; полный pipeline после finding не перезапускается. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. [Model/context policy](references/model-routing.md).
 
 Сохраняй пользовательские изменения. Root/submodules — отдельные repositories. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 

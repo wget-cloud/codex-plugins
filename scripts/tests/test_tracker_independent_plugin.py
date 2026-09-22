@@ -14,7 +14,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest["name"], "wget-cloud-development")
-        self.assertEqual(manifest["version"], "1.0.8")
+        self.assertEqual(manifest["version"], "2.0.0")
         self.assertNotIn("mcpServers", manifest)
 
     def test_bundle_has_no_tracker_runtime_or_youtrack_knowledge(self):
@@ -74,12 +74,14 @@ class TrackerIndependentPluginTests(unittest.TestCase):
         ):
             self.assertNotIn(obsolete_gate, corpus)
 
-    def test_sol_reasoning_is_capped_at_medium(self):
+    def test_gpt6_routing_is_bounded_and_astra_is_forbidden(self):
         forbidden_routes = (
-            "gpt-5.6-sol/high",
-            "gpt-5.6-sol/xhigh",
-            "gpt-5.6-sol/max",
-            "gpt-5.6-sol/ultra",
+            "gpt-6-sol/high",
+            "gpt-6-sol/xhigh",
+            "gpt-6-sol/max",
+            "gpt-6-sol/ultra",
+            "gpt-5.6",
+            "Terra",
             "Sol/high",
         )
 
@@ -88,9 +90,15 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             model_routing = (skill / "references" / "model-routing.md").read_text()
             registry = (skill / "references" / "agents" / "index.md").read_text()
 
-            self.assertIn("gpt-5.6-sol/medium", model_routing)
+            self.assertIn("gpt-6-luna/low", model_routing)
+            self.assertIn("gpt-6-luna/medium", model_routing)
+            self.assertIn("gpt-6-sol/low", model_routing)
+            self.assertIn("gpt-6-sol/medium", model_routing)
+            self.assertIn("gpt-6-astra` полностью запрещена", model_routing)
             self.assertIn("`high`, `xhigh`, `max` и `ultra`", model_routing)
-            self.assertIn("Любой Sol effort выше `medium` запрещён", registry)
+            self.assertIn("Astra и Sol выше `medium` запрещены", registry)
+            self.assertIn("MEDIUM_ESCALATION_REASON", registry)
+            self.assertIn("DECISION_REQUIRED", (skill / "references" / "coordination-efficiency.md").read_text())
             for forbidden in forbidden_routes:
                 self.assertNotIn(forbidden, model_routing)
                 self.assertNotIn(forbidden, registry)
@@ -181,7 +189,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             self.assertIn(required, implementation_coordination, required)
 
         self.assertIn("SPAWN_PREFLIGHT", implementation_registry)
-        self.assertIn("exact `model` и `reasoning_effort`", implementation_model)
+        self.assertIn("exact `model`, `reasoning_effort` и `fork_turns`", implementation_model)
         self.assertIn("test_ownership", implementation_tests)
         self.assertIn("обычные `add/update` tests принадлежат Implementor", implementation_tests)
         self.assertIn("T2 gates — один раз", implementation_workflow)
@@ -200,7 +208,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             self.assertIn("максимум 3 assignments", coordination)
             self.assertIn("10 coordination decisions", coordination)
             self.assertIn("полный pipeline не перезапускается", coordination)
-            self.assertIn("Sol escalation", routing)
+            self.assertIn("MEDIUM_ESCALATION_REASON", routing)
             self.assertNotIn("Startup/Fast", coordination)
 
     def test_plugin_remains_skills_only_after_coordination_hardening(self):

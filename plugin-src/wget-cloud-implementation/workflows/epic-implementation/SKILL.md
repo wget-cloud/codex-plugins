@@ -7,7 +7,7 @@ description: Implement a Wget Cloud epic or ordered pool of YouTrack tasks throu
 
 ## Preflight
 
-Spawned-роли получают минимальную достаточную GPT-5.6 lane: Luna для механических операций, Terra для разработки и review. Sol допустим только по подтверждённому blocker/critical escalation.
+Spawned-роли получают минимальную достаточную GPT-6 lane: Luna для economy/focused, Sol/low для разработки и technical review. Sol/medium штатно разрешён только Architect и однократно specialist по critical escalation.
 
 ## YouTrack и продуктовая готовность
 
@@ -28,7 +28,7 @@ Project Manager собирает весь EpicInventory без усечения:
 
 ## Исполнение и готовность
 
-Оркестратор владеет EpicRun, DecisionSnapshot, ResumeCapsule, EfficiencyBudget и transitions. Один item/slice имеет одного Implementor на Terra; Reviewer либо один specialist добавляется только по нетривиальному item risk. Максимум три assignments на item slice и один correction batch существующему Implementor; замечание не перезапускает полный pipeline. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. [Model/context policy](references/model-routing.md).
+Оркестратор владеет EpicRun, DecisionSnapshot, ResumeCapsule, EfficiencyBudget и transitions. Один item/slice имеет одного Implementor на Sol/low; Reviewer либо один specialist добавляется только по нетривиальному item risk. Максимум три assignments на item slice и один correction batch существующему Implementor; замечание не перезапускает полный pipeline. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision. Domain profile не расширяет write permissions. [Model/context policy](references/model-routing.md).
 
 Сохраняй пользовательские изменения. Root/submodules — отдельные repositories. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 

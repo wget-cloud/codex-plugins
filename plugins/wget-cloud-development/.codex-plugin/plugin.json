@@ -1,6 +1,6 @@
 {
   "name": "wget-cloud-development",
-  "version": "1.0.8",
+  "version": "2.0.0",
   "description": "Tracker-independent implementation and evidence-driven bugfix workflows for Wget Cloud Go backend services.",
   "author": {
     "name": "Wget Cloud",

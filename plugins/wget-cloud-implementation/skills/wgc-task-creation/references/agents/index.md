@@ -23,10 +23,17 @@ EXPECTED_COMMANDS: <read-only или verification checks>
 ASSESSMENT_REVISION: <current TaskAssessment revision; n/a only during assessment/intake>
 DOMAIN_PROFILES: <selected domain reference paths>
 OUTPUT_CONTRACT: <артефакт и verdict enum>
-MODEL_ROUTE: <economy|balanced|frontier>
+MODEL_ROUTE: <economy|focused|balanced|architecture>
 MODEL: <selected advertised model>
 REASONING_EFFORT: <selected effort>
 ROUTING_BASIS: <role lane, risk и fallback evidence>
+FALLBACK_REASON: <n/a|why Luna lane escalated to Sol/low>
+MEDIUM_ESCALATION_ROLE: <n/a|same specialist role>
+MEDIUM_ESCALATION_REASON: <n/a|critical reason>
+BLOCKER_EVIDENCE: <n/a|redacted evidence refs>
+FAILED_LOW_EFFORT_ATTEMPT: <n/a|completed Sol/low attempt>
+CRITICAL_INVARIANT: <n/a|data/tenant/security/contract/migration/concurrency invariant>
+EXPECTED_DECISION: <n/a|bounded decision medium must produce>
 FORK_TURNS: <none|smallest justified positive N>
 FORK_JUSTIFICATION: <n/a for none|why artifact cannot replace exact N turns>
 SPAWN_PREFLIGHT: <exact model + reasoning_effort + fork_turns args verified>
@@ -38,24 +45,24 @@ EFFICIENCY_BUDGET: <max assignments/coordination decisions/unchanged waits/passi
 INPUT_REVISION: <exact current workflow revision>
 ```
 
-`TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и работает на `balanced`; frontier допустима только узкому подтверждённому escalation. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет YouTrack scope и не объявляет весь backlog готовым.
+`TASK_NAME` строится из prefix таблицы и snake_case slice; итог передаётся в `spawn_agent.task_name`. Orchestrator использует `n/a`, не spawn и работает на `balanced`; `architecture` штатно принадлежит только Architect. Каждый субагент сохраняет пользовательские изменения, не commit/push/PR/merge/release/deploy, не расширяет YouTrack scope и не объявляет весь backlog готовым.
 
 Перед spawn сверь [coordination contract](../coordination-efficiency.md): active/completed `ASSIGNMENT_KEY`, ResumeCapsule и EfficiencyBudget. Вызов без явных exact `model`, `reasoning_effort` и `fork_turns` запрещён; обычный fork — `none`, `all` запрещён.
 
 ## Model routing policy
 
-Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/medium. Любой Sol effort выше `medium` запрещён. Fallback и ограничения: [model policy](../model-routing.md).
+Используй минимальную достаточную lane: `economy` → Luna/low, `focused` → Luna/medium, `balanced` → Sol/low, `architecture` → Sol/medium. Astra и Sol выше `medium` запрещены. Fallback/эскалация: [model policy](../model-routing.md).
 
 ## Роли
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
 | Orchestrator | n/a | всегда | coordination | balanced | [orchestrator.md](orchestrator.md) |
-| Product Manager | product_manager | business workflow и acceptance | нет | balanced | [product-manager.md](product-manager.md) |
-| Project Manager | project_manager | schema, priority, sequence | нет | balanced | [project-manager.md](project-manager.md) |
-| Implementation Auditor | implementation_auditor | current-state evidence | нет | balanced | [implementation-auditor.md](implementation-auditor.md) |
-| Architect | architect | ownership/contracts/decomposition | нет | frontier | [architect.md](architect.md) |
-| Backlog Reviewer | backlog_reviewer | независимый quality gate | нет | balanced | [backlog-reviewer.md](backlog-reviewer.md) |
+| Product Manager | product_manager | business workflow и acceptance | нет | focused | [product-manager.md](product-manager.md) |
+| Project Manager | project_manager | schema, priority, sequence | нет | focused | [project-manager.md](project-manager.md) |
+| Implementation Auditor | implementation_auditor | current-state evidence | нет | focused | [implementation-auditor.md](implementation-auditor.md) |
+| Architect | architect | ownership/contracts/decomposition | нет | architecture | [architect.md](architect.md) |
+| Backlog Reviewer | backlog_reviewer | независимый quality gate | нет | focused | [backlog-reviewer.md](backlog-reviewer.md) |
 | YouTrack Operator | youtrack_operator | идемпотентная publication | exact YouTrack MCP allowlist | economy | [youtrack-operator.md](youtrack-operator.md) |
 
 ## Машинный результат
@@ -81,7 +88,7 @@ Task-creation хранит только provisional test policy в task body/AC 
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| task-assessor | task_assessor | по TaskAssessment | read-only | balanced | [task-assessor.md](task-assessor.md) |
+| task-assessor | task_assessor | по TaskAssessment | read-only | focused | [task-assessor.md](task-assessor.md) |
 
 ## Выбор команды
 
@@ -93,7 +100,7 @@ Task-creation хранит только provisional test policy в task body/AC 
 
 | Роль | Task prefix | Когда применять | Write scope | Model lane | Контракт |
 |---|---|---|---|---|---|
-| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | economy | [effort-estimator.md](effort-estimator.md) |
+| Effort Estimator | effort_estimator | SP до создания; при delivery без оценки или при изменении плана | read-only | focused | [effort-estimator.md](effort-estimator.md) |
 
 Assignment дополнительно содержит TRACKER=youtrack, ISSUE_SCOPE (exact project keys/IDs), PLAN_REVISION, DECISION_REFS, ESTIMATE_REFS и MUTATION_ALLOWLIST; секреты не передаются. Registry задаёт существующие marker fields; `phase` новых ролей пустой. Effort Estimator не совмещается с автором оцениваемой постановки/плана.
 

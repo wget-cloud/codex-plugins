@@ -1,6 +1,6 @@
 # Wget Cloud Development Plugin
 
-Версия 1.0.8 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
+Версия 2.0.0 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
 
 | Skill | Назначение |
 |---|---|
@@ -11,7 +11,7 @@
 
 ## Runtime policy
 
-Стандартный workflow ориентирован на скорость и экономный расход токенов без отдельного профиля: один Implementor на Terra/medium, inline assessment/RiskMatrix и targeted checks. Reviewer либо один specialist добавляется только для конкретного нетривиального риска. Sol/medium требует подтверждённого blocker/critical escalation и не назначается всей команде из-за Full/large scope; effort выше `medium` запрещён.
+Стандартный workflow ориентирован на скорость и экономный расход токенов без отдельного профиля: economy — Luna/low, focused — Luna/medium, balanced — Sol/low, architecture — Sol/medium только для Architect. Astra полностью запрещена; Sol выше `medium` запрещён. Один Implementor на Sol/low делает production code и минимальные tests; Reviewer либо один specialist добавляется только для конкретного риска.
 
 На slice действует жёсткий default budget: максимум 3 assignments, 10 coordination decisions, один unchanged wait без анализа и один correction/recheck. Implementor пишет production code и 2–5 минимальных tests вместе с ним. Correction возвращается тому же агенту; полный role pipeline после finding не перезапускается. Test-maker используется только для protected critical baseline, а T2 запускается один раз на service/release boundary по repository requirement.
 
