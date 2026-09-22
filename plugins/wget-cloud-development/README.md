@@ -1,6 +1,6 @@
 # Wget Cloud Development Plugin
 
-Версия 1.0.5 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
+Версия 1.0.6 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
 
 | Skill | Назначение |
 |---|---|
@@ -11,7 +11,7 @@
 
 ## Runtime policy
 
-Роли используют минимально достаточную GPT-5.6 lane из registry. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`, а полный fork истории запрещён. DecisionSnapshot и ResumeCapsule переживают compaction, assignment ledger исключает дубли, а immutable diff review, selective invalidation и ступени T0–T3 сокращают повторный анализ и дорогие проверки без ослабления независимых gates.
+Роли используют минимально достаточную GPT-5.6 lane из registry. Для `gpt-5.6-sol` действует жёсткий предел `medium`: уровни `high`, `xhigh`, `max` и `ultra` запрещены для оркестратора и субагентов. Одновременно допускается максимум три субагента, `FORK_TURNS` по умолчанию `none`, а полный fork истории запрещён. DecisionSnapshot и ResumeCapsule переживают compaction, assignment ledger исключает дубли, а immutable diff review, selective invalidation и ступени T0–T3 сокращают повторный анализ и дорогие проверки без ослабления независимых gates.
 
 Перед первым production write Full workflow один раз на сервис замораживает cross-slice contracts, auth/tenant semantics, ownership и compatibility. Большие сервисы выполняются траншами связанных RPC/behavior families, а не отдельным полным role pipeline на каждый handler. Implementor пишет production code и обычные slice-local tests; отдельный Test-maker владеет только действительно независимыми protected regression/contract/security tests. Дорогие T2/T3 проверки, immutable snapshot и independent gates повторяются только после релевантной invalidation.
 

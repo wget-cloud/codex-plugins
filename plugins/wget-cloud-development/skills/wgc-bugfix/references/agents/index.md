@@ -49,7 +49,7 @@ EFFICIENCY_BUDGET: <max assignments/waits/expensive checks/rework + checkpoint b
 
 ## Model routing policy
 
-Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/high. Fallback и service-tier ограничения: [model policy](../model-routing.md).
+Используй минимальную достаточную lane из таблиц: `economy` → Luna/low, `balanced` → Terra/medium, `frontier` → Sol/medium. Любой Sol effort выше `medium` запрещён. Fallback и ограничения: [model policy](../model-routing.md).
 
 ## Core roles
 

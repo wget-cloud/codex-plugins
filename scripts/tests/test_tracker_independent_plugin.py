@@ -14,7 +14,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest["name"], "wget-cloud-development")
-        self.assertEqual(manifest["version"], "1.0.5")
+        self.assertEqual(manifest["version"], "1.0.6")
         self.assertNotIn("mcpServers", manifest)
 
     def test_bundle_has_no_tracker_runtime_or_youtrack_knowledge(self):
@@ -73,6 +73,27 @@ class TrackerIndependentPluginTests(unittest.TestCase):
             "wgc_service_tier_unverifiable",
         ):
             self.assertNotIn(obsolete_gate, corpus)
+
+    def test_sol_reasoning_is_capped_at_medium(self):
+        forbidden_routes = (
+            "gpt-5.6-sol/high",
+            "gpt-5.6-sol/xhigh",
+            "gpt-5.6-sol/max",
+            "gpt-5.6-sol/ultra",
+            "Sol/high",
+        )
+
+        for skill_name in ("wgc-bugfix", "wgc-implementation"):
+            skill = PLUGIN / "skills" / skill_name
+            model_routing = (skill / "references" / "model-routing.md").read_text()
+            registry = (skill / "references" / "agents" / "index.md").read_text()
+
+            self.assertIn("gpt-5.6-sol/medium", model_routing)
+            self.assertIn("`high`, `xhigh`, `max` и `ultra`", model_routing)
+            self.assertIn("Любой Sol effort выше `medium` запрещён", registry)
+            for forbidden in forbidden_routes:
+                self.assertNotIn(forbidden, model_routing)
+                self.assertNotIn(forbidden, registry)
 
     def test_coordination_contract_prevents_duplicate_agent_work(self):
         for skill_name in ("wgc-bugfix", "wgc-implementation"):
