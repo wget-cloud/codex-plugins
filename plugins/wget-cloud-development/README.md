@@ -1,6 +1,6 @@
 # Wget Cloud Development Plugin
 
-Версия 2.0.0 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
+Версия 2.0.1 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
 
 | Skill | Назначение |
 |---|---|
@@ -14,6 +14,8 @@
 Стандартный workflow ориентирован на скорость и экономный расход токенов без отдельного профиля: economy — Luna/low, focused — Luna/medium, balanced — Sol/low, architecture — Sol/medium только для Architect. Astra полностью запрещена; Sol выше `medium` запрещён. Один Implementor на Sol/low делает production code и минимальные tests; Reviewer либо один specialist добавляется только для конкретного риска.
 
 На slice действует жёсткий default budget: максимум 3 assignments, 10 coordination decisions, один unchanged wait без анализа и один correction/recheck. Implementor пишет production code и 2–5 минимальных tests вместе с ним. Correction возвращается тому же агенту; полный role pipeline после finding не перезапускается. Test-maker используется только для protected critical baseline, а T2 запускается один раз на service/release boundary по repository requirement.
+
+Для нового сервиса skill один раз собирает функциональные решения и запрашивает разрешение на выбранный объём. Внутренние транши не требуют нового пользовательского согласования без изменения продуктовой семантики или scope. Вопросы задаются через доступный UI выбора; варианты остаются в обычном сообщении, если ответ не поступил. Ожидание ответа не имеет искусственного срока и не запускает sleep/status loop.
 
 Каждое назначение проходит spawn preflight с явными `model` и `reasoning_effort`; наследование модели и `fork_turns: all` считаются contract violation. EfficiencyBudget отдельно считает назначения, retries, coordination decisions, unchanged waits, passive wait time, дорогие проверки и rework. Неизменившийся wait не запускает повторный анализ или status-only follow-up. На границе сервиса workflow выпускает компактный ServiceHandoff и выполняет явный `STOP_AFTER_SERVICE`.
 

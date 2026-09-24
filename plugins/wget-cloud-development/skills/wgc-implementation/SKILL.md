@@ -20,6 +20,8 @@ description: Coordinate tracker-independent, architecture-safe planned implement
 
 Один planned WorkItem: новая функция или refactor. Для reported defect выбирай bugfix. Не расширяй задачу до общего аудита или управления backlog.
 
+Для нового микросервиса сначала один раз собери inventory подключённого legacy-поведения, зависимостей и границ нового сервиса. Сведи существенные продуктовые решения в один пакет вопросов, затем покажи единый план сервиса с вариантами объёма и получи разрешение на выбранную реализацию. Это разрешение действует для всех внутренних траншей согласованного объёма; новый вопрос или approval нужен только при новом продуктовом выборе, изменении границ/acceptance либо отдельном Git/delivery действии. Внутренний транш остаётся связным проверяемым поведением, а не отдельным слоем схемы, криптографии или handler-кода.
+
 ## Исполнение и готовность
 
 Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule и EfficiencyBudget, но не пишет production code/tests. Стандартный workflow — один Implementor на Sol/low, который делает связный tranche и 2–5 минимальных tests. Orchestrator выполняет inline RiskMatrix и targeted verification; один Reviewer либо specialist добавляется только для нетривиального риска. Максимум три assignments на tranche, 10 coordination decisions и один correction batch существующему Implementor; полный pipeline после finding не перезапускается. Sol требует подтверждённого blocker escalation. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision.

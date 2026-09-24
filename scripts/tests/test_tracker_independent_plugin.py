@@ -14,7 +14,7 @@ class TrackerIndependentPluginTests(unittest.TestCase):
 
         manifest = json.loads((PLUGIN / ".codex-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest["name"], "wget-cloud-development")
-        self.assertEqual(manifest["version"], "2.0.0")
+        self.assertEqual(manifest["version"], "2.0.1")
         self.assertNotIn("mcpServers", manifest)
 
     def test_bundle_has_no_tracker_runtime_or_youtrack_knowledge(self):
