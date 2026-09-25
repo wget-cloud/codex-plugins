@@ -5,6 +5,10 @@ description: Coordinate tracker-independent, evidence-driven diagnosis and repai
 
 # WGC Bugfix
 
+## MVP flag
+
+`MVP_SKIP_TESTS: true` — переключатель этого автономного skill. При `true` не создавай, не изменяй и не запускай тесты, не вычисляй и не проверяй покрытие, не назначай Test-maker. Передавай значение флага каждому агенту; в `TestAssessment` фиксируй `test_disposition: none`, `coverage_mode: skipped_by_mvp_flag`, альтернативное evidence и остаточный риск даже для critical fix. Это правило имеет приоритет над test-writing, test-running и coverage указаниями в references этого skill. При `false` применяется обычная [test policy](references/test-assessment.md). Требования CI и repository не изменяются: если они всё ещё требуют тесты или покрытие, сообщи об этом как о непроверенном gate и не заявляй release readiness.
+
 ## Граница внешних систем
 
 Работай только с сообщением пользователя, repository context и доступными runtime evidence. Skill не читает и не изменяет task trackers, backlog или внешние карточки. Если expected behavior не определено либо исправление требует продуктового выбора, исследуй безопасный локальный контекст и запроси конкретное решение пользователя до production-правки.
@@ -18,14 +22,14 @@ description: Coordinate tracker-independent, evidence-driven diagnosis and repai
 
 ## Этот процесс
 
-До production fix зафиксируй observed/expected и минимальное evidence причины. Light/Standard: Orchestrator проверяет baseline/причину/результат, а Implementor добавляет небольшой regression test вместе с fix, если он полезен. Full не запускает каталог ролей автоматически: investigator/reproducer/RCA reviewer нужны только при действительно неоднозначной причине. Runtime inspection read-only и scoped.
+До production fix зафиксируй observed/expected и минимальное evidence причины. Light/Standard: Orchestrator проверяет baseline/причину/результат; при `MVP_SKIP_TESTS: false` Implementor добавляет небольшой regression test вместе с fix, если он полезен. Full не запускает каталог ролей автоматически: investigator/reproducer/RCA reviewer нужны только при действительно неоднозначной причине. Runtime inspection read-only и scoped.
 
 ## Исполнение и готовность
 
-Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule и EfficiencyBudget, но не пишет production code/tests. Стандартный workflow — один Implementor на Sol/low и targeted verification; один Reviewer либо specialist добавляется только по конкретному риску. Отдельный Test-maker нужен лишь для protected critical baseline. Максимум три assignments на fix, 10 coordination decisions и один correction batch существующему Implementor; полный pipeline не перезапускается. Sol требует подтверждённого blocker escalation. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision.
+Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule и EfficiencyBudget, но не пишет production code/tests. Стандартный workflow — один Implementor на Sol/low и targeted verification; один Reviewer либо specialist добавляется только по конкретному риску. При `MVP_SKIP_TESTS: false` отдельный Test-maker нужен лишь для protected critical baseline. Максимум три assignments на fix, 10 coordination decisions и один correction batch существующему Implementor; полный pipeline не перезапускается. Sol требует подтверждённого blocker escalation. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision.
 
 Сохраняй пользовательские изменения. Каждый `services/<name>`, `platform` и `contracts` — отдельный Go module внутри одного Git repository; module boundary не является отдельной Git history. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 
-Scope expansion или новые риски → новая оценка; устаревшие approvals/checks не засчитываются. Не писать тесты без конкретного regression value и не повторять успешные проверки без основания. Требования repository/CI сохраняются. Готовность требует актуальных route gates, доказанной acceptance и честного delivery status. При blocker сообщи его; не изображай пропущенные роли как approved.
+Scope expansion или новые риски → новая оценка; устаревшие approvals/checks не засчитываются. При `MVP_SKIP_TESTS: false` не писать тесты без конкретного regression value и не повторять успешные проверки без основания. Требования repository/CI сохраняются. Готовность требует актуальных route gates, доказанной acceptance и честного delivery status. При blocker сообщи его; не изображай пропущенные роли как approved.
 
 Финал: результат, изменённый scope, проверки/evidence, blockers и Git/delivery status. Для Light и compact bugfix приложи Orchestrator marker из TaskAssessment contract.

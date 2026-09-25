@@ -1,5 +1,7 @@
 # Адаптивная политика тестирования bugfix
 
+При `MVP_SKIP_TESTS: true` из `SKILL.md` все правила ниже о написании, изменении, запуске тестов, coverage, Test-maker, CharacterizationTest и запрете `none` отключены. TestAssessment остаётся обязательным: `test_disposition: none`, `coverage_mode: skipped_by_mvp_flag`, без TestPlan и test paths; зафиксируй альтернативное evidence, непроверенную регрессию и residual risks даже для `critical`. Reproduction опирается на доступное runtime/static evidence без тестовых команд; если причину нельзя подтвердить, fix блокируется обычным evidence gate. Требования репозитория/CI к тестам остаются незакрытыми. При `false` действует обычная политика ниже.
+
 В обычном bugfix Implementor пишет минимальный regression test вместе с fix. Отдельный Test-maker выпускает protected failing baseline только для заранее обозначенного critical invariant, когда независимость materially снижает риск. None/reuse assessment выпускает Orchestrator либо Task Assessor после проверенной причины.
 
 ## Критичность

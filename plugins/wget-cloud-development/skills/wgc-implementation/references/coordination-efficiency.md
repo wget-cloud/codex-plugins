@@ -2,6 +2,8 @@
 
 Этот контракт обязателен до первого назначения субагента. Стандартное поведение оптимизирует скорость поставки и расход токенов: один write-owner, targeted checks и только доказанно нужные независимые gates. Отдельного fast/startup профиля нет.
 
+`MVP_SKIP_TESTS: true` из `SKILL.md` имеет приоритет над тестовыми T0–T3, readiness и role gates ниже: тесты не пишутся и не запускаются, coverage не проверяется, Test-maker не назначается. В `DecisionSnapshot` сохрани значение флага; его смена инвалидирует TestAssessment и CheckPlan. Нетестовые проверки и review сохраняются; неудовлетворённые CI/repository test gates явно указываются в результате.
+
 ## DecisionSnapshot
 
 Оркестратор ведёт компактный `DecisionSnapshot` с ревизиями `work_item`, `scope`, `acceptance`, `plan`, `contract`, `architecture`, `security` и `test_plan`. В assignment передаются только актуальные ревизии, нужные артефакты и evidence handles; свободный пересказ истории не является источником истины.

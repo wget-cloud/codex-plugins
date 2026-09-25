@@ -1,6 +1,6 @@
 # Wget Cloud Development Plugin
 
-Версия 2.0.1 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
+Версия 2.0.2 содержит два автономных skill для `/Users/estev/wc/wgetcloud/backend-services` без интеграции с task tracker, внешним backlog или MCP:
 
 | Skill | Назначение |
 |---|---|
@@ -11,9 +11,11 @@
 
 ## Runtime policy
 
-Стандартный workflow ориентирован на скорость и экономный расход токенов без отдельного профиля: economy — Luna/low, focused — Luna/medium, balanced — Sol/low, architecture — Sol/medium только для Architect. Astra полностью запрещена; Sol выше `medium` запрещён. Один Implementor на Sol/low делает production code и минимальные tests; Reviewer либо один specialist добавляется только для конкретного риска.
+В обоих `SKILL.md` установлен `MVP_SKIP_TESTS: true`. Пока флаг включён, агенты не создают, не изменяют и не запускают тесты, не считают и не проверяют покрытие. `TestAssessment` фиксирует `test_disposition: none`, `coverage_mode: skipped_by_mvp_flag`, альтернативные проверки и остаточные риски. Сборка, статические и контрактные проверки остаются. Требования `backend-services` и CI к тестам/покрытию не меняются: если они обязательны, результат помечается как не прошедший эти gate. Для возврата обычной политики установите `MVP_SKIP_TESTS: false` в обоих skill.
 
-На slice действует жёсткий default budget: максимум 3 assignments, 10 coordination decisions, один unchanged wait без анализа и один correction/recheck. Implementor пишет production code и 2–5 минимальных tests вместе с ним. Correction возвращается тому же агенту; полный role pipeline после finding не перезапускается. Test-maker используется только для protected critical baseline, а T2 запускается один раз на service/release boundary по repository requirement.
+Стандартный workflow ориентирован на скорость и экономный расход токенов без отдельного профиля: economy — Luna/low, focused — Luna/medium, balanced — Sol/low, architecture — Sol/medium только для Architect. Astra полностью запрещена; Sol выше `medium` запрещён. Один Implementor на Sol/low делает production code; при выключенном флаге он также пишет минимальные tests. Reviewer либо один specialist добавляется только для конкретного риска.
+
+На slice действует жёсткий default budget: максимум 3 assignments, 10 coordination decisions, один unchanged wait без анализа и один correction/recheck. При выключенном флаге Implementor пишет 2–5 минимальных tests вместе с production code. Correction возвращается тому же агенту; полный role pipeline после finding не перезапускается. Test-maker используется только для protected critical baseline при выключенном флаге, а нетестовые T2-проверки запускаются один раз на service/release boundary по repository requirement.
 
 Для нового сервиса skill один раз собирает функциональные решения и запрашивает разрешение на выбранный объём. Внутренние транши не требуют нового пользовательского согласования без изменения продуктовой семантики или scope. Вопросы задаются через доступный UI выбора; варианты остаются в обычном сообщении, если ответ не поступил. Ожидание ответа не имеет искусственного срока и не запускает sleep/status loop.
 

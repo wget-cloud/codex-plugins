@@ -2,11 +2,14 @@
 
 Открывай файл роли непосредственно перед её назначением и не загружай downstream-роли заранее. Оркестратор читает этот index полностью, а затем передаёт субагенту конкретный role contract вместе с task scope.
 
+Если в `SKILL.md` установлено `MVP_SKIP_TESTS: true`, передавай флаг каждому назначенному агенту. Убери test paths из `ALLOW_PATHS`, добавь их в `DENY_PATHS`; Test-maker не назначай. Всем ролям запрещено писать, менять и запускать тесты и проверять coverage. Смена флага инвалидирует TestAssessment и CheckPlan.
+
 ## Общий assignment envelope
 
 ```text
 WORK_ITEM: <id и цель>
 ROLE: <role>
+MVP_SKIP_TESTS: <true|false из SKILL.md>
 TASK_NAME: <role prefix>_<snake slice>[_ordinal]
 TASK_SLICE: <одна ограниченная подзадача>
 REPOSITORIES: <разрешённые repo>

@@ -2,11 +2,14 @@
 
 Оркестратор читает этот index полностью, но открывает role contract только непосредственно перед назначением роли. Не загружай downstream-роли заранее и не подключай conditional specialists без route signal.
 
+Если в `SKILL.md` установлено `MVP_SKIP_TESTS: true`, передавай флаг каждому назначенному агенту. Убери test paths из `ALLOW_PATHS`, добавь их в `DENY_PATHS`; Test-maker не назначай. Всем ролям запрещено писать, менять и запускать тесты и проверять coverage. Смена флага инвалидирует TestAssessment и CheckPlan.
+
 ## Общий assignment envelope
 
 ```text
 BUG_CASE: <id и redacted symptom>
 ROLE: <role>
+MVP_SKIP_TESTS: <true|false из SKILL.md>
 PHASE: <evidence|rca|plan|diff либо пусто>
 TASK_NAME: <role prefix>_<snake slice>[_ordinal]
 TASK_SLICE: <одна ограниченная подзадача>

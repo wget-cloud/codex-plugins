@@ -1,5 +1,7 @@
 # Адаптивная политика тестирования
 
+При `MVP_SKIP_TESTS: true` из `SKILL.md` все правила ниже о написании, изменении, запуске тестов, coverage, Test-maker и запрете `none` отключены. TestAssessment остаётся обязательным: `test_disposition: none`, `coverage_mode: skipped_by_mvp_flag`, без TestPlan и test paths; зафиксируй альтернативное evidence, непроверенные инварианты и residual risks даже для `critical`. Не проверяй покрытие. Требования репозитория/CI к тестам остаются незакрытыми, не выдавай их за успешные. При `false` действует обычная политика ниже.
+
 TestAssessment обязателен, но отдельный Test-maker нужен только для protected critical invariants, где независимость от Implementor даёт реальную regression value. Light/Standard assessment выпускает Orchestrator либо назначенный Assessor; обычные `add/update` tests принадлежат Implementor и независимо читаются Reviewer. После изменения scope, плана, acceptance, protected tests, contract/migration surface или production path вне `assessed_paths` assessment повторяется.
 
 ## Критичность

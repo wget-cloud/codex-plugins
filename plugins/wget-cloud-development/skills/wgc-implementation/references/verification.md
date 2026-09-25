@@ -1,5 +1,7 @@
 # Проверки без дублирования
 
+При `MVP_SKIP_TESTS: true` из `SKILL.md` исключи из `CheckPlan` и всех T0–T3 любые тестовые команды (включая существующие, race test и smoke tests), создание/изменение тестов и расчёт/проверку покрытия. Выполняй применимые build, vet, lint, Buf, static/contract checks. Отметь test/coverage gates репозитория и CI как невыполненные, а не успешные. При `false` действует обычный порядок ниже.
+
 Один назначенный владелец выполняет проверку; остальные используют актуальный результат, оценивая его достаточность. Reviewer проверяет смысл assertions и diff, QA — поведение; никто не повторяет всю suite коллеги автоматически. Применяй ступени T0–T3 и cache/invalidation rules из [coordination contract](coordination-efficiency.md).
 
 Для каждого транша до write составь компактный `CheckPlan`. Implementor выполняет targeted T0 и один affected-scope T1. T2 выполняется один раз на service/release boundary только по repository requirement или явному запросу; T3 — только в пользовательском delivery scope.

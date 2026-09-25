@@ -5,6 +5,10 @@ description: Coordinate tracker-independent, architecture-safe planned implement
 
 # WGC Implementation
 
+## MVP flag
+
+`MVP_SKIP_TESTS: true` — переключатель этого автономного skill. При `true` не создавай, не изменяй и не запускай тесты, не вычисляй и не проверяй покрытие, не назначай Test-maker. Передавай значение флага каждому агенту; в `TestAssessment` фиксируй `test_disposition: none`, `coverage_mode: skipped_by_mvp_flag`, альтернативные проверки и остаточный риск даже для critical scope. Это правило имеет приоритет над test-writing, test-running и coverage указаниями в references этого skill. При `false` применяется обычная [test policy](references/test-assessment.md). Требования CI и repository не изменяются: если они всё ещё требуют тесты или покрытие, сообщи об этом как о непроверенном gate и не заявляй release readiness.
+
 ## Граница внешних систем
 
 Работай только с запросом пользователя, repository context и доступными runtime evidence. Skill не читает и не изменяет task trackers, backlog или внешние карточки. Если для реализации не хватает acceptance criteria либо нужно выбрать продуктовую семантику, исследуй безопасный локальный контекст и запроси конкретное решение пользователя до зависимой правки.
@@ -24,10 +28,10 @@ description: Coordinate tracker-independent, architecture-safe planned implement
 
 ## Исполнение и готовность
 
-Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule и EfficiencyBudget, но не пишет production code/tests. Стандартный workflow — один Implementor на Sol/low, который делает связный tranche и 2–5 минимальных tests. Orchestrator выполняет inline RiskMatrix и targeted verification; один Reviewer либо specialist добавляется только для нетривиального риска. Максимум три assignments на tranche, 10 coordination decisions и один correction batch существующему Implementor; полный pipeline после finding не перезапускается. Sol требует подтверждённого blocker escalation. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision.
+Оркестратор владеет WorkItem, DecisionSnapshot, ResumeCapsule и EfficiencyBudget, но не пишет production code/tests. Стандартный workflow — один Implementor на Sol/low, который делает связный tranche; при `MVP_SKIP_TESTS: false` он также пишет 2–5 минимальных tests. Orchestrator выполняет inline RiskMatrix и targeted verification; один Reviewer либо specialist добавляется только для нетривиального риска. Максимум три assignments на tranche, 10 coordination decisions и один correction batch существующему Implementor; полный pipeline после finding не перезапускается. Sol требует подтверждённого blocker escalation. Каждый агент возвращает только назначенный artifact/verdict с current assessment revision.
 
 Сохраняй пользовательские изменения. Каждый `services/<name>`, `platform` и `contracts` — отдельный Go module внутри одного Git repository; module boundary не является отдельной Git history. Commit/push/PR/merge/release/deployment требуют явного разрешения. Kubernetes — через approved GitOps; DevOps не является Infrastructure Reviewer.
 
-Scope expansion или новые риски → новая оценка; устаревшие approvals/checks не засчитываются. Не писать тесты без конкретного regression value и не повторять успешные проверки без основания. Требования repository/CI сохраняются. Готовность требует актуальных route gates, доказанной acceptance и честного delivery status. При blocker сообщи его; не изображай пропущенные роли как approved.
+Scope expansion или новые риски → новая оценка; устаревшие approvals/checks не засчитываются. При `MVP_SKIP_TESTS: false` не писать тесты без конкретного regression value и не повторять успешные проверки без основания. Требования repository/CI сохраняются. Готовность требует актуальных route gates, доказанной acceptance и честного delivery status. При blocker сообщи его; не изображай пропущенные роли как approved.
 
 Финал: результат, изменённый scope, проверки/evidence, blockers и Git/delivery status. Для Light приложи Orchestrator marker из TaskAssessment contract.
